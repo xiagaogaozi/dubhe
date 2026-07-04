@@ -626,6 +626,208 @@
         }
       }
     },
+    "/v1/approvals": {
+      "get": {
+        "summary": "List Approval Requests Endpoint",
+        "operationId": "list_approval_requests_endpoint_v1_approvals_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ApprovalStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalRequest"
+                  },
+                  "title": "Response List Approval Requests Endpoint V1 Approvals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals/{approval_id}/approve": {
+      "post": {
+        "summary": "Approve Request Endpoint",
+        "operationId": "approve_request_endpoint_v1_approvals__approval_id__approve_post",
+        "parameters": [
+          {
+            "name": "approval_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Approval Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequest"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals/{approval_id}/reject": {
+      "post": {
+        "summary": "Reject Request Endpoint",
+        "operationId": "reject_request_endpoint_v1_approvals__approval_id__reject_post",
+        "parameters": [
+          {
+            "name": "approval_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Approval Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequest"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/risk/kill-switch": {
+      "get": {
+        "summary": "Get Kill Switch Endpoint",
+        "operationId": "get_kill_switch_endpoint_v1_risk_kill_switch_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KillSwitchState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Kill Switch Endpoint",
+        "operationId": "set_kill_switch_endpoint_v1_risk_kill_switch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KillSwitchState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/simulation/paper-orders": {
       "get": {
         "summary": "List Paper Orders Endpoint",
@@ -687,6 +889,117 @@
   },
   "components": {
     "schemas": {
+      "ApprovalActionRequest": {
+        "properties": {
+          "decided_by": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Decided By",
+            "default": "local-demo-user"
+          },
+          "decision_comment_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Comment Zh"
+          }
+        },
+        "type": "object",
+        "title": "ApprovalActionRequest"
+      },
+      "ApprovalRequest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "order_intent_id": {
+            "type": "string",
+            "title": "Order Intent Id"
+          },
+          "risk_decision": {
+            "$ref": "#/components/schemas/RiskDecision"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApprovalStatus",
+            "default": "pending"
+          },
+          "requested_by": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "strategy",
+              "user"
+            ],
+            "title": "Requested By",
+            "default": "ai"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_comment_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Comment Zh"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh",
+            "default": "实盘订单需要人工审批。"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_intent_id",
+          "risk_decision"
+        ],
+        "title": "ApprovalRequest"
+      },
+      "ApprovalStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ],
+        "title": "ApprovalStatus"
+      },
       "BacktestPoint": {
         "properties": {
           "date": {
@@ -921,6 +1234,57 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "KillSwitchState": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "reason_zh": {
+            "type": "string",
+            "title": "Reason Zh",
+            "default": "未启用 kill switch。"
+          },
+          "updated_by": {
+            "type": "string",
+            "title": "Updated By",
+            "default": "system"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "title": "KillSwitchState"
+      },
+      "KillSwitchUpdateRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "reason_zh": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Reason Zh"
+          },
+          "updated_by": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Updated By",
+            "default": "local-demo-user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "reason_zh"
+        ],
+        "title": "KillSwitchUpdateRequest"
       },
       "Market": {
         "type": "string",
@@ -1629,6 +1993,8 @@
           "strategy_draft",
           "backtest_result",
           "risk_decision",
+          "approval_request",
+          "kill_switch",
           "paper_order"
         ],
         "title": "SyncEntityType"
@@ -1880,6 +2246,13 @@
             },
             "type": "array",
             "title": "Risk Decisions"
+          },
+          "approval_requests": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalRequest"
+            },
+            "type": "array",
+            "title": "Approval Requests"
           },
           "paper_orders": {
             "items": {

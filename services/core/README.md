@@ -10,6 +10,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 - 新闻分析生成策略草案与 deterministic replay 回测。
 - 策略规格校验。
 - 订单意图风控门禁。
+- 人工审批请求与 kill switch。
 - 纸面交易订单占位链路。
 
 当前版本不接真实新闻 API、不接真实券商、不执行真实订单。所有交易相关请求必须先经过 `Risk Service`。

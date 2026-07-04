@@ -358,6 +358,30 @@ kill switch 不强制撤销已在 broker 成交或正在成交的订单；撤单
 - broker outage。
 - 策略异常。
 
+### 12.1 当前已实现 smoke
+
+Core 当前提供全局 kill switch 与审批请求 API：
+
+```http
+GET /v1/risk/kill-switch
+POST /v1/risk/kill-switch
+GET /v1/approvals
+POST /v1/approvals/{approval_id}/approve
+POST /v1/approvals/{approval_id}/reject
+```
+
+当前行为：
+
+- `POST /v1/risk/evaluate` 遇到 live order intent 会生成 `requires_approval` 风控结果，并自动创建待审批请求。
+- kill switch 启用后，新的风控评估和纸面订单都会被拒绝。
+- 审批请求、kill switch 状态、风控判定会写入 SQLite，并进入工作区同步事件。
+- 桌面端可以查看待审批数量、通过/拒绝审批，以及启用/解除 kill switch。
+
+边界：
+
+- 当前审批只完成产品链路与审计状态，不会向真实 broker 发送 live order。
+- 后续移动端审批、MFA、管理员权限和 broker adapter 仍需接入。
+
 ## 13. CI 流水线
 
 最小 CI：

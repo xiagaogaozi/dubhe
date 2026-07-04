@@ -10,13 +10,19 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 from .models import (
+    ApprovalActionRequest,
+    ApprovalRequest,
+    ApprovalStatus,
     DeviceRegistrationRequest,
     DeviceSession,
     BacktestResult,
+    KillSwitchState,
+    KillSwitchUpdateRequest,
     NewsEvent,
     NewsAnalysis,
     PaperOrder,
     RiskDecision,
+    RiskPolicy,
     StrategyDraft,
     SyncEntityType,
     SyncEvent,
@@ -83,6 +89,10 @@ class SQLiteStore:
     def backtest_results(self) -> list[BacktestResult]:
         return self._load_payloads("backtest_results", BacktestResult, "generated_at DESC, id")
 
+    @property
+    def approval_requests(self) -> list[ApprovalRequest]:
+        return self._load_payloads("approval_requests", ApprovalRequest, "created_at DESC, id")
+
     def close(self) -> None:
         with self._lock:
             self._connection.close()
@@ -136,6 +146,96 @@ class SQLiteStore:
             )
             self._connection.commit()
             return decision
+
+    def create_approval_request(
+        self,
+        decision: RiskDecision,
+        requested_by: Literal["ai", "strategy", "user"],
+    ) -> ApprovalRequest:
+        with self._lock:
+            existing = self._approval_by_order_intent_id(decision.order_intent_id)
+            if existing is not None and existing.status == ApprovalStatus.PENDING:
+                return existing
+            approval = ApprovalRequest(
+                order_intent_id=decision.order_intent_id,
+                risk_decision=decision,
+                requested_by=requested_by,
+            )
+            self._save_approval_request(approval)
+            self._append_entity_event_to_all_workspaces(
+                entity_type=SyncEntityType.APPROVAL_REQUEST,
+                entity_id=approval.id,
+                payload=approval.model_dump(mode="json"),
+            )
+            self._connection.commit()
+            return approval
+
+    def decide_approval(
+        self,
+        approval_id: str,
+        status: ApprovalStatus,
+        request: ApprovalActionRequest,
+    ) -> ApprovalRequest:
+        with self._lock:
+            approval = self._approval_by_id(approval_id)
+            if approval.status != ApprovalStatus.PENDING:
+                return approval
+            decided = approval.model_copy(
+                update={
+                    "status": status,
+                    "decided_by": request.decided_by,
+                    "decision_comment_zh": request.decision_comment_zh,
+                    "decided_at": utc_now(),
+                    "message_zh": "审批已通过。" if status == ApprovalStatus.APPROVED else "审批已拒绝。",
+                },
+            )
+            self._save_approval_request(decided)
+            self._append_entity_event_to_all_workspaces(
+                entity_type=SyncEntityType.APPROVAL_REQUEST,
+                entity_id=decided.id,
+                action="updated",
+                payload=decided.model_dump(mode="json"),
+            )
+            self._connection.commit()
+            return decided
+
+    def list_approval_requests(
+        self,
+        status: ApprovalStatus | None = None,
+    ) -> list[ApprovalRequest]:
+        approvals = self.approval_requests
+        if status is None:
+            return approvals
+        return [approval for approval in approvals if approval.status == status]
+
+    def get_kill_switch_state(self) -> KillSwitchState:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT payload FROM kill_switch_state WHERE id = 'global'",
+            ).fetchone()
+            if row is None:
+                return KillSwitchState()
+            return KillSwitchState.model_validate_json(row["payload"])
+
+    def set_kill_switch_state(self, request: KillSwitchUpdateRequest) -> KillSwitchState:
+        with self._lock:
+            state = KillSwitchState(
+                enabled=request.enabled,
+                reason_zh=request.reason_zh,
+                updated_by=request.updated_by,
+            )
+            self._save_kill_switch_state(state)
+            self._append_entity_event_to_all_workspaces(
+                entity_type=SyncEntityType.KILL_SWITCH,
+                entity_id="global",
+                action="updated",
+                payload=state.model_dump(mode="json"),
+            )
+            self._connection.commit()
+            return state
+
+    def current_risk_policy(self) -> RiskPolicy:
+        return RiskPolicy(kill_switch_enabled=self.get_kill_switch_state().enabled)
 
     def add_paper_order(self, order: PaperOrder) -> PaperOrder:
         with self._lock:
@@ -250,6 +350,7 @@ class SQLiteStore:
                 news_events=self.news_events,
                 analyses=self.analyses,
                 risk_decisions=self.risk_decisions,
+                approval_requests=self.approval_requests,
                 paper_orders=self.paper_orders,
                 strategy_drafts=self.strategy_drafts,
                 backtest_results=self.backtest_results,
@@ -340,6 +441,21 @@ class SQLiteStore:
                 CREATE TABLE IF NOT EXISTS risk_decisions (
                     id TEXT PRIMARY KEY,
                     evaluated_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    id TEXT PRIMARY KEY,
+                    order_intent_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS kill_switch_state (
+                    id TEXT PRIMARY KEY,
+                    enabled INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL,
                     payload TEXT NOT NULL
                 );
 
@@ -434,6 +550,54 @@ class SQLiteStore:
             payload=decision,
             timestamp=decision.evaluated_at.isoformat(),
         )
+
+    def _save_approval_request(self, approval: ApprovalRequest) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO approval_requests
+                (id, order_intent_id, status, created_at, payload)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                approval.id,
+                approval.order_intent_id,
+                approval.status.value,
+                approval.created_at.isoformat(),
+                approval.model_dump_json(),
+            ),
+        )
+
+    def _save_kill_switch_state(self, state: KillSwitchState) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO kill_switch_state (id, enabled, updated_at, payload)
+            VALUES ('global', ?, ?, ?)
+            """,
+            (1 if state.enabled else 0, state.updated_at.isoformat(), state.model_dump_json()),
+        )
+
+    def _approval_by_id(self, approval_id: str) -> ApprovalRequest:
+        row = self._connection.execute(
+            "SELECT payload FROM approval_requests WHERE id = ?",
+            (approval_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(approval_id)
+        return ApprovalRequest.model_validate_json(row["payload"])
+
+    def _approval_by_order_intent_id(self, order_intent_id: str) -> ApprovalRequest | None:
+        row = self._connection.execute(
+            """
+            SELECT payload FROM approval_requests
+            WHERE order_intent_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (order_intent_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return ApprovalRequest.model_validate_json(row["payload"])
 
     def _save_user(self, user: UserAccount) -> None:
         self._connection.execute(
@@ -570,6 +734,7 @@ class SQLiteStore:
         entity_type: SyncEntityType,
         entity_id: str,
         payload: dict[str, Any],
+        action: Literal["created", "updated", "deleted"] = "created",
     ) -> None:
         rows = self._connection.execute("SELECT id FROM workspaces ORDER BY id").fetchall()
         for row in rows:
@@ -577,7 +742,7 @@ class SQLiteStore:
                 workspace_id=row["id"],
                 entity_type=entity_type,
                 entity_id=entity_id,
-                action="created",
+                action=action,
                 payload=payload,
             )
 

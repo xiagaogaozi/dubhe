@@ -18,6 +18,9 @@ def evaluate_order_intent(
     reasons: list[str] = []
     notional = estimate_notional(intent)
 
+    if policy.kill_switch_enabled:
+        reasons.append("Kill switch 已启用，系统禁止生成新订单。")
+
     disabled_symbols = {symbol.upper() for symbol in policy.disabled_symbols}
     if intent.symbol in disabled_symbols:
         reasons.append(f"{intent.symbol} 已被当前风控策略禁用。")
@@ -55,4 +58,3 @@ def evaluate_order_intent(
         notional=notional,
         reasons_zh=["订单通过纸面交易风控检查。"],
     )
-

@@ -51,6 +51,12 @@ class PaperOrderStatus(str, Enum):
     BLOCKED = "blocked"
 
 
+class ApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class DevicePlatform(str, Enum):
     WINDOWS = "windows"
     MACOS = "macos"
@@ -66,6 +72,8 @@ class SyncEntityType(str, Enum):
     STRATEGY_DRAFT = "strategy_draft"
     BACKTEST_RESULT = "backtest_result"
     RISK_DECISION = "risk_decision"
+    APPROVAL_REQUEST = "approval_request"
+    KILL_SWITCH = "kill_switch"
     PAPER_ORDER = "paper_order"
 
 
@@ -231,6 +239,7 @@ class RiskPolicy(BaseModel):
     require_source_refs: bool = True
     live_requires_human_approval: bool = True
     disabled_symbols: list[str] = Field(default_factory=list)
+    kill_switch_enabled: bool = False
 
 
 class RiskDecision(BaseModel):
@@ -250,6 +259,37 @@ class PaperOrder(BaseModel):
     risk_decision: RiskDecision
     submitted_at: datetime = Field(default_factory=utc_now)
     message_zh: str
+
+
+class ApprovalRequest(BaseModel):
+    id: str = Field(default_factory=lambda: f"approval_{uuid4().hex}")
+    order_intent_id: str
+    risk_decision: RiskDecision
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    requested_by: Literal["ai", "strategy", "user"] = "ai"
+    decided_by: str | None = None
+    decision_comment_zh: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    decided_at: datetime | None = None
+    message_zh: str = "实盘订单需要人工审批。"
+
+
+class ApprovalActionRequest(BaseModel):
+    decided_by: str = Field(default="local-demo-user", min_length=1)
+    decision_comment_zh: str | None = None
+
+
+class KillSwitchState(BaseModel):
+    enabled: bool = False
+    reason_zh: str = "未启用 kill switch。"
+    updated_by: str = "system"
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class KillSwitchUpdateRequest(BaseModel):
+    enabled: bool
+    reason_zh: str = Field(min_length=1)
+    updated_by: str = Field(default="local-demo-user", min_length=1)
 
 
 class DeviceRegistrationRequest(BaseModel):
@@ -329,6 +369,7 @@ class WorkspaceSnapshot(BaseModel):
     news_events: list[NewsEvent] = Field(default_factory=list)
     analyses: list[NewsAnalysis] = Field(default_factory=list)
     risk_decisions: list[RiskDecision] = Field(default_factory=list)
+    approval_requests: list[ApprovalRequest] = Field(default_factory=list)
     paper_orders: list[PaperOrder] = Field(default_factory=list)
     strategy_drafts: list[StrategyDraft] = Field(default_factory=list)
     backtest_results: list[BacktestResult] = Field(default_factory=list)

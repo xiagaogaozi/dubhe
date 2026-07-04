@@ -312,6 +312,72 @@ def test_live_ai_order_requires_human_approval() -> None:
     assert list_response.status_code == 200
     assert any(item["id"] == body["id"] for item in list_response.json())
 
+    approvals_response = client.get("/v1/approvals?status=pending")
+    assert approvals_response.status_code == 200
+    approvals = approvals_response.json()
+    approval = next(
+        item for item in approvals if item["order_intent_id"] == body["order_intent_id"]
+    )
+    assert approval["status"] == "pending"
+
+    approve_response = client.post(
+        f"/v1/approvals/{approval['id']}/approve",
+        json={
+            "decided_by": "risk_manager_fixture",
+            "decision_comment_zh": "测试通过审批。",
+        },
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == "approved"
+
+
+def test_kill_switch_blocks_new_paper_orders() -> None:
+    enable_response = client.post(
+        "/v1/risk/kill-switch",
+        json={
+            "enabled": True,
+            "reason_zh": "测试 kill switch 拦截新订单。",
+            "updated_by": "risk_manager_fixture",
+        },
+    )
+    assert enable_response.status_code == 200
+    assert enable_response.json()["enabled"] is True
+
+    response = client.post(
+        "/v1/simulation/paper-orders",
+        json={
+            "account_id": "acct_fixture",
+            "strategy_version_id": "strategy_v1",
+            "market": "US",
+            "symbol": "NVDA",
+            "side": "buy",
+            "order_type": "market",
+            "quantity": 1,
+            "estimated_price": 1000,
+            "currency": "USD",
+            "created_by": "strategy",
+            "destination": "paper",
+            "rationale_zh": "测试 kill switch。",
+            "source_refs": ["analysis_fixture"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "blocked"
+    assert "Kill switch" in body["risk_decision"]["reasons_zh"][0]
+
+    disable_response = client.post(
+        "/v1/risk/kill-switch",
+        json={
+            "enabled": False,
+            "reason_zh": "测试结束，恢复下单。",
+            "updated_by": "risk_manager_fixture",
+        },
+    )
+    assert disable_response.status_code == 200
+    assert disable_response.json()["enabled"] is False
+
 
 def test_paper_order_blocks_missing_source_refs() -> None:
     response = client.post(

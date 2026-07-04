@@ -6,14 +6,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from .analysis import analyze_news
 from .backtest import draft_strategy_from_analysis, run_replay_backtest
 from .models import (
+    ApprovalActionRequest,
+    ApprovalRequest,
+    ApprovalStatus,
     BacktestRequest,
     BacktestResult,
+    KillSwitchState,
+    KillSwitchUpdateRequest,
     NewsAnalysis,
     NewsEvent,
     NewsFeedResponse,
     OrderIntent,
     PaperOrder,
     RiskDecision,
+    RiskStatus,
     DeviceRegistrationRequest,
     DeviceSession,
     Market,
@@ -74,6 +80,8 @@ def capabilities() -> dict[str, object]:
             "public_news_feed_adapters",
             "strategy_draft_from_news_analysis",
             "deterministic_replay_backtest",
+            "approval_requests",
+            "kill_switch",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
@@ -175,7 +183,10 @@ def list_backtests_endpoint() -> list[BacktestResult]:
 
 @app.post("/v1/risk/evaluate", response_model=RiskDecision)
 def evaluate_risk_endpoint(intent: OrderIntent) -> RiskDecision:
-    return store.add_risk_decision(evaluate_order_intent(intent))
+    decision = store.add_risk_decision(evaluate_order_intent(intent, store.current_risk_policy()))
+    if decision.status == RiskStatus.REQUIRES_APPROVAL:
+        store.create_approval_request(decision, intent.created_by)
+    return decision
 
 
 @app.get("/v1/risk/decisions", response_model=list[RiskDecision])
@@ -183,9 +194,48 @@ def list_risk_decisions_endpoint() -> list[RiskDecision]:
     return store.risk_decisions
 
 
+@app.get("/v1/approvals", response_model=list[ApprovalRequest])
+def list_approval_requests_endpoint(
+    status: ApprovalStatus | None = Query(default=None),
+) -> list[ApprovalRequest]:
+    return store.list_approval_requests(status=status)
+
+
+@app.post("/v1/approvals/{approval_id}/approve", response_model=ApprovalRequest)
+def approve_request_endpoint(
+    approval_id: str,
+    request: ApprovalActionRequest,
+) -> ApprovalRequest:
+    try:
+        return store.decide_approval(approval_id, ApprovalStatus.APPROVED, request)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="审批请求不存在。") from exc
+
+
+@app.post("/v1/approvals/{approval_id}/reject", response_model=ApprovalRequest)
+def reject_request_endpoint(
+    approval_id: str,
+    request: ApprovalActionRequest,
+) -> ApprovalRequest:
+    try:
+        return store.decide_approval(approval_id, ApprovalStatus.REJECTED, request)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="审批请求不存在。") from exc
+
+
+@app.get("/v1/risk/kill-switch", response_model=KillSwitchState)
+def get_kill_switch_endpoint() -> KillSwitchState:
+    return store.get_kill_switch_state()
+
+
+@app.post("/v1/risk/kill-switch", response_model=KillSwitchState)
+def set_kill_switch_endpoint(request: KillSwitchUpdateRequest) -> KillSwitchState:
+    return store.set_kill_switch_state(request)
+
+
 @app.post("/v1/simulation/paper-orders", response_model=PaperOrder)
 def submit_paper_order_endpoint(intent: OrderIntent) -> PaperOrder:
-    return store.add_paper_order(submit_paper_order(intent))
+    return store.add_paper_order(submit_paper_order(intent, store.current_risk_policy()))
 
 
 @app.get("/v1/simulation/paper-orders", response_model=list[PaperOrder])

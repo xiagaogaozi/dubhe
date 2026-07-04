@@ -649,6 +649,32 @@
   line-height: 1.5;
 }
 
+.risk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.risk-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgba(242, 240, 232, 0.1);
+  color: #e8eee9;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.risk-actions button:hover {
+  background: rgba(242, 240, 232, 0.16);
+}
+
+.risk-actions button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .risk-card .risk-status {
   color: var(--amber);
   font-size: 18px;

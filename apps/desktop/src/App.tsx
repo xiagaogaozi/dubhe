@@ -63,6 +63,26 @@ type RiskDecision = {
   evaluated_at: string
 }
 
+type ApprovalRequest = {
+  id: string
+  order_intent_id: string
+  risk_decision: RiskDecision
+  status: 'pending' | 'approved' | 'rejected'
+  requested_by: 'ai' | 'strategy' | 'user'
+  decided_by?: string | null
+  decision_comment_zh?: string | null
+  created_at: string
+  decided_at?: string | null
+  message_zh: string
+}
+
+type KillSwitchState = {
+  enabled: boolean
+  reason_zh: string
+  updated_by: string
+  updated_at: string
+}
+
 type PaperOrder = {
   id: string
   order_intent_id: string
@@ -300,6 +320,8 @@ function App() {
   const [strategyDraft, setStrategyDraft] = useState<StrategyDraft | null>(null)
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null)
   const [riskDecision, setRiskDecision] = useState<RiskDecision | null>(null)
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([])
+  const [killSwitch, setKillSwitch] = useState<KillSwitchState | null>(null)
   const [paperOrder, setPaperOrder] = useState<PaperOrder | null>(null)
   const [isBusy, setBusy] = useState(false)
   const [apiStatus, setApiStatus] = useState<'未知' | '已连接' | '离线'>('未知')
@@ -323,6 +345,16 @@ function App() {
 
   function appendLog(kind: LogEntry['kind'], message: string) {
     setLogs((current) => [{ time: nowTime(), kind, message }, ...current].slice(0, 4))
+  }
+
+  async function refreshSafetyState() {
+    const [approvals, killSwitchState] = await Promise.all([
+      getJson<ApprovalRequest[]>('/v1/approvals'),
+      getJson<KillSwitchState>('/v1/risk/kill-switch'),
+    ])
+    setApprovalRequests(approvals)
+    setKillSwitch(killSwitchState)
+    return { approvals, killSwitchState }
   }
 
   function newsFeedPath(item: WatchRow) {
@@ -403,6 +435,8 @@ function App() {
         setNewsEvents(feed.events.length > 0 ? feed.events : [fallbackNewsEvent])
         setProviderStatus(feed.provider_status)
         setSelectedNewsId(feed.events[0]?.id ?? fallbackNewsEvent.id)
+        await refreshSafetyState()
+        if (cancelled) return
         setApiStatus('已连接')
         appendLog(
           'success',
@@ -507,11 +541,74 @@ function App() {
         source_refs: [analysis.id],
       })
       setRiskDecision(result)
+      await refreshSafetyState()
       setApiStatus('已连接')
       appendLog('warning', `风控完成：${result.status === 'requires_approval' ? '需要人工审批' : result.status}。`)
     } catch (error) {
       setApiStatus('离线')
       appendLog('danger', `风控评估失败：${error instanceof Error ? error.message : '未知错误'}。`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function approveLatestRequest() {
+    const pending = approvalRequests.find((approval) => approval.status === 'pending')
+    if (!pending) {
+      appendLog('warning', '当前没有待审批请求。')
+      return
+    }
+
+    setBusy(true)
+    try {
+      const approval = await postJson<ApprovalRequest>(`/v1/approvals/${pending.id}/approve`, {
+        decided_by: 'desktop-risk-manager',
+        decision_comment_zh: '桌面端演示审批通过，仅用于验证审批链路。',
+      })
+      await refreshSafetyState()
+      appendLog('success', `审批已通过：${approval.id}。`)
+    } catch (error) {
+      appendLog('danger', `审批失败：${error instanceof Error ? error.message : '未知错误'}。`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function rejectLatestRequest() {
+    const pending = approvalRequests.find((approval) => approval.status === 'pending')
+    if (!pending) {
+      appendLog('warning', '当前没有待审批请求。')
+      return
+    }
+
+    setBusy(true)
+    try {
+      const approval = await postJson<ApprovalRequest>(`/v1/approvals/${pending.id}/reject`, {
+        decided_by: 'desktop-risk-manager',
+        decision_comment_zh: '桌面端演示拒绝，高风险订单不进入实盘。',
+      })
+      await refreshSafetyState()
+      appendLog('warning', `审批已拒绝：${approval.id}。`)
+    } catch (error) {
+      appendLog('danger', `拒绝审批失败：${error instanceof Error ? error.message : '未知错误'}。`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleKillSwitch() {
+    setBusy(true)
+    try {
+      const nextEnabled = !killSwitch?.enabled
+      const state = await postJson<KillSwitchState>('/v1/risk/kill-switch', {
+        enabled: nextEnabled,
+        reason_zh: nextEnabled ? '桌面端手动启用急停。' : '桌面端手动解除急停。',
+        updated_by: 'desktop-risk-manager',
+      })
+      setKillSwitch(state)
+      appendLog(state.enabled ? 'danger' : 'success', state.enabled ? 'Kill switch 已启用。' : 'Kill switch 已解除。')
+    } catch (error) {
+      appendLog('danger', `Kill switch 更新失败：${error instanceof Error ? error.message : '未知错误'}。`)
     } finally {
       setBusy(false)
     }
@@ -782,6 +879,22 @@ function App() {
           ) : (
             <p>尚未运行 replay 回测。</p>
           )}
+        </section>
+
+        <section className="risk-card">
+          <h3>审批中心</h3>
+          <p className={killSwitch?.enabled ? 'paper-blocked' : 'paper-ok'}>
+            {killSwitch?.enabled ? 'Kill switch 已启用' : 'Kill switch 未启用'}
+          </p>
+          <p>{killSwitch?.reason_zh ?? '尚未同步急停状态。'}</p>
+          <p>待审批：{approvalRequests.filter((approval) => approval.status === 'pending').length} 条</p>
+          <div className="risk-actions">
+            <button type="button" onClick={toggleKillSwitch} disabled={isBusy}>
+              {killSwitch?.enabled ? '解除急停' : '启用急停'}
+            </button>
+            <button type="button" onClick={approveLatestRequest} disabled={isBusy}>通过</button>
+            <button type="button" onClick={rejectLatestRequest} disabled={isBusy}>拒绝</button>
+          </div>
         </section>
 
         <section className="risk-card">

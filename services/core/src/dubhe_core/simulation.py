@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from .models import OrderIntent, PaperOrder, PaperOrderStatus, RiskStatus
-from .risk import evaluate_order_intent
+from .models import OrderIntent, PaperOrder, PaperOrderStatus, RiskPolicy, RiskStatus
+from .risk import DEFAULT_RISK_POLICY, evaluate_order_intent
 
 
-def submit_paper_order(intent: OrderIntent) -> PaperOrder:
-    decision = evaluate_order_intent(intent)
+def submit_paper_order(
+    intent: OrderIntent,
+    policy: RiskPolicy = DEFAULT_RISK_POLICY,
+) -> PaperOrder:
+    decision = evaluate_order_intent(intent, policy)
 
     if decision.status == RiskStatus.REJECTED:
         return PaperOrder(
@@ -21,4 +24,3 @@ def submit_paper_order(intent: OrderIntent) -> PaperOrder:
         risk_decision=decision,
         message_zh="纸面订单已接受。当前版本不会连接真实券商。",
     )
-
