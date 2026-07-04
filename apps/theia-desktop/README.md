@@ -64,6 +64,13 @@ macOS 安装器目标：
 yarn dist:mac
 ```
 
+CI 会拆开执行以下两个命令：
+
+```powershell
+yarn dist:mac:arm64
+yarn dist:mac:x64
+```
+
 国内网络如果下载 Electron 或 electron-builder 辅助二进制超时，可以在当前 PowerShell 会话里临时设置镜像后再执行打包命令：
 
 ```powershell
@@ -72,6 +79,16 @@ $env:ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-
 ```
 
 当前已经能生成未签名 Windows `.exe` 安装器和便携版；仍未完成 Windows `.msi`、macOS `.dmg/.pkg` 实机验证、正式签名、图标、自动更新、安装器元数据和发布流水线。`dist:mac` 需要在 macOS 构建机上执行。
+
+## GitHub Actions
+
+`docs/ci/theia-desktop.yml` 是桌面端打包流水线模板。将它复制到 `.github/workflows/theia-desktop.yml` 后，会在 `main` 分支相关文件变更或手动触发时构建桌面端安装产物：
+
+- Windows：`Dubhe-*-win-x64-setup.exe`、`Dubhe-*-win-x64-portable.exe`。
+- macOS arm64：`dmg` 和 `zip`。
+- macOS x64：`dmg` 和 `zip`。
+
+当前 CI 产物保留 14 天，后续接入正式发布流水线后再上传到 GitHub Releases。
 
 ## 后续迁移顺序
 

@@ -9,7 +9,9 @@
     "rebuild": "yarn --cwd app rebuild",
     "package:electron": "yarn --cwd app package:electron",
     "dist:windows": "yarn --cwd app dist:windows",
-    "dist:mac": "yarn --cwd app dist:mac"
+    "dist:mac": "yarn --cwd app dist:mac",
+    "dist:mac:x64": "yarn --cwd app dist:mac:x64",
+    "dist:mac:arm64": "yarn --cwd app dist:mac:arm64"
   },
   "workspaces": [
     "app",

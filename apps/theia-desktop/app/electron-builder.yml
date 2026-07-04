@@ -24,6 +24,7 @@ win:
         - x64
 
 mac:
+  identity: null
   target:
     - target: dmg
       arch:

@@ -34,6 +34,8 @@
   "scripts": {
     "bundle": "yarn rebuild && theia build --mode development",
     "dist:mac": "yarn bundle && electron-builder --mac dmg zip",
+    "dist:mac:arm64": "yarn bundle && electron-builder --mac dmg zip --arm64",
+    "dist:mac:x64": "yarn bundle && electron-builder --mac dmg zip --x64",
     "dist:windows": "yarn bundle && electron-builder --win nsis portable",
     "rebuild": "theia rebuild:electron --cacheRoot ../.theia-cache",
     "start": "theia start --plugins=local-dir:plugins",
