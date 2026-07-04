@@ -98,6 +98,8 @@ cd D:\github\dubhe-main\services\core
 - API: http://127.0.0.1:8000
 - OpenAPI: http://127.0.0.1:8000/docs
 
+本地桌面端 CORS 已允许 `127.0.0.1` / `localhost` 的任意端口，方便 Theia Desktop、React/Vite 原型和后续本机调试壳连接 Core。
+
 ## 测试
 
 ```powershell

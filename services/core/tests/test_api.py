@@ -51,6 +51,19 @@ def test_health() -> None:
     assert response.json() == {"status": "ok", "service": "dubhe-core"}
 
 
+def test_local_desktop_cors_allows_random_theia_port() -> None:
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "http://127.0.0.1:39201",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:39201"
+
+
 def test_device_registration_returns_default_workspace_snapshot() -> None:
     session = register_test_device(
         account_key="sync-fixture-default",
@@ -497,6 +510,85 @@ def test_strategy_draft_and_replay_backtest_from_news_analysis() -> None:
     list_response = client.get("/v1/backtests")
     assert list_response.status_code == 200
     assert any(item["id"] == backtest["id"] for item in list_response.json())
+
+
+def test_theia_workbench_user_flow_reaches_paper_portfolio() -> None:
+    register_response = client.post(
+        "/v1/auth/accounts/register",
+        json={
+            "account_key": f"theia-flow-{uuid4().hex[:8]}",
+            "account_name": "Theia 工作台测试账户",
+            "password": "Dubhe@2026",
+            "mfa_code": "000000",
+            "device_name": "Dubhe Theia Desktop",
+            "platform": "windows",
+        },
+    )
+    assert register_response.status_code == 200
+    session = register_response.json()
+
+    feed_response = client.get("/v1/news/feed?market=US&symbol=NVDA&limit=3&live=false")
+    assert feed_response.status_code == 200
+    event = feed_response.json()["events"][0]
+
+    analysis_response = client.post("/v1/news/analyze", json=event)
+    assert analysis_response.status_code == 200
+    analysis = analysis_response.json()
+
+    draft_response = client.post(
+        "/v1/strategy/drafts/from-analysis",
+        json={
+            "analysis": analysis,
+            "symbol": "NVDA",
+            "market": "US",
+            "max_order_notional": 10000,
+        },
+    )
+    assert draft_response.status_code == 200
+    draft = draft_response.json()
+
+    backtest_response = client.post(
+        "/v1/backtests/replay",
+        json={
+            "strategy": draft,
+            "initial_cash": 100000,
+            "replay_scenario": "golden_news_sentiment_v1",
+        },
+    )
+    assert backtest_response.status_code == 200
+    assert backtest_response.json()["final_equity"] > 100000
+
+    paper_response = client.post(
+        "/v1/simulation/paper-orders",
+        headers=auth_headers(session),
+        json={
+            "account_id": "demo_account",
+            "strategy_version_id": draft["strategy_version_id"],
+            "market": "US",
+            "symbol": "NVDA",
+            "side": "buy",
+            "order_type": "market",
+            "quantity": 1,
+            "estimated_price": 120,
+            "currency": "USD",
+            "created_by": "user",
+            "destination": "paper",
+            "rationale_zh": "Theia 工作台端到端烟测。",
+            "source_refs": [analysis["id"]],
+        },
+    )
+    assert paper_response.status_code == 200
+    assert paper_response.json()["status"] == "accepted"
+
+    portfolio_response = client.get(
+        "/v1/simulation/paper-portfolio/demo_account",
+        headers=auth_headers(session),
+    )
+    assert portfolio_response.status_code == 200
+    portfolio = portfolio_response.json()
+    assert portfolio["cash_by_currency"]["USD"] == 99880
+    assert portfolio["positions"][0]["symbol"] == "NVDA"
+    assert portfolio["positions"][0]["quantity"] == 1
 
 
 def test_live_ai_order_requires_human_approval() -> None:
