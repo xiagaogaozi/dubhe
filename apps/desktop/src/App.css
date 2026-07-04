@@ -107,6 +107,20 @@
   color: #f4f2ea;
 }
 
+.sidebar-header > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sidebar-header small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-dot {
   display: inline-flex;
   align-items: center;

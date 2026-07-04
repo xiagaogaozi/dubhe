@@ -48,6 +48,206 @@
         }
       }
     },
+    "/v1/auth/devices/register": {
+      "post": {
+        "summary": "Register Device Endpoint",
+        "operationId": "register_device_endpoint_v1_auth_devices_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/snapshot": {
+      "get": {
+        "summary": "Workspace Snapshot Endpoint",
+        "operationId": "workspace_snapshot_endpoint_v1_workspaces__workspace_id__snapshot_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "since_sequence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Since Sequence"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/watchlist/{symbol}": {
+      "put": {
+        "summary": "Upsert Watchlist Item Endpoint",
+        "operationId": "upsert_watchlist_item_endpoint_v1_workspaces__workspace_id__watchlist__symbol__put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchlistUpsertRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/sync-events": {
+      "get": {
+        "summary": "List Sync Events Endpoint",
+        "operationId": "list_sync_events_endpoint_v1_workspaces__workspace_id__sync_events_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "since_sequence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Since Sequence"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SyncEvent"
+                  },
+                  "title": "Response List Sync Events Endpoint V1 Workspaces  Workspace Id  Sync Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/news/analyze": {
       "post": {
         "summary": "Analyze News Endpoint",
@@ -267,6 +467,88 @@
   },
   "components": {
     "schemas": {
+      "DevicePlatform": {
+        "type": "string",
+        "enum": [
+          "windows",
+          "macos",
+          "ios",
+          "android"
+        ],
+        "title": "DevicePlatform"
+      },
+      "DeviceRegistrationRequest": {
+        "properties": {
+          "account_key": {
+            "type": "string",
+            "minLength": 3,
+            "title": "Account Key",
+            "default": "local-demo"
+          },
+          "account_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Name",
+            "default": "本地演示账户"
+          },
+          "device_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Device Name"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatform"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_name",
+          "platform"
+        ],
+        "title": "DeviceRegistrationRequest"
+      },
+      "DeviceSession": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatform"
+          },
+          "device_name": {
+            "type": "string",
+            "title": "Device Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "device_id",
+          "workspace_id",
+          "access_token",
+          "platform",
+          "device_name"
+        ],
+        "title": "DeviceSession"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -842,6 +1124,69 @@
         ],
         "title": "StrategyValidationResult"
       },
+      "SyncEntityType": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "watchlist_item",
+          "news_analysis",
+          "risk_decision",
+          "paper_order"
+        ],
+        "title": "SyncEntityType"
+      },
+      "SyncEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Sequence"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/SyncEntityType"
+          },
+          "entity_id": {
+            "type": "string",
+            "title": "Entity Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "created",
+              "updated",
+              "deleted"
+            ],
+            "title": "Action"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "sequence",
+          "entity_type",
+          "entity_id",
+          "action"
+        ],
+        "title": "SyncEvent"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -881,6 +1226,181 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WatchlistItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Workspace Id"
+          },
+          "symbol": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "notes_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes Zh"
+          },
+          "added_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Added At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "symbol",
+          "name",
+          "market"
+        ],
+        "title": "WatchlistItem"
+      },
+      "WatchlistUpsertRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "notes_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "name",
+          "market"
+        ],
+        "title": "WatchlistUpsertRequest"
+      },
+      "Workspace": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "owner_user_id": {
+            "type": "string",
+            "title": "Owner User Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "owner_user_id",
+          "name"
+        ],
+        "title": "Workspace"
+      },
+      "WorkspaceSnapshot": {
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          },
+          "watchlist": {
+            "items": {
+              "$ref": "#/components/schemas/WatchlistItem"
+            },
+            "type": "array",
+            "title": "Watchlist"
+          },
+          "analyses": {
+            "items": {
+              "$ref": "#/components/schemas/NewsAnalysis"
+            },
+            "type": "array",
+            "title": "Analyses"
+          },
+          "risk_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/RiskDecision"
+            },
+            "type": "array",
+            "title": "Risk Decisions"
+          },
+          "paper_orders": {
+            "items": {
+              "$ref": "#/components/schemas/PaperOrder"
+            },
+            "type": "array",
+            "title": "Paper Orders"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SyncEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "server_sequence": {
+            "type": "integer",
+            "title": "Server Sequence",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace"
+        ],
+        "title": "WorkspaceSnapshot"
       }
     }
   }

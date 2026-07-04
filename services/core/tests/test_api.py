@@ -14,6 +14,87 @@ def test_health() -> None:
     assert response.json() == {"status": "ok", "service": "dubhe-core"}
 
 
+def test_device_registration_returns_default_workspace_snapshot() -> None:
+    session_response = client.post(
+        "/v1/auth/devices/register",
+        json={
+            "account_key": "sync-fixture-default",
+            "account_name": "同步测试账户",
+            "device_name": "Windows 测试机",
+            "platform": "windows",
+        },
+    )
+
+    assert session_response.status_code == 200
+    session = session_response.json()
+    assert session["access_token"].startswith("local_")
+    assert session["platform"] == "windows"
+
+    snapshot_response = client.get(f"/v1/workspaces/{session['workspace_id']}/snapshot")
+
+    assert snapshot_response.status_code == 200
+    snapshot = snapshot_response.json()
+    assert snapshot["workspace"]["name"] == "同步测试账户的默认工作区"
+    assert snapshot["server_sequence"] >= 5
+    assert {item["symbol"] for item in snapshot["watchlist"]} >= {
+        "NVDA",
+        "0700.HK",
+        "600519.SH",
+        "AAPL",
+    }
+    assert snapshot["events"][0]["entity_type"] == "workspace"
+
+
+def test_watchlist_sync_events_are_shared_across_devices() -> None:
+    first_session_response = client.post(
+        "/v1/auth/devices/register",
+        json={
+            "account_key": "sync-fixture-shared",
+            "account_name": "多端同步账户",
+            "device_name": "Windows 测试机",
+            "platform": "windows",
+        },
+    )
+    first_session = first_session_response.json()
+    workspace_id = first_session["workspace_id"]
+
+    upsert_response = client.put(
+        f"/v1/workspaces/{workspace_id}/watchlist/MSFT",
+        json={
+            "symbol": "MSFT",
+            "name": "微软",
+            "market": "US",
+            "notes_zh": "从桌面端加入的测试自选股",
+        },
+    )
+
+    assert upsert_response.status_code == 200
+    assert upsert_response.json()["symbol"] == "MSFT"
+
+    second_session_response = client.post(
+        "/v1/auth/devices/register",
+        json={
+            "account_key": "sync-fixture-shared",
+            "account_name": "多端同步账户",
+            "device_name": "iPhone 测试机",
+            "platform": "ios",
+        },
+    )
+    second_session = second_session_response.json()
+
+    assert second_session["workspace_id"] == workspace_id
+
+    snapshot_response = client.get(f"/v1/workspaces/{workspace_id}/snapshot")
+    snapshot = snapshot_response.json()
+    symbols = {item["symbol"] for item in snapshot["watchlist"]}
+    assert "MSFT" in symbols
+
+    events_response = client.get(f"/v1/workspaces/{workspace_id}/sync-events?since_sequence=5")
+    assert events_response.status_code == 200
+    events = events_response.json()
+    assert any(event["entity_type"] == "watchlist_item" for event in events)
+
+
 def test_news_analysis_returns_chinese_summary_and_sources() -> None:
     response = client.post(
         "/v1/news/analyze",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .analysis import analyze_news
@@ -10,8 +10,14 @@ from .models import (
     OrderIntent,
     PaperOrder,
     RiskDecision,
+    DeviceRegistrationRequest,
+    DeviceSession,
     StrategySpec,
     StrategyValidationResult,
+    SyncEvent,
+    WatchlistItem,
+    WatchlistUpsertRequest,
+    WorkspaceSnapshot,
 )
 from .risk import evaluate_order_intent
 from .simulation import submit_paper_order
@@ -53,9 +59,53 @@ def capabilities() -> dict[str, object]:
             "strategy_spec_validation",
             "risk_gate",
             "paper_order_mock",
+            "device_registration",
+            "workspace_sync_snapshot",
+            "watchlist_sync",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
+
+
+@app.post("/v1/auth/devices/register", response_model=DeviceSession)
+def register_device_endpoint(request: DeviceRegistrationRequest) -> DeviceSession:
+    return store.register_device(request)
+
+
+@app.get("/v1/workspaces/{workspace_id}/snapshot", response_model=WorkspaceSnapshot)
+def workspace_snapshot_endpoint(
+    workspace_id: str,
+    since_sequence: int = Query(default=0, ge=0),
+) -> WorkspaceSnapshot:
+    try:
+        return store.get_workspace_snapshot(workspace_id, since_sequence=since_sequence)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="工作区不存在。") from exc
+
+
+@app.put("/v1/workspaces/{workspace_id}/watchlist/{symbol}", response_model=WatchlistItem)
+def upsert_watchlist_item_endpoint(
+    workspace_id: str,
+    symbol: str,
+    request: WatchlistUpsertRequest,
+) -> WatchlistItem:
+    if request.symbol != symbol.strip().upper():
+        raise HTTPException(status_code=400, detail="路径中的股票代码必须与请求体一致。")
+    try:
+        return store.upsert_watchlist_item(workspace_id, request)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="工作区不存在。") from exc
+
+
+@app.get("/v1/workspaces/{workspace_id}/sync-events", response_model=list[SyncEvent])
+def list_sync_events_endpoint(
+    workspace_id: str,
+    since_sequence: int = Query(default=0, ge=0),
+) -> list[SyncEvent]:
+    try:
+        return store.list_sync_events(workspace_id, since_sequence=since_sequence)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="工作区不存在。") from exc
 
 
 @app.post("/v1/news/analyze", response_model=NewsAnalysis)

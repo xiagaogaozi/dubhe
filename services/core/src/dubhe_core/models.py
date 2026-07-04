@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -49,6 +49,21 @@ class RiskStatus(str, Enum):
 class PaperOrderStatus(str, Enum):
     ACCEPTED = "accepted"
     BLOCKED = "blocked"
+
+
+class DevicePlatform(str, Enum):
+    WINDOWS = "windows"
+    MACOS = "macos"
+    IOS = "ios"
+    ANDROID = "android"
+
+
+class SyncEntityType(str, Enum):
+    WORKSPACE = "workspace"
+    WATCHLIST_ITEM = "watchlist_item"
+    NEWS_ANALYSIS = "news_analysis"
+    RISK_DECISION = "risk_decision"
+    PAPER_ORDER = "paper_order"
 
 
 class NewsEvent(BaseModel):
@@ -161,3 +176,83 @@ class PaperOrder(BaseModel):
     submitted_at: datetime = Field(default_factory=utc_now)
     message_zh: str
 
+
+class DeviceRegistrationRequest(BaseModel):
+    account_key: str = Field(default="local-demo", min_length=3)
+    account_name: str = Field(default="本地演示账户", min_length=1)
+    device_name: str = Field(min_length=1)
+    platform: DevicePlatform
+
+
+class UserAccount(BaseModel):
+    id: str = Field(default_factory=lambda: f"user_{uuid4().hex}")
+    account_key: str = Field(min_length=3)
+    display_name: str = Field(min_length=1)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class DeviceSession(BaseModel):
+    user_id: str
+    device_id: str
+    workspace_id: str
+    access_token: str
+    platform: DevicePlatform
+    device_name: str
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class Workspace(BaseModel):
+    id: str = Field(default_factory=lambda: f"workspace_{uuid4().hex}")
+    owner_user_id: str
+    name: str = Field(min_length=1)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class WatchlistItem(BaseModel):
+    id: str = Field(default_factory=lambda: f"watch_{uuid4().hex}")
+    workspace_id: str = Field(min_length=1)
+    symbol: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    market: Market
+    notes_zh: str | None = None
+    added_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    @field_validator("symbol")
+    @classmethod
+    def normalize_watch_symbol(cls, symbol: str) -> str:
+        return symbol.strip().upper()
+
+
+class WatchlistUpsertRequest(BaseModel):
+    symbol: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    market: Market
+    notes_zh: str | None = None
+
+    @field_validator("symbol")
+    @classmethod
+    def normalize_watch_symbol(cls, symbol: str) -> str:
+        return symbol.strip().upper()
+
+
+class SyncEvent(BaseModel):
+    id: str = Field(default_factory=lambda: f"sync_{uuid4().hex}")
+    workspace_id: str
+    sequence: int = Field(ge=1)
+    entity_type: SyncEntityType
+    entity_id: str
+    action: Literal["created", "updated", "deleted"]
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class WorkspaceSnapshot(BaseModel):
+    workspace: Workspace
+    watchlist: list[WatchlistItem] = Field(default_factory=list)
+    analyses: list[NewsAnalysis] = Field(default_factory=list)
+    risk_decisions: list[RiskDecision] = Field(default_factory=list)
+    paper_orders: list[PaperOrder] = Field(default_factory=list)
+    events: list[SyncEvent] = Field(default_factory=list)
+    server_sequence: int = 0
