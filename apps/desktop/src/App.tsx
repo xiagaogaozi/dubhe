@@ -4,6 +4,7 @@ import './App.css'
 
 const API_BASE = import.meta.env.VITE_DUBHE_CORE_URL ?? 'http://127.0.0.1:8000'
 const DEVICE_SESSION_STORAGE_KEY = 'dubhe.deviceSession'
+const DEFAULT_PAPER_ACCOUNT_ID = 'demo_account'
 
 let deviceAccessToken: string | null = null
 let logSequence = 0
@@ -132,6 +133,27 @@ type PaperOrder = {
   submitted_at: string
 }
 
+type PaperPortfolioPosition = {
+  market: Market
+  symbol: string
+  currency: string
+  quantity: number
+  avg_cost: number
+  last_price: number
+  market_value: number
+  unrealized_pnl: number
+  updated_at: string
+}
+
+type PaperPortfolioSnapshot = {
+  account_id: string
+  cash_by_currency: Record<string, number>
+  equity_by_currency: Record<string, number>
+  realized_pnl_by_currency: Record<string, number>
+  positions: PaperPortfolioPosition[]
+  updated_at: string
+}
+
 type StrategySpec = {
   strategy_name: string
   market_scope: Market[]
@@ -235,6 +257,7 @@ type WorkspaceSnapshot = {
   watchlist: SyncedWatchlistItem[]
   news_events: NewsEvent[]
   broker_orders: BrokerOrder[]
+  paper_portfolios: PaperPortfolioSnapshot[]
   server_sequence: number
 }
 
@@ -254,6 +277,7 @@ type SyncEvent = {
     | 'kill_switch'
     | 'paper_order'
     | 'broker_order'
+    | 'paper_portfolio'
   entity_id: string
   action: 'created' | 'updated' | 'deleted'
   payload: Record<string, unknown>
@@ -369,6 +393,18 @@ function percentLabel(value: number) {
   return `${(value * 100).toFixed(2)}%`
 }
 
+function moneyLabel(currency: string, value: number) {
+  try {
+    return new Intl.NumberFormat('zh-CN', {
+      currency,
+      maximumFractionDigits: 2,
+      style: 'currency',
+    }).format(value)
+  } catch {
+    return `${currency} ${value.toLocaleString('zh-CN')}`
+  }
+}
+
 function roleLabel(role: UserRole) {
   if (role === 'admin') return '管理员'
   if (role === 'risk_manager') return '风控管理员'
@@ -460,6 +496,7 @@ function syncEntityLabel(entityType: SyncEvent['entity_type']) {
   if (entityType === 'risk_decision') return '风控结果'
   if (entityType === 'paper_order') return '纸面订单'
   if (entityType === 'broker_order') return '模拟券商回报'
+  if (entityType === 'paper_portfolio') return '纸面组合'
   if (entityType === 'backtest_result') return '回测结果'
   if (entityType === 'strategy_draft') return '策略草案'
   if (entityType === 'news_event') return '新闻事件'
@@ -511,6 +548,7 @@ function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
   const [paperOrder, setPaperOrder] = useState<PaperOrder | null>(null)
   const [brokerOrder, setBrokerOrder] = useState<BrokerOrder | null>(null)
+  const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolioSnapshot | null>(null)
   const [isBusy, setBusy] = useState(false)
   const [apiStatus, setApiStatus] = useState<'未知' | '已连接' | '离线'>('未知')
   const [syncSocketStatus, setSyncSocketStatus] = useState<'未连接' | '已连接' | '离线'>('未连接')
@@ -609,6 +647,14 @@ function App() {
     return { users, audits }
   }, [canManageAdmin, canManageRisk])
 
+  const refreshPaperPortfolio = useCallback(async () => {
+    const portfolio = await getJson<PaperPortfolioSnapshot>(
+      `/v1/simulation/paper-portfolio/${DEFAULT_PAPER_ACCOUNT_ID}`,
+    )
+    setPaperPortfolio(portfolio)
+    return portfolio
+  }, [])
+
   async function setUserRole(user: UserSummary, role: UserRole) {
     if (!canManageAdmin || user.role === role) return
     setBusy(true)
@@ -668,6 +714,10 @@ function App() {
 
     if (event.entity_type === 'broker_order') {
       setBrokerOrder(event.payload as unknown as BrokerOrder)
+    }
+
+    if (event.entity_type === 'paper_portfolio') {
+      setPaperPortfolio(event.payload as unknown as PaperPortfolioSnapshot)
     }
 
     if (!['news_event', 'news_analysis'].includes(event.entity_type)) {
@@ -737,6 +787,9 @@ function App() {
         if (snapshot.broker_orders.length > 0) {
           setBrokerOrder(snapshot.broker_orders[0])
         }
+        if (snapshot.paper_portfolios.length > 0) {
+          setPaperPortfolio(snapshot.paper_portfolios[0])
+        }
         if (syncedWatchlist.length > 0) {
           setWatchlistItems(syncedWatchlist)
           const activeSymbol = syncedWatchlist.some((item) => item.symbol === fallbackWatchlist[0].symbol)
@@ -754,6 +807,7 @@ function App() {
         setNewsEvents(feed.events.length > 0 ? feed.events : [fallbackNewsEvent])
         setProviderStatus(feed.provider_status)
         setSelectedNewsId(feed.events[0]?.id ?? fallbackNewsEvent.id)
+        await refreshPaperPortfolio()
         if (canManageRisk) {
           await refreshSafetyState()
           await refreshGovernanceState()
@@ -794,7 +848,7 @@ function App() {
       cancelled = true
       syncSocket?.close()
     }
-  }, [canManageRisk, deviceSession, refreshGovernanceState, refreshSafetyState])
+  }, [canManageRisk, deviceSession, refreshGovernanceState, refreshPaperPortfolio, refreshSafetyState])
 
   async function runNewsAnalysis() {
     setBusy(true)
@@ -866,7 +920,7 @@ function App() {
     setBusy(true)
     try {
       const result = await postJson<RiskDecision>('/v1/risk/evaluate', {
-        account_id: 'demo_account',
+        account_id: DEFAULT_PAPER_ACCOUNT_ID,
         strategy_version_id: 'strategy_news_demo_v1',
         market: tickerContext.market,
         symbol: selectedTicker,
@@ -976,7 +1030,7 @@ function App() {
     setBusy(true)
     try {
       const result = await postJson<PaperOrder>('/v1/simulation/paper-orders', {
-        account_id: 'demo_account',
+        account_id: DEFAULT_PAPER_ACCOUNT_ID,
         strategy_version_id: 'strategy_news_demo_v1',
         market: tickerContext.market,
         symbol: selectedTicker,
@@ -992,6 +1046,7 @@ function App() {
       })
       setPaperOrder(result)
       setBrokerOrder(result.broker_order ?? null)
+      await refreshPaperPortfolio()
       if (canManageRisk) {
         await refreshGovernanceState()
       }
@@ -1404,6 +1459,44 @@ function App() {
             </>
           ) : (
             <p>尚未运行风控评估。</p>
+          )}
+        </section>
+
+        <section className="risk-card portfolio-card">
+          <h3>纸面组合</h3>
+          {paperPortfolio ? (
+            <>
+              <div className="portfolio-metrics">
+                {Object.entries(paperPortfolio.equity_by_currency).map(([currency, value]) => (
+                  <div key={currency}>
+                    <span>{currency} 权益</span>
+                    <strong>{moneyLabel(currency, value)}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="portfolio-cash-list">
+                {Object.entries(paperPortfolio.cash_by_currency).map(([currency, value]) => (
+                  <p key={currency}>现金 {currency}：{moneyLabel(currency, value)}</p>
+                ))}
+              </div>
+              {paperPortfolio.positions.length > 0 ? (
+                <div className="position-list">
+                  {paperPortfolio.positions.slice(0, 4).map((position) => (
+                    <div className="position-row" key={`${position.market}-${position.symbol}-${position.currency}`}>
+                      <span>
+                        <strong>{position.symbol}</strong>{' '}
+                        {position.quantity.toLocaleString('zh-CN')} 股 · 均价 {moneyLabel(position.currency, position.avg_cost)}
+                      </span>
+                      <span>{moneyLabel(position.currency, position.market_value)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>尚无持仓，提交纸面交易后会自动更新。</p>
+              )}
+            </>
+          ) : (
+            <p>纸面组合尚未同步。</p>
           )}
         </section>
 

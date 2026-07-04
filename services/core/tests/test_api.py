@@ -663,6 +663,66 @@ def test_paper_order_submits_to_simulated_broker() -> None:
     assert broker_orders_response.status_code == 200
     assert any(item["id"] == broker_order["id"] for item in broker_orders_response.json())
 
+    portfolio_response = client.get(
+        "/v1/simulation/paper-portfolio/acct_fixture",
+        headers=auth_headers(session),
+    )
+    assert portfolio_response.status_code == 200
+    portfolio = portfolio_response.json()
+    assert portfolio["cash_by_currency"]["USD"] == 98000
+    assert portfolio["equity_by_currency"]["USD"] == 100000
+    assert portfolio["positions"][0]["symbol"] == "NVDA"
+    assert portfolio["positions"][0]["quantity"] == 2
+    assert portfolio["positions"][0]["avg_cost"] == 1000
+
+    snapshot = client.get(
+        f"/v1/workspaces/{session['workspace_id']}/snapshot",
+        headers=auth_headers(session),
+    ).json()
+    assert any(item["account_id"] == "acct_fixture" for item in snapshot["paper_portfolios"])
+
+
+def test_paper_sell_blocks_when_position_is_insufficient() -> None:
+    session = register_test_device(
+        account_key="paper-short-block-fixture",
+        account_name="纸面空仓卖出测试账户",
+    )
+
+    response = client.post(
+        "/v1/simulation/paper-orders",
+        headers=auth_headers(session),
+        json={
+            "account_id": "short_block_fixture",
+            "strategy_version_id": "strategy_v1",
+            "market": "US",
+            "symbol": "NVDA",
+            "side": "sell",
+            "order_type": "market",
+            "quantity": 1,
+            "estimated_price": 1000,
+            "currency": "USD",
+            "created_by": "strategy",
+            "destination": "paper",
+            "rationale_zh": "测试空仓卖出拦截。",
+            "source_refs": ["analysis_fixture"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "blocked"
+    assert body["broker_order"] is None
+    assert "可卖数量 0" in body["risk_decision"]["reasons_zh"][-1]
+
+    portfolio_response = client.get(
+        "/v1/simulation/paper-portfolio/short_block_fixture",
+        headers=auth_headers(session),
+    )
+    assert portfolio_response.status_code == 200
+    portfolio = portfolio_response.json()
+    assert portfolio["cash_by_currency"]["USD"] == 100000
+    assert portfolio["positions"] == []
+
 
 def test_paper_order_blocks_missing_source_refs() -> None:
     session = register_test_device(

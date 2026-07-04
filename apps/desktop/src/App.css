@@ -916,6 +916,76 @@
   line-height: 1.45;
 }
 
+.portfolio-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.portfolio-metrics div {
+  min-height: 58px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(242, 240, 232, 0.06);
+}
+
+.portfolio-metrics span,
+.portfolio-metrics strong,
+.position-row span {
+  display: block;
+}
+
+.portfolio-metrics span {
+  color: #8d978f;
+  font-size: 12px;
+}
+
+.portfolio-metrics strong {
+  margin-top: 6px;
+  color: #f1f5f0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-cash-list {
+  margin-top: 8px;
+}
+
+.position-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.position-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: rgba(242, 240, 232, 0.06);
+}
+
+.position-row span {
+  color: #b5beb8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.position-row > span:last-child {
+  color: var(--green);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.position-row strong {
+  color: #f1f5f0;
+  font-size: 13px;
+}
+
 .bottom-panel {
   grid-column: 3 / 5;
   grid-row: 2;

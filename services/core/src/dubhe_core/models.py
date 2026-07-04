@@ -89,6 +89,7 @@ class SyncEntityType(str, Enum):
     KILL_SWITCH = "kill_switch"
     PAPER_ORDER = "paper_order"
     BROKER_ORDER = "broker_order"
+    PAPER_PORTFOLIO = "paper_portfolio"
 
 
 class ProviderStatus(str, Enum):
@@ -309,6 +310,37 @@ class PaperOrder(BaseModel):
     message_zh: str
 
 
+class PaperPortfolioPosition(BaseModel):
+    market: Market
+    symbol: str = Field(min_length=1)
+    currency: str = Field(min_length=3, max_length=3)
+    quantity: float = 0
+    avg_cost: float = Field(default=0, ge=0)
+    last_price: float = Field(default=0, ge=0)
+    market_value: float = 0
+    unrealized_pnl: float = 0
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    @field_validator("symbol")
+    @classmethod
+    def normalize_symbol(cls, symbol: str) -> str:
+        return symbol.strip().upper()
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_position_currency(cls, currency: str) -> str:
+        return currency.strip().upper()
+
+
+class PaperPortfolioSnapshot(BaseModel):
+    account_id: str = Field(min_length=1)
+    cash_by_currency: dict[str, float] = Field(default_factory=dict)
+    equity_by_currency: dict[str, float] = Field(default_factory=dict)
+    realized_pnl_by_currency: dict[str, float] = Field(default_factory=dict)
+    positions: list[PaperPortfolioPosition] = Field(default_factory=list)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class ApprovalRequest(BaseModel):
     id: str = Field(default_factory=lambda: f"approval_{uuid4().hex}")
     order_intent_id: str
@@ -475,6 +507,7 @@ class WorkspaceSnapshot(BaseModel):
     approval_requests: list[ApprovalRequest] = Field(default_factory=list)
     paper_orders: list[PaperOrder] = Field(default_factory=list)
     broker_orders: list[BrokerOrder] = Field(default_factory=list)
+    paper_portfolios: list[PaperPortfolioSnapshot] = Field(default_factory=list)
     strategy_drafts: list[StrategyDraft] = Field(default_factory=list)
     backtest_results: list[BacktestResult] = Field(default_factory=list)
     events: list[SyncEvent] = Field(default_factory=list)

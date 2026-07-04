@@ -1468,6 +1468,61 @@
           }
         }
       }
+    },
+    "/v1/simulation/paper-portfolio/{account_id}": {
+      "get": {
+        "summary": "Get Paper Portfolio Endpoint",
+        "operationId": "get_paper_portfolio_endpoint_v1_simulation_paper_portfolio__account_id__get",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperPortfolioSnapshot"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2689,6 +2744,110 @@
         ],
         "title": "PaperOrderStatus"
       },
+      "PaperPortfolioPosition": {
+        "properties": {
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "symbol": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Symbol"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity",
+            "default": 0
+          },
+          "avg_cost": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Avg Cost",
+            "default": 0
+          },
+          "last_price": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Last Price",
+            "default": 0
+          },
+          "market_value": {
+            "type": "number",
+            "title": "Market Value",
+            "default": 0
+          },
+          "unrealized_pnl": {
+            "type": "number",
+            "title": "Unrealized Pnl",
+            "default": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market",
+          "symbol",
+          "currency"
+        ],
+        "title": "PaperPortfolioPosition"
+      },
+      "PaperPortfolioSnapshot": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "cash_by_currency": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Cash By Currency"
+          },
+          "equity_by_currency": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Equity By Currency"
+          },
+          "realized_pnl_by_currency": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Realized Pnl By Currency"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/PaperPortfolioPosition"
+            },
+            "type": "array",
+            "title": "Positions"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "PaperPortfolioSnapshot"
+      },
       "ProviderStatus": {
         "type": "string",
         "enum": [
@@ -2956,7 +3115,8 @@
           "approval_request",
           "kill_switch",
           "paper_order",
-          "broker_order"
+          "broker_order",
+          "paper_portfolio"
         ],
         "title": "SyncEntityType"
       },
@@ -3293,6 +3453,13 @@
             },
             "type": "array",
             "title": "Broker Orders"
+          },
+          "paper_portfolios": {
+            "items": {
+              "$ref": "#/components/schemas/PaperPortfolioSnapshot"
+            },
+            "type": "array",
+            "title": "Paper Portfolios"
           },
           "strategy_drafts": {
             "items": {

@@ -24,7 +24,10 @@ from .models import (
     NewsEvent,
     NewsFeedResponse,
     OrderIntent,
+    OrderSide,
     PaperOrder,
+    PaperOrderStatus,
+    PaperPortfolioSnapshot,
     RiskDecision,
     RiskStatus,
     DeviceRegistrationRequest,
@@ -86,6 +89,7 @@ def capabilities() -> dict[str, object]:
             "risk_gate",
             "paper_order_mock",
             "simulated_paper_broker_adapter",
+            "paper_portfolio_ledger",
             "device_registration",
             "workspace_sync_snapshot",
             "watchlist_sync",
@@ -444,6 +448,38 @@ def submit_paper_order_endpoint(
     intent: OrderIntent,
     session: DeviceSession = Depends(require_device_session),
 ) -> PaperOrder:
+    if intent.side == OrderSide.SELL:
+        portfolio = store.get_paper_portfolio(intent.account_id)
+        held_quantity = 0.0
+        for position in portfolio.positions:
+            if (
+                position.market == intent.market
+                and position.symbol == intent.symbol
+                and position.currency == intent.currency
+            ):
+                held_quantity = position.quantity
+                break
+
+        if held_quantity + 0.00000001 < intent.quantity:
+            decision = evaluate_order_intent(intent, store.current_risk_policy())
+            reasons = list(decision.reasons_zh)
+            reasons.append(
+                f"纸面组合中 {intent.symbol} 可卖数量 {held_quantity:g}，不足以卖出 {intent.quantity:g}。"
+            )
+            blocked_order = PaperOrder(
+                order_intent_id=intent.id,
+                status=PaperOrderStatus.BLOCKED,
+                risk_decision=decision.model_copy(
+                    update={
+                        "status": RiskStatus.REJECTED,
+                        "allowed_destination": "none",
+                        "reasons_zh": reasons,
+                    },
+                ),
+                message_zh="纸面订单已被纸面组合持仓校验拦截。",
+            )
+            return store.add_paper_order(blocked_order, session)
+
     return store.add_paper_order(submit_paper_order(intent, store.current_risk_policy()), session)
 
 
@@ -459,3 +495,11 @@ def list_broker_orders_endpoint(
     _session: DeviceSession = Depends(require_device_session),
 ) -> list[BrokerOrder]:
     return store.broker_orders
+
+
+@app.get("/v1/simulation/paper-portfolio/{account_id}", response_model=PaperPortfolioSnapshot)
+def get_paper_portfolio_endpoint(
+    account_id: str,
+    _session: DeviceSession = Depends(require_device_session),
+) -> PaperPortfolioSnapshot:
+    return store.get_paper_portfolio(account_id)

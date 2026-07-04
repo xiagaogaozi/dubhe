@@ -30,6 +30,8 @@ from .models import (
     NewsEvent,
     NewsAnalysis,
     PaperOrder,
+    PaperPortfolioPosition,
+    PaperPortfolioSnapshot,
     RiskDecision,
     RiskPolicy,
     StrategyDraft,
@@ -53,6 +55,11 @@ DEFAULT_WATCHLIST = [
     {"symbol": "600519.SH", "name": "贵州茅台", "market": "A_SHARE", "notes_zh": "A 股消费核心标的"},
     {"symbol": "AAPL", "name": "苹果", "market": "US", "notes_zh": "美股消费电子核心标的"},
 ]
+DEFAULT_PAPER_CASH_BY_CURRENCY = {
+    "USD": 100_000.0,
+    "HKD": 1_000_000.0,
+    "CNY": 1_000_000.0,
+}
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
@@ -140,6 +147,10 @@ class SQLiteStore:
     @property
     def broker_orders(self) -> list[BrokerOrder]:
         return self._load_payloads("broker_orders", BrokerOrder, "submitted_at, id")
+
+    @property
+    def paper_portfolios(self) -> list[PaperPortfolioSnapshot]:
+        return self._load_payloads("paper_portfolios", PaperPortfolioSnapshot, "updated_at DESC, account_id")
 
     @property
     def strategy_drafts(self) -> list[StrategyDraft]:
@@ -364,6 +375,13 @@ class SQLiteStore:
                     entity_id=order.broker_order.id,
                     payload=order.broker_order.model_dump(mode="json"),
                 )
+                portfolio = self._apply_broker_order_to_portfolio(order.broker_order)
+                self._append_entity_event_to_all_workspaces(
+                    entity_type=SyncEntityType.PAPER_PORTFOLIO,
+                    entity_id=portfolio.account_id,
+                    action="updated",
+                    payload=portfolio.model_dump(mode="json"),
+                )
             self._append_audit_log(
                 actor_session=actor_session,
                 action="simulation.paper_order_submitted",
@@ -378,6 +396,20 @@ class SQLiteStore:
             )
             self._connection.commit()
             return order
+
+    def get_paper_portfolio(self, account_id: str) -> PaperPortfolioSnapshot:
+        with self._lock:
+            portfolio = self._paper_portfolio_by_account_id(account_id)
+            if portfolio is None:
+                portfolio = self._default_paper_portfolio(account_id)
+                self._save_paper_portfolio(portfolio)
+                self._append_entity_event_to_all_workspaces(
+                    entity_type=SyncEntityType.PAPER_PORTFOLIO,
+                    entity_id=portfolio.account_id,
+                    payload=portfolio.model_dump(mode="json"),
+                )
+                self._connection.commit()
+            return portfolio
 
     def add_strategy_draft(self, draft: StrategyDraft) -> StrategyDraft:
         with self._lock:
@@ -645,6 +677,7 @@ class SQLiteStore:
                 approval_requests=self.approval_requests,
                 paper_orders=self.paper_orders,
                 broker_orders=self.broker_orders,
+                paper_portfolios=self.paper_portfolios,
                 strategy_drafts=self.strategy_drafts,
                 backtest_results=self.backtest_results,
                 events=self.list_sync_events(workspace_id, since_sequence=since_sequence),
@@ -766,6 +799,12 @@ class SQLiteStore:
                     payload TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS paper_portfolios (
+                    account_id TEXT PRIMARY KEY,
+                    updated_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS strategy_drafts (
                     id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
@@ -793,6 +832,7 @@ class SQLiteStore:
                 CREATE INDEX IF NOT EXISTS idx_watchlist_workspace ON watchlist_items(workspace_id);
                 CREATE INDEX IF NOT EXISTS idx_sync_events_workspace_sequence
                     ON sync_events(workspace_id, sequence);
+                CREATE INDEX IF NOT EXISTS idx_paper_portfolios_updated_at ON paper_portfolios(updated_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_user_id ON audit_logs(actor_user_id);
                 """
@@ -892,6 +932,110 @@ class SQLiteStore:
             """,
             (1 if state.enabled else 0, state.updated_at.isoformat(), state.model_dump_json()),
         )
+
+    def _save_paper_portfolio(self, portfolio: PaperPortfolioSnapshot) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO paper_portfolios (account_id, updated_at, payload)
+            VALUES (?, ?, ?)
+            """,
+            (
+                portfolio.account_id,
+                portfolio.updated_at.isoformat(),
+                portfolio.model_dump_json(),
+            ),
+        )
+
+    def _paper_portfolio_by_account_id(self, account_id: str) -> PaperPortfolioSnapshot | None:
+        row = self._connection.execute(
+            "SELECT payload FROM paper_portfolios WHERE account_id = ?",
+            (account_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return PaperPortfolioSnapshot.model_validate_json(row["payload"])
+
+    def _default_paper_portfolio(self, account_id: str) -> PaperPortfolioSnapshot:
+        return PaperPortfolioSnapshot(
+            account_id=account_id,
+            cash_by_currency=dict(DEFAULT_PAPER_CASH_BY_CURRENCY),
+            equity_by_currency=dict(DEFAULT_PAPER_CASH_BY_CURRENCY),
+            realized_pnl_by_currency={currency: 0 for currency in DEFAULT_PAPER_CASH_BY_CURRENCY},
+        )
+
+    def _apply_broker_order_to_portfolio(self, order: BrokerOrder) -> PaperPortfolioSnapshot:
+        account_id = order.broker_account_id.removeprefix("paper:")
+        portfolio = self._paper_portfolio_by_account_id(account_id) or self._default_paper_portfolio(account_id)
+        cash_by_currency = dict(portfolio.cash_by_currency)
+        realized_pnl_by_currency = dict(portfolio.realized_pnl_by_currency)
+        positions = {
+            (position.market.value, position.symbol, position.currency): position
+            for position in portfolio.positions
+        }
+
+        for fill in order.fills:
+            currency = order.currency.upper()
+            position_key = (order.market.value, fill.symbol.upper(), currency)
+            existing = positions.get(position_key)
+            if existing is None:
+                existing = PaperPortfolioPosition(
+                    market=order.market,
+                    symbol=fill.symbol,
+                    currency=currency,
+                )
+
+            current_cash = cash_by_currency.get(currency, DEFAULT_PAPER_CASH_BY_CURRENCY.get(currency, 0.0))
+            current_realized = realized_pnl_by_currency.get(currency, 0.0)
+
+            if fill.side.value == "buy":
+                next_quantity = existing.quantity + fill.quantity
+                next_avg_cost = (
+                    ((existing.quantity * existing.avg_cost) + fill.notional) / next_quantity
+                    if next_quantity
+                    else 0
+                )
+                current_cash -= fill.notional + fill.commission
+            else:
+                next_quantity = existing.quantity - fill.quantity
+                next_avg_cost = existing.avg_cost if next_quantity > 0 else 0
+                current_realized += ((fill.price - existing.avg_cost) * fill.quantity) - fill.commission
+                current_cash += fill.notional - fill.commission
+
+            updated_position = existing.model_copy(
+                update={
+                    "quantity": round(next_quantity, 8),
+                    "avg_cost": round(max(next_avg_cost, 0), 8),
+                    "last_price": fill.price,
+                    "market_value": round(next_quantity * fill.price, 4),
+                    "unrealized_pnl": round((fill.price - next_avg_cost) * next_quantity, 4),
+                    "updated_at": fill.filled_at,
+                },
+            )
+
+            cash_by_currency[currency] = round(current_cash, 4)
+            realized_pnl_by_currency[currency] = round(current_realized, 4)
+            if abs(updated_position.quantity) < 0.00000001:
+                positions.pop(position_key, None)
+            else:
+                positions[position_key] = updated_position
+
+        position_list = sorted(positions.values(), key=lambda item: (item.currency, item.market.value, item.symbol))
+        equity_by_currency = dict(cash_by_currency)
+        for position in position_list:
+            equity_by_currency[position.currency] = round(
+                equity_by_currency.get(position.currency, 0.0) + position.market_value,
+                4,
+            )
+
+        updated = PaperPortfolioSnapshot(
+            account_id=account_id,
+            cash_by_currency=cash_by_currency,
+            equity_by_currency=equity_by_currency,
+            realized_pnl_by_currency=realized_pnl_by_currency,
+            positions=position_list,
+        )
+        self._save_paper_portfolio(updated)
+        return updated
 
     def _approval_by_id(self, approval_id: str) -> ApprovalRequest:
         row = self._connection.execute(
