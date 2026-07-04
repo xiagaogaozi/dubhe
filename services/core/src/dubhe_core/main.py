@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+import asyncio
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .analysis import analyze_news
@@ -38,6 +40,8 @@ from .risk import evaluate_order_intent
 from .simulation import submit_paper_order
 from .store import store
 from .strategy import validate_strategy_spec
+
+SYNC_WEBSOCKET_POLL_SECONDS = 0.25
 
 app = FastAPI(
     title="Dubhe Core",
@@ -85,9 +89,17 @@ def capabilities() -> dict[str, object]:
             "kill_switch",
             "device_bearer_token_auth",
             "device_token_revocation",
+            "workspace_sync_websocket",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
+
+
+def authenticate_device_token(access_token: str) -> DeviceSession | None:
+    session = store.device_session_by_access_token(access_token)
+    if session is None:
+        return None
+    return session
 
 
 def require_device_session(authorization: str | None = Header(default=None)) -> DeviceSession:
@@ -95,7 +107,7 @@ def require_device_session(authorization: str | None = Header(default=None)) -> 
     if scheme.lower() != "bearer" or not token.strip():
         raise HTTPException(status_code=401, detail="需要设备访问令牌。")
 
-    session = store.device_session_by_access_token(token)
+    session = authenticate_device_token(token)
     if session is None:
         raise HTTPException(status_code=401, detail="设备访问令牌无效或已失效。")
     return session
@@ -158,6 +170,37 @@ def list_sync_events_endpoint(
         return store.list_sync_events(workspace_id, since_sequence=since_sequence)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="工作区不存在。") from exc
+
+
+@app.websocket("/v1/workspaces/{workspace_id}/sync-events/ws")
+async def workspace_sync_events_websocket(
+    websocket: WebSocket,
+    workspace_id: str,
+    access_token: str = Query(min_length=1),
+    since_sequence: int = Query(default=0, ge=0),
+) -> None:
+    session = authenticate_device_token(access_token)
+    if session is None or session.workspace_id != workspace_id:
+        await websocket.close(code=1008)
+        return
+
+    try:
+        store.get_workspace_snapshot(workspace_id, since_sequence=since_sequence)
+    except KeyError:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    cursor = since_sequence
+    try:
+        while True:
+            events = store.list_sync_events(workspace_id, since_sequence=cursor)
+            for event in events:
+                await websocket.send_json(event.model_dump(mode="json"))
+                cursor = max(cursor, event.sequence)
+            await asyncio.sleep(SYNC_WEBSOCKET_POLL_SECONDS)
+    except WebSocketDisconnect:
+        return
 
 
 @app.post("/v1/news/analyze", response_model=NewsAnalysis)

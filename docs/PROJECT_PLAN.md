@@ -484,6 +484,10 @@ AI strategy draft
 - Auth/device/workspace API。
 - WebSocket task channel。
 
+当前状态：
+
+- 已完成 SQLite 版设备注册、设备 token 认证/撤销、工作区快照、增量同步事件和 WebSocket 同步事件流；生产版仍需迁移 PostgreSQL/Redis、正式登录/MFA 和权限模型。
+
 通过标准：
 
 - Windows/macOS/iOS/Android client mock can login and receive sync events。

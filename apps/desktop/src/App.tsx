@@ -176,6 +176,27 @@ type WorkspaceSnapshot = {
   server_sequence: number
 }
 
+type SyncEvent = {
+  id: string
+  workspace_id: string
+  sequence: number
+  entity_type:
+    | 'workspace'
+    | 'watchlist_item'
+    | 'news_event'
+    | 'news_analysis'
+    | 'strategy_draft'
+    | 'backtest_result'
+    | 'risk_decision'
+    | 'approval_request'
+    | 'kill_switch'
+    | 'paper_order'
+  entity_id: string
+  action: 'created' | 'updated' | 'deleted'
+  payload: Record<string, unknown>
+  created_at: string
+}
+
 type WatchRow = {
   symbol: string
   name: string
@@ -312,6 +333,30 @@ function marketLabel(market: Market) {
   return '全球'
 }
 
+function syncEntityLabel(entityType: SyncEvent['entity_type']) {
+  if (entityType === 'watchlist_item') return '自选股'
+  if (entityType === 'approval_request') return '审批请求'
+  if (entityType === 'kill_switch') return '急停状态'
+  if (entityType === 'risk_decision') return '风控结果'
+  if (entityType === 'paper_order') return '纸面订单'
+  if (entityType === 'backtest_result') return '回测结果'
+  if (entityType === 'strategy_draft') return '策略草案'
+  if (entityType === 'news_event') return '新闻事件'
+  if (entityType === 'news_analysis') return 'AI 分析'
+  return '工作区'
+}
+
+function syncSocketUrl(workspaceId: string, sinceSequence: number) {
+  const url = new URL(API_BASE)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.pathname = `/v1/workspaces/${workspaceId}/sync-events/ws`
+  url.search = new URLSearchParams({
+    access_token: deviceAccessToken ?? '',
+    since_sequence: String(sinceSequence),
+  }).toString()
+  return url.toString()
+}
+
 function Icon({ label }: { label: string }) {
   return <span className="icon-glyph" aria-hidden="true">{label}</span>
 }
@@ -334,6 +379,7 @@ function App() {
   const [paperOrder, setPaperOrder] = useState<PaperOrder | null>(null)
   const [isBusy, setBusy] = useState(false)
   const [apiStatus, setApiStatus] = useState<'未知' | '已连接' | '离线'>('未知')
+  const [syncSocketStatus, setSyncSocketStatus] = useState<'未连接' | '已连接' | '离线'>('未连接')
   const [logs, setLogs] = useState<LogEntry[]>([
     { time: nowTime(), kind: 'info', message: '工作台已载入，可连接 Dubhe Core。' },
     { time: nowTime(), kind: 'warning', message: '实盘交易关闭：所有真实订单必须先通过风控与人工审批。' },
@@ -364,6 +410,37 @@ function App() {
     setApprovalRequests(approvals)
     setKillSwitch(killSwitchState)
     return { approvals, killSwitchState }
+  }
+
+  function applySyncEvent(event: SyncEvent) {
+    setSyncSequence((current) => Math.max(current, event.sequence))
+
+    if (event.entity_type === 'approval_request') {
+      const approval = event.payload as unknown as ApprovalRequest
+      setApprovalRequests((current) => [approval, ...current.filter((item) => item.id !== approval.id)])
+    }
+
+    if (event.entity_type === 'kill_switch') {
+      setKillSwitch(event.payload as unknown as KillSwitchState)
+    }
+
+    if (event.entity_type === 'watchlist_item') {
+      const item = event.payload as unknown as SyncedWatchlistItem
+      setWatchlistItems((current) => {
+        const row: WatchRow = {
+          symbol: item.symbol,
+          name: item.name,
+          market: item.market,
+          move: demoMoves[item.symbol] ?? '0.0%',
+          notes_zh: item.notes_zh,
+        }
+        return [row, ...current.filter((existing) => existing.symbol !== row.symbol)]
+      })
+    }
+
+    if (!['news_event', 'news_analysis'].includes(event.entity_type)) {
+      appendLog('info', `实时同步：${syncEntityLabel(event.entity_type)} ${event.action}。`)
+    }
   }
 
   function newsFeedPath(item: WatchRow) {
@@ -400,6 +477,7 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    let syncSocket: WebSocket | null = null
 
     async function connectWorkspaceSync() {
       try {
@@ -447,6 +525,18 @@ function App() {
         setSelectedNewsId(feed.events[0]?.id ?? fallbackNewsEvent.id)
         await refreshSafetyState()
         if (cancelled) return
+        syncSocket = new WebSocket(syncSocketUrl(session.workspace_id, snapshot.server_sequence))
+        syncSocket.onopen = () => {
+          setSyncSocketStatus('已连接')
+          appendLog('success', '实时同步已连接。')
+        }
+        syncSocket.onmessage = (message) => {
+          applySyncEvent(JSON.parse(message.data) as SyncEvent)
+        }
+        syncSocket.onclose = () => {
+          setSyncSocketStatus('离线')
+          appendLog('warning', '实时同步已断开。')
+        }
         setApiStatus('已连接')
         appendLog(
           'success',
@@ -463,6 +553,7 @@ function App() {
 
     return () => {
       cancelled = true
+      syncSocket?.close()
     }
   }, [])
 
@@ -711,6 +802,7 @@ function App() {
           <h2>策略项目</h2>
           <p>新闻情绪测试策略</p>
           <p>同步序列 {syncSequence}</p>
+          <p>实时同步 {syncSocketStatus}</p>
         </section>
       </aside>
 

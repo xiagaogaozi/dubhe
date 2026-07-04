@@ -131,6 +131,38 @@ def test_device_token_can_be_revoked() -> None:
     assert after_response.status_code == 401
 
 
+def test_workspace_sync_websocket_streams_new_events() -> None:
+    session = register_test_device(
+        account_key="sync-websocket-fixture",
+        account_name="实时同步测试账户",
+    )
+    workspace_id = session["workspace_id"]
+    headers = auth_headers(session)
+    snapshot = client.get(f"/v1/workspaces/{workspace_id}/snapshot", headers=headers).json()
+
+    with client.websocket_connect(
+        f"/v1/workspaces/{workspace_id}/sync-events/ws"
+        f"?access_token={session['access_token']}&since_sequence={snapshot['server_sequence']}",
+    ) as websocket:
+        upsert_response = client.put(
+            f"/v1/workspaces/{workspace_id}/watchlist/AMD",
+            headers=headers,
+            json={
+                "symbol": "AMD",
+                "name": "超威半导体",
+                "market": "US",
+                "notes_zh": "通过 WebSocket 验证同步事件。",
+            },
+        )
+        assert upsert_response.status_code == 200
+
+        event = websocket.receive_json()
+        assert event["entity_type"] == "watchlist_item"
+        assert event["action"] == "created"
+        assert event["payload"]["symbol"] == "AMD"
+        assert event["sequence"] > snapshot["server_sequence"]
+
+
 def test_watchlist_sync_events_are_shared_across_devices() -> None:
     first_session = register_test_device(
         account_key="sync-fixture-shared",
