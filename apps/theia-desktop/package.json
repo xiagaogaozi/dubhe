@@ -7,7 +7,9 @@
     "build": "yarn --cwd packages/dubhe-theia-extension build && yarn --cwd app bundle",
     "start": "yarn --cwd app start",
     "rebuild": "yarn --cwd app rebuild",
-    "package:electron": "yarn --cwd app package:electron"
+    "package:electron": "yarn --cwd app package:electron",
+    "dist:windows": "yarn --cwd app dist:windows",
+    "dist:mac": "yarn --cwd app dist:mac"
   },
   "workspaces": [
     "app",

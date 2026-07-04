@@ -1,0 +1,46 @@
+appId: com.dubhe.desktop
+productName: Dubhe
+artifactName: Dubhe-${version}-${os}-${arch}.${ext}
+asar: false
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
+directories:
+  output: dist
+
+files:
+  - package.json
+  - lib/**/*
+  - "!lib/**/*.map"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+
+nsis:
+  artifactName: Dubhe-${version}-win-${arch}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+portable:
+  artifactName: Dubhe-${version}-win-${arch}-portable.${ext}

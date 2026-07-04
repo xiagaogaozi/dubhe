@@ -44,7 +44,34 @@ yarn build
 yarn package:electron
 ```
 
-该命令目标是生成 Theia Electron desktop package。当前仍未完成 Windows `.exe/.msi` 和 macOS `.dmg/.pkg` 的正式签名、图标、自动更新、安装器元数据和发布流水线。
+该命令会先执行 Theia build，再通过 `electron-builder --dir` 生成未签名目录包。Windows 本地验证产物位于 `app/dist/win-unpacked/Dubhe.exe`。
+
+Windows 安装器目标：
+
+```powershell
+yarn dist:windows
+```
+
+该命令当前会生成：
+
+- `app/dist/Dubhe-0.1.0-win-x64-setup.exe`
+- `app/dist/Dubhe-0.1.0-win-x64-portable.exe`
+- `app/dist/win-unpacked/Dubhe.exe`
+
+macOS 安装器目标：
+
+```powershell
+yarn dist:mac
+```
+
+国内网络如果下载 Electron 或 electron-builder 辅助二进制超时，可以在当前 PowerShell 会话里临时设置镜像后再执行打包命令：
+
+```powershell
+$env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = 'https://npmmirror.com/mirrors/electron-builder-binaries/'
+```
+
+当前已经能生成未签名 Windows `.exe` 安装器和便携版；仍未完成 Windows `.msi`、macOS `.dmg/.pkg` 实机验证、正式签名、图标、自动更新、安装器元数据和发布流水线。`dist:mac` 需要在 macOS 构建机上执行。
 
 ## 后续迁移顺序
 
