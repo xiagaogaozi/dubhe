@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from .models import (
     DeviceRegistrationRequest,
     DeviceSession,
+    NewsEvent,
     NewsAnalysis,
     PaperOrder,
     RiskDecision,
@@ -57,6 +58,10 @@ class SQLiteStore:
         self._initialize_schema()
 
     @property
+    def news_events(self) -> list[NewsEvent]:
+        return self._load_payloads("news_events", NewsEvent, "published_at DESC, id")
+
+    @property
     def analyses(self) -> list[NewsAnalysis]:
         return self._load_payloads("news_analyses", NewsAnalysis, "generated_at, id")
 
@@ -71,6 +76,29 @@ class SQLiteStore:
     def close(self) -> None:
         with self._lock:
             self._connection.close()
+
+    def add_news_event(self, event: NewsEvent) -> NewsEvent:
+        with self._lock:
+            self._save_news_event(event)
+            self._append_entity_event_to_all_workspaces(
+                entity_type=SyncEntityType.NEWS_EVENT,
+                entity_id=event.id,
+                payload=event.model_dump(mode="json"),
+            )
+            self._connection.commit()
+            return event
+
+    def add_news_events(self, events: list[NewsEvent]) -> list[NewsEvent]:
+        with self._lock:
+            for event in events:
+                self._save_news_event(event)
+                self._append_entity_event_to_all_workspaces(
+                    entity_type=SyncEntityType.NEWS_EVENT,
+                    entity_id=event.id,
+                    payload=event.model_dump(mode="json"),
+                )
+            self._connection.commit()
+            return events
 
     def add_analysis(self, analysis: NewsAnalysis) -> NewsAnalysis:
         with self._lock:
@@ -177,6 +205,7 @@ class SQLiteStore:
             return WorkspaceSnapshot(
                 workspace=workspace,
                 watchlist=self._watchlist_for_workspace(workspace_id),
+                news_events=self.news_events,
                 analyses=self.analyses,
                 risk_decisions=self.risk_decisions,
                 paper_orders=self.paper_orders,
@@ -256,6 +285,14 @@ class SQLiteStore:
                     payload TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS news_events (
+                    id TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    provider_event_id TEXT,
+                    published_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS risk_decisions (
                     id TEXT PRIMARY KEY,
                     evaluated_at TEXT NOT NULL,
@@ -308,6 +345,22 @@ class SQLiteStore:
             VALUES (?, ?, ?)
             """,
             (model_id, timestamp, payload.model_dump_json()),
+        )
+
+    def _save_news_event(self, event: NewsEvent) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO news_events
+                (id, provider, provider_event_id, published_at, payload)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                event.id,
+                event.provider,
+                event.provider_event_id,
+                event.published_at.isoformat(),
+                event.model_dump_json(),
+            ),
         )
 
     def _save_risk_decision(self, decision: RiskDecision) -> None:

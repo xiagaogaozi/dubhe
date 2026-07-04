@@ -7,11 +7,13 @@ from .analysis import analyze_news
 from .models import (
     NewsAnalysis,
     NewsEvent,
+    NewsFeedResponse,
     OrderIntent,
     PaperOrder,
     RiskDecision,
     DeviceRegistrationRequest,
     DeviceSession,
+    Market,
     StrategySpec,
     StrategyValidationResult,
     SyncEvent,
@@ -19,6 +21,7 @@ from .models import (
     WatchlistUpsertRequest,
     WorkspaceSnapshot,
 )
+from .news_sources import fetch_news_feed
 from .risk import evaluate_order_intent
 from .simulation import submit_paper_order
 from .store import store
@@ -63,6 +66,7 @@ def capabilities() -> dict[str, object]:
             "workspace_sync_snapshot",
             "watchlist_sync",
             "local_sqlite_persistence",
+            "public_news_feed_adapters",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
@@ -111,7 +115,25 @@ def list_sync_events_endpoint(
 
 @app.post("/v1/news/analyze", response_model=NewsAnalysis)
 def analyze_news_endpoint(event: NewsEvent) -> NewsAnalysis:
+    store.add_news_event(event)
     return store.add_analysis(analyze_news(event))
+
+
+@app.get("/v1/news/feed", response_model=NewsFeedResponse)
+def news_feed_endpoint(
+    market: Market = Query(default=Market.US),
+    symbol: str | None = Query(default=None, min_length=1),
+    limit: int = Query(default=8, ge=1, le=20),
+    live: bool = Query(default=True),
+) -> NewsFeedResponse:
+    feed = fetch_news_feed(market=market, symbol=symbol, limit=limit, live=live)
+    store.add_news_events(feed.events)
+    return feed
+
+
+@app.get("/v1/news/events", response_model=list[NewsEvent])
+def list_news_events_endpoint() -> list[NewsEvent]:
+    return store.news_events
 
 
 @app.get("/v1/news/analyses", response_model=list[NewsAnalysis])

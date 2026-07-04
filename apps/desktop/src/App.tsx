@@ -20,6 +20,39 @@ type NewsAnalysis = {
   generated_at: string
 }
 
+type NewsEvent = {
+  id: string
+  provider: string
+  provider_event_id?: string | null
+  source_name: string
+  market_scope: Market[]
+  language: string
+  title_original: string
+  title_zh?: string | null
+  published_at: string
+  received_at?: string
+  url?: string | null
+  tickers: string[]
+  entities: string[]
+  event_type: string
+  authority_score: number
+  duplicate_group_id?: string | null
+  license_flags: string[]
+}
+
+type NewsProviderStatus = {
+  provider: string
+  status: 'ok' | 'skipped' | 'unavailable'
+  fetched_count: number
+  message_zh: string
+}
+
+type NewsFeedResponse = {
+  events: NewsEvent[]
+  provider_status: NewsProviderStatus[]
+  generated_at: string
+}
+
 type RiskDecision = {
   id: string
   order_intent_id: string
@@ -69,6 +102,7 @@ type WorkspaceSnapshot = {
     updated_at: string
   }
   watchlist: SyncedWatchlistItem[]
+  news_events: NewsEvent[]
   server_sequence: number
 }
 
@@ -121,6 +155,24 @@ const fallbackAnalysis: NewsAnalysis = {
   source_refs: ['本地演示数据'],
   confidence: 0.845,
   generated_at: new Date().toISOString(),
+}
+
+const fallbackNewsEvent: NewsEvent = {
+  id: 'news_local_demo',
+  provider: 'fixture',
+  provider_event_id: 'desktop-news-001',
+  source_name: '本地演示新闻源',
+  market_scope: ['US'],
+  language: 'zh-CN',
+  title_original: '英伟达业绩超预期并宣布回购',
+  title_zh: '英伟达业绩超预期并宣布回购',
+  published_at: new Date().toISOString(),
+  url: 'https://example.com/news/desktop-news-001',
+  tickers: ['NVDA'],
+  entities: ['英伟达'],
+  event_type: 'earnings',
+  authority_score: 0.75,
+  license_flags: ['fixture'],
 }
 
 function nowTime() {
@@ -189,6 +241,9 @@ function App() {
   const [watchlistItems, setWatchlistItems] = useState<WatchRow[]>(fallbackWatchlist)
   const [workspaceName, setWorkspaceName] = useState('本地演示工作区')
   const [syncSequence, setSyncSequence] = useState(0)
+  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([fallbackNewsEvent])
+  const [selectedNewsId, setSelectedNewsId] = useState(fallbackNewsEvent.id)
+  const [providerStatus, setProviderStatus] = useState<NewsProviderStatus[]>([])
   const [analysis, setAnalysis] = useState<NewsAnalysis>(fallbackAnalysis)
   const [riskDecision, setRiskDecision] = useState<RiskDecision | null>(null)
   const [paperOrder, setPaperOrder] = useState<PaperOrder | null>(null)
@@ -204,8 +259,48 @@ function App() {
     [selectedTicker, watchlistItems],
   )
 
+  const selectedNews = useMemo(
+    () =>
+      newsEvents.find((event) => event.id === selectedNewsId) ??
+      newsEvents.find((event) => event.tickers.includes(selectedTicker)) ??
+      fallbackNewsEvent,
+    [newsEvents, selectedNewsId, selectedTicker],
+  )
+
   function appendLog(kind: LogEntry['kind'], message: string) {
     setLogs((current) => [{ time: nowTime(), kind, message }, ...current].slice(0, 4))
+  }
+
+  function newsFeedPath(item: WatchRow) {
+    const params = new URLSearchParams({
+      market: item.market,
+      symbol: item.symbol,
+      limit: '8',
+      live: 'true',
+    })
+    return `/v1/news/feed?${params.toString()}`
+  }
+
+  async function loadNewsFeed(item: WatchRow) {
+    const feed = await getJson<NewsFeedResponse>(newsFeedPath(item))
+    setNewsEvents(feed.events.length > 0 ? feed.events : [fallbackNewsEvent])
+    setProviderStatus(feed.provider_status)
+    setSelectedNewsId(feed.events[0]?.id ?? fallbackNewsEvent.id)
+    return feed
+  }
+
+  async function refreshNewsFeed() {
+    setBusy(true)
+    try {
+      const feed = await loadNewsFeed(tickerContext)
+      setApiStatus('已连接')
+      appendLog('success', `新闻源刷新完成：${feed.events.length} 条，${feed.provider_status.length} 个来源状态。`)
+    } catch (error) {
+      setApiStatus('离线')
+      appendLog('danger', `新闻源刷新失败：${error instanceof Error ? error.message : '未知错误'}。`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   useEffect(() => {
@@ -233,14 +328,32 @@ function App() {
 
         setWorkspaceName(snapshot.workspace.name)
         setSyncSequence(snapshot.server_sequence)
+        if (snapshot.news_events.length > 0) {
+          setNewsEvents(snapshot.news_events)
+          setSelectedNewsId(snapshot.news_events[0].id)
+        }
         if (syncedWatchlist.length > 0) {
           setWatchlistItems(syncedWatchlist)
-          setSelectedTicker((current) =>
-            syncedWatchlist.some((item) => item.symbol === current) ? current : syncedWatchlist[0].symbol,
-          )
+          const activeSymbol = syncedWatchlist.some((item) => item.symbol === fallbackWatchlist[0].symbol)
+            ? fallbackWatchlist[0].symbol
+            : syncedWatchlist[0].symbol
+          setSelectedTicker(activeSymbol)
         }
+        const activeSymbol = syncedWatchlist.some((item) => item.symbol === fallbackWatchlist[0].symbol)
+          ? fallbackWatchlist[0].symbol
+          : syncedWatchlist[0]?.symbol
+        const activeTicker =
+          syncedWatchlist.find((item) => item.symbol === activeSymbol) ?? syncedWatchlist[0] ?? fallbackWatchlist[0]
+        const feed = await getJson<NewsFeedResponse>(newsFeedPath(activeTicker))
+        if (cancelled) return
+        setNewsEvents(feed.events.length > 0 ? feed.events : [fallbackNewsEvent])
+        setProviderStatus(feed.provider_status)
+        setSelectedNewsId(feed.events[0]?.id ?? fallbackNewsEvent.id)
         setApiStatus('已连接')
-        appendLog('success', `同步快照已加载：${snapshot.watchlist.length} 个自选标的，序列 ${snapshot.server_sequence}。`)
+        appendLog(
+          'success',
+          `同步快照已加载：${snapshot.watchlist.length} 个自选标的；新闻源 ${feed.events.length} 条。`,
+        )
       } catch (error) {
         if (cancelled) return
         setApiStatus('离线')
@@ -258,22 +371,13 @@ function App() {
   async function runNewsAnalysis() {
     setBusy(true)
     try {
-      const result = await postJson<NewsAnalysis>('/v1/news/analyze', {
-        provider: 'desktop_demo',
-        provider_event_id: 'desktop-news-001',
-        source_name: '测试新闻源',
-        market_scope: [tickerContext.market] satisfies Market[],
-        language: 'zh-CN',
-        title_original: '英伟达业绩超预期并宣布回购',
-        title_zh: '英伟达业绩超预期并宣布回购',
-        published_at: new Date().toISOString(),
-        url: 'https://example.com/news/desktop-news-001',
-        tickers: [selectedTicker],
-        entities: [tickerContext.name],
-        event_type: 'earnings',
-        authority_score: 0.9,
-        license_flags: ['fixture'],
-      })
+      const event = {
+        ...selectedNews,
+        market_scope: selectedNews.market_scope.length > 0 ? selectedNews.market_scope : [tickerContext.market],
+        tickers: selectedNews.tickers.length > 0 ? selectedNews.tickers : [selectedTicker],
+        entities: selectedNews.entities.length > 0 ? selectedNews.entities : [tickerContext.name],
+      }
+      const result = await postJson<NewsAnalysis>('/v1/news/analyze', event)
       setAnalysis(result)
       setApiStatus('已连接')
       appendLog('success', `新闻分析完成：${result.affected_tickers.join('、')} 影响分 ${Math.round(result.impact_score * 100)}。`)
@@ -411,6 +515,9 @@ function App() {
             <h1>把新闻变成可验证的策略线索</h1>
           </div>
           <div className="topbar-actions">
+            <button type="button" onClick={refreshNewsFeed} disabled={isBusy}>
+              <Icon label="源" /> 刷新新闻源
+            </button>
             <button type="button" onClick={runNewsAnalysis} disabled={isBusy}>
               <Icon label="析" /> 分析新闻
             </button>
@@ -432,11 +539,31 @@ function App() {
 
         <article className="analysis-document">
           <div className="document-title">
-            <span className="source-chip">测试新闻源</span>
+            <span className="source-chip">{selectedNews.source_name}</span>
             <span>{marketLabel(tickerContext.market)} / {tickerContext.symbol}</span>
           </div>
-          <h2>{tickerContext.name}：业绩超预期并宣布回购</h2>
+          <h2>{selectedNews.title_zh || selectedNews.title_original}</h2>
           <p className="summary-text">{analysis.summary_zh}</p>
+
+          <section className="news-feed-panel">
+            <header>
+              <h3>新闻源事件</h3>
+              <span>{newsEvents.length} 条</span>
+            </header>
+            <div className="news-event-list">
+              {newsEvents.slice(0, 5).map((event) => (
+                <button
+                  className={selectedNews.id === event.id ? 'news-event is-selected' : 'news-event'}
+                  key={event.id}
+                  type="button"
+                  onClick={() => setSelectedNewsId(event.id)}
+                >
+                  <span>{event.source_name}</span>
+                  <strong>{event.title_zh || event.title_original}</strong>
+                </button>
+              ))}
+            </div>
+          </section>
 
           <div className="metric-grid">
             <div>
@@ -491,6 +618,19 @@ function App() {
           <div className="chat user">可以直接实盘买吗？</div>
           <div className="chat assistant">不可以。AI 只能生成订单意图，实盘必须进入风控和人工审批。</div>
         </div>
+
+        <section className="risk-card">
+          <h3>新闻源状态</h3>
+          {providerStatus.length > 0 ? (
+            providerStatus.slice(0, 3).map((status) => (
+              <p key={status.provider}>
+                {status.provider}：{status.message_zh}
+              </p>
+            ))
+          ) : (
+            <p>尚未刷新实时新闻源。</p>
+          )}
+        </section>
 
         <section className="risk-card">
           <h3>风控快照</h3>

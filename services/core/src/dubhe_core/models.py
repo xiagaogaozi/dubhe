@@ -61,9 +61,16 @@ class DevicePlatform(str, Enum):
 class SyncEntityType(str, Enum):
     WORKSPACE = "workspace"
     WATCHLIST_ITEM = "watchlist_item"
+    NEWS_EVENT = "news_event"
     NEWS_ANALYSIS = "news_analysis"
     RISK_DECISION = "risk_decision"
     PAPER_ORDER = "paper_order"
+
+
+class ProviderStatus(str, Enum):
+    OK = "ok"
+    SKIPPED = "skipped"
+    UNAVAILABLE = "unavailable"
 
 
 class NewsEvent(BaseModel):
@@ -102,6 +109,19 @@ class NewsAnalysis(BaseModel):
     affected_tickers: list[str] = Field(default_factory=list)
     source_refs: list[str] = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
+class NewsProviderStatus(BaseModel):
+    provider: str
+    status: ProviderStatus
+    fetched_count: int = Field(default=0, ge=0)
+    message_zh: str
+
+
+class NewsFeedResponse(BaseModel):
+    events: list[NewsEvent] = Field(default_factory=list)
+    provider_status: list[NewsProviderStatus] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -251,6 +271,7 @@ class SyncEvent(BaseModel):
 class WorkspaceSnapshot(BaseModel):
     workspace: Workspace
     watchlist: list[WatchlistItem] = Field(default_factory=list)
+    news_events: list[NewsEvent] = Field(default_factory=list)
     analyses: list[NewsAnalysis] = Field(default_factory=list)
     risk_decisions: list[RiskDecision] = Field(default_factory=list)
     paper_orders: list[PaperOrder] = Field(default_factory=list)

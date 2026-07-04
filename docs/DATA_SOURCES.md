@@ -17,6 +17,35 @@ Every data provider must define:
 - cost model。
 - outage fallback。
 
+## 1.1 Implemented in Core
+
+Current runnable adapters:
+
+| Provider | Endpoint | Market | Runtime status |
+| --- | --- | --- | --- |
+| SEC EDGAR | `https://data.sec.gov/submissions/CIK##########.json` | US filings | implemented for a first CIK map: NVDA, AAPL, MSFT, AMD, TSLA, AMZN, GOOGL, META |
+| GDELT DOC 2.1 | `https://api.gdeltproject.org/api/v2/doc/doc` | global news index | implemented as public macro/news context, not a licensed exchange-grade source |
+| Fixture | local generated `NewsEvent` | all markets | implemented as deterministic fallback for tests and outages |
+
+Core endpoint:
+
+```http
+GET /v1/news/feed?market=US&symbol=NVDA&limit=8&live=true
+```
+
+Behavior:
+
+- When `live=true`, Core tries SEC EDGAR and GDELT where applicable.
+- Provider failures return Chinese provider status instead of crashing the client.
+- If no live event is available, Core returns fixture events so the AI analysis and simulation chain remains testable.
+- Returned events are persisted in SQLite and included in workspace snapshots.
+
+Compliance notes:
+
+- SEC EDGAR events are official public filings metadata and links; Core sets a configurable `DUBHE_SEC_USER_AGENT`.
+- GDELT is a public news index; it does not grant redistribution rights for original publisher article bodies. Dubhe stores title, source URL, metadata, and license flags only.
+- Commercial A-share, Hong Kong, and institutional news feeds still require contracts before production use.
+
 ## 2. A-share Sources
 
 | Source | Use | Status |

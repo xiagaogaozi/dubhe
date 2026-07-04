@@ -286,6 +286,106 @@
         }
       }
     },
+    "/v1/news/feed": {
+      "get": {
+        "summary": "News Feed Endpoint",
+        "operationId": "news_feed_endpoint_v1_news_feed_get",
+        "parameters": [
+          {
+            "name": "market",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Market",
+              "default": "US"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 8,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "live",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Live"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsFeedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/news/events": {
+      "get": {
+        "summary": "List News Events Endpoint",
+        "operationId": "list_news_events_endpoint_v1_news_events_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NewsEvent"
+                  },
+                  "type": "array",
+                  "title": "Response List News Events Endpoint V1 News Events Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/news/analyses": {
       "get": {
         "summary": "List News Analyses Endpoint",
@@ -785,6 +885,59 @@
         ],
         "title": "NewsEvent"
       },
+      "NewsFeedResponse": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/NewsEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "provider_status": {
+            "items": {
+              "$ref": "#/components/schemas/NewsProviderStatus"
+            },
+            "type": "array",
+            "title": "Provider Status"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "title": "NewsFeedResponse"
+      },
+      "NewsProviderStatus": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProviderStatus"
+          },
+          "fetched_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Fetched Count",
+            "default": 0
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "status",
+          "message_zh"
+        ],
+        "title": "NewsProviderStatus"
+      },
       "OrderDestination": {
         "type": "string",
         "enum": [
@@ -951,6 +1104,15 @@
           "blocked"
         ],
         "title": "PaperOrderStatus"
+      },
+      "ProviderStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "skipped",
+          "unavailable"
+        ],
+        "title": "ProviderStatus"
       },
       "RiskDecision": {
         "properties": {
@@ -1129,6 +1291,7 @@
         "enum": [
           "workspace",
           "watchlist_item",
+          "news_event",
           "news_analysis",
           "risk_decision",
           "paper_order"
@@ -1361,6 +1524,13 @@
             },
             "type": "array",
             "title": "Watchlist"
+          },
+          "news_events": {
+            "items": {
+              "$ref": "#/components/schemas/NewsEvent"
+            },
+            "type": "array",
+            "title": "News Events"
           },
           "analyses": {
             "items": {

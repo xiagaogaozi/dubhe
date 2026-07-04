@@ -12,7 +12,9 @@ os.environ["DUBHE_CORE_DB_PATH"] = str(
 from fastapi.testclient import TestClient
 
 from dubhe_core.main import app
+from dubhe_core.models import Market
 from dubhe_core.models import DeviceRegistrationRequest, WatchlistUpsertRequest
+from dubhe_core.news_sources import fetch_news_feed
 from dubhe_core.store import SQLiteStore
 
 client = TestClient(app)
@@ -104,6 +106,60 @@ def test_watchlist_sync_events_are_shared_across_devices() -> None:
     assert events_response.status_code == 200
     events = events_response.json()
     assert any(event["entity_type"] == "watchlist_item" for event in events)
+
+
+def test_news_feed_returns_fixture_events_and_persists_them() -> None:
+    response = client.get("/v1/news/feed?market=US&symbol=NVDA&limit=3&live=false")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["events"][0]["provider"] == "fixture"
+    assert body["events"][0]["tickers"] == ["NVDA"]
+    assert any(status["provider"] == "fixture" for status in body["provider_status"])
+
+    events_response = client.get("/v1/news/events")
+    assert events_response.status_code == 200
+    assert any(event["id"] == body["events"][0]["id"] for event in events_response.json())
+
+
+def test_public_news_adapters_parse_sec_and_gdelt_payloads() -> None:
+    def fake_fetcher(url: str, _headers: dict[str, str], _timeout: float) -> dict[str, object]:
+        if "data.sec.gov" in url:
+            return {
+                "filings": {
+                    "recent": {
+                        "accessionNumber": ["0001045810-26-000123"],
+                        "form": ["10-Q"],
+                        "filingDate": ["2026-07-01"],
+                        "primaryDocument": ["nvda-20260701.htm"],
+                    }
+                }
+            }
+        if "api.gdeltproject.org" in url:
+            return {
+                "articles": [
+                    {
+                        "url": "https://example.com/nvda-news",
+                        "title": "NVIDIA expands AI platform",
+                        "domain": "example.com",
+                        "language": "English",
+                        "seendate": "20260701123000",
+                    }
+                ]
+            }
+        raise AssertionError(url)
+
+    feed = fetch_news_feed(
+        market=Market.US,
+        symbol="NVDA",
+        limit=5,
+        live=True,
+        fetcher=fake_fetcher,
+    )
+
+    assert {event.provider for event in feed.events} == {"sec_edgar", "gdelt_doc"}
+    assert any(event.event_type == "filing" for event in feed.events)
+    assert any(status.status == "ok" for status in feed.provider_status)
 
 
 def test_sqlite_store_persists_workspace_and_watchlist_across_restarts(tmp_path: Path) -> None:

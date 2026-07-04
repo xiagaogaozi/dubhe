@@ -144,6 +144,7 @@
 .sidebar-section h2,
 .right-panel h2,
 .right-panel h3,
+.news-feed-panel h3,
 .source-panel h3,
 .workflow-panel h3 {
   margin: 0;
@@ -384,6 +385,7 @@
 }
 
 .metric-grid div,
+.news-feed-panel,
 .source-panel,
 .workflow-panel,
 .risk-card {
@@ -414,8 +416,64 @@
 }
 
 .source-panel,
+.news-feed-panel,
 .workflow-panel {
   padding: 16px;
+}
+
+.news-feed-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.news-feed-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.news-feed-panel header span {
+  color: #647069;
+  font-size: 12px;
+}
+
+.news-event-list {
+  display: grid;
+  gap: 8px;
+}
+
+.news-event {
+  display: grid;
+  gap: 5px;
+  min-height: 54px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(23, 32, 28, 0.05);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.news-event:hover,
+.news-event.is-selected {
+  background: #dfe7dc;
+  box-shadow: inset 3px 0 0 #6abf91;
+}
+
+.news-event span {
+  color: #68746d;
+  font-size: 12px;
+}
+
+.news-event strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .source-panel {
