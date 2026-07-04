@@ -461,6 +461,7 @@ def test_kill_switch_blocks_new_paper_orders() -> None:
 
     response = client.post(
         "/v1/simulation/paper-orders",
+        headers=auth_headers(session),
         json={
             "account_id": "acct_fixture",
             "strategy_version_id": "strategy_v1",
@@ -481,6 +482,7 @@ def test_kill_switch_blocks_new_paper_orders() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "blocked"
+    assert body["broker_order"] is None
     assert "Kill switch" in body["risk_decision"]["reasons_zh"][0]
 
     disable_response = client.post(
@@ -496,9 +498,62 @@ def test_kill_switch_blocks_new_paper_orders() -> None:
     assert disable_response.json()["enabled"] is False
 
 
-def test_paper_order_blocks_missing_source_refs() -> None:
+def test_paper_order_submits_to_simulated_broker() -> None:
+    session = register_test_device(
+        account_key="paper-broker-fixture",
+        account_name="纸面券商测试账户",
+    )
+
+    assert client.get("/v1/simulation/paper-orders").status_code == 401
+
     response = client.post(
         "/v1/simulation/paper-orders",
+        headers=auth_headers(session),
+        json={
+            "account_id": "acct_fixture",
+            "strategy_version_id": "strategy_v1",
+            "market": "US",
+            "symbol": "NVDA",
+            "side": "buy",
+            "order_type": "market",
+            "quantity": 2,
+            "estimated_price": 1000,
+            "currency": "USD",
+            "created_by": "strategy",
+            "destination": "paper",
+            "rationale_zh": "测试模拟券商成交。",
+            "source_refs": ["analysis_fixture"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    broker_order = body["broker_order"]
+    assert body["status"] == "accepted"
+    assert body["message_zh"] == "纸面订单已通过模拟券商成交。当前版本不会连接真实券商。"
+    assert broker_order["adapter"] == "simulated_paper"
+    assert broker_order["status"] == "filled"
+    assert broker_order["filled_quantity"] == 2
+    assert broker_order["avg_fill_price"] == 1000
+    assert broker_order["fills"][0]["notional"] == 2000
+    assert broker_order["raw_response"]["real_broker"] is False
+
+    broker_orders_response = client.get(
+        "/v1/simulation/broker-orders",
+        headers=auth_headers(session),
+    )
+    assert broker_orders_response.status_code == 200
+    assert any(item["id"] == broker_order["id"] for item in broker_orders_response.json())
+
+
+def test_paper_order_blocks_missing_source_refs() -> None:
+    session = register_test_device(
+        account_key="paper-block-fixture",
+        account_name="纸面拦截测试账户",
+    )
+    response = client.post(
+        "/v1/simulation/paper-orders",
+        headers=auth_headers(session),
         json={
             "account_id": "acct_fixture",
             "strategy_version_id": "strategy_v1",
@@ -521,8 +576,9 @@ def test_paper_order_blocks_missing_source_refs() -> None:
     body = response.json()
     assert body["status"] == "blocked"
     assert body["risk_decision"]["status"] == "rejected"
+    assert body["broker_order"] is None
 
-    list_response = client.get("/v1/simulation/paper-orders")
+    list_response = client.get("/v1/simulation/paper-orders", headers=auth_headers(session))
     assert list_response.status_code == 200
     assert any(item["id"] == body["id"] for item in list_response.json())
 

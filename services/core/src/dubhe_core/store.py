@@ -19,6 +19,7 @@ from .models import (
     DeviceRevocation,
     DeviceSession,
     BacktestResult,
+    BrokerOrder,
     KillSwitchState,
     KillSwitchUpdateRequest,
     NewsEvent,
@@ -87,6 +88,10 @@ class SQLiteStore:
     @property
     def paper_orders(self) -> list[PaperOrder]:
         return self._load_payloads("paper_orders", PaperOrder, "submitted_at, id")
+
+    @property
+    def broker_orders(self) -> list[BrokerOrder]:
+        return self._load_payloads("broker_orders", BrokerOrder, "submitted_at, id")
 
     @property
     def strategy_drafts(self) -> list[StrategyDraft]:
@@ -263,6 +268,18 @@ class SQLiteStore:
                 entity_id=order.id,
                 payload=order.model_dump(mode="json"),
             )
+            if order.broker_order is not None:
+                self._upsert_payload(
+                    table="broker_orders",
+                    model_id=order.broker_order.id,
+                    payload=order.broker_order,
+                    timestamp=order.broker_order.submitted_at.isoformat(),
+                )
+                self._append_entity_event_to_all_workspaces(
+                    entity_type=SyncEntityType.BROKER_ORDER,
+                    entity_id=order.broker_order.id,
+                    payload=order.broker_order.model_dump(mode="json"),
+                )
             self._connection.commit()
             return order
 
@@ -393,6 +410,7 @@ class SQLiteStore:
                 risk_decisions=self.risk_decisions,
                 approval_requests=self.approval_requests,
                 paper_orders=self.paper_orders,
+                broker_orders=self.broker_orders,
                 strategy_drafts=self.strategy_drafts,
                 backtest_results=self.backtest_results,
                 events=self.list_sync_events(workspace_id, since_sequence=since_sequence),
@@ -508,6 +526,12 @@ class SQLiteStore:
                     payload TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS broker_orders (
+                    id TEXT PRIMARY KEY,
+                    submitted_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS strategy_drafts (
                     id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
@@ -550,6 +574,7 @@ class SQLiteStore:
             "news_analyses",
             "risk_decisions",
             "paper_orders",
+            "broker_orders",
             "strategy_drafts",
             "backtest_results",
         ],
@@ -561,6 +586,7 @@ class SQLiteStore:
             "news_analyses": "generated_at",
             "risk_decisions": "evaluated_at",
             "paper_orders": "submitted_at",
+            "broker_orders": "submitted_at",
             "strategy_drafts": "created_at",
             "backtest_results": "generated_at",
         }[table]

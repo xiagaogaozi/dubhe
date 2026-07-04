@@ -63,6 +63,7 @@ Authorization: Bearer dubhe_dev_xxx
 - `analyses`
 - `risk_decisions`
 - `paper_orders`
+- `broker_orders`
 - `events`
 - `server_sequence`
 

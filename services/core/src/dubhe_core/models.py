@@ -51,6 +51,13 @@ class PaperOrderStatus(str, Enum):
     BLOCKED = "blocked"
 
 
+class BrokerOrderStatus(str, Enum):
+    ACCEPTED = "accepted"
+    FILLED = "filled"
+    REJECTED = "rejected"
+    CANCELED = "canceled"
+
+
 class ApprovalStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
@@ -75,6 +82,7 @@ class SyncEntityType(str, Enum):
     APPROVAL_REQUEST = "approval_request"
     KILL_SWITCH = "kill_switch"
     PAPER_ORDER = "paper_order"
+    BROKER_ORDER = "broker_order"
 
 
 class ProviderStatus(str, Enum):
@@ -252,11 +260,45 @@ class RiskDecision(BaseModel):
     evaluated_at: datetime = Field(default_factory=utc_now)
 
 
+class BrokerFill(BaseModel):
+    id: str = Field(default_factory=lambda: f"fill_{uuid4().hex}")
+    broker_order_id: str
+    symbol: str
+    side: OrderSide
+    quantity: float = Field(gt=0)
+    price: float = Field(gt=0)
+    notional: float = Field(ge=0)
+    commission: float = Field(default=0, ge=0)
+    filled_at: datetime = Field(default_factory=utc_now)
+
+
+class BrokerOrder(BaseModel):
+    id: str = Field(default_factory=lambda: f"broker_order_{uuid4().hex}")
+    paper_order_id: str
+    order_intent_id: str
+    adapter: str = "simulated_paper"
+    broker_account_id: str
+    market: Market
+    symbol: str
+    side: OrderSide
+    quantity: float = Field(gt=0)
+    currency: str = Field(min_length=3, max_length=3)
+    status: BrokerOrderStatus
+    filled_quantity: float = Field(default=0, ge=0)
+    avg_fill_price: float | None = Field(default=None, gt=0)
+    submitted_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    fills: list[BrokerFill] = Field(default_factory=list)
+    message_zh: str
+    raw_response: dict[str, Any] = Field(default_factory=dict)
+
+
 class PaperOrder(BaseModel):
     id: str = Field(default_factory=lambda: f"paper_{uuid4().hex}")
     order_intent_id: str
     status: PaperOrderStatus
     risk_decision: RiskDecision
+    broker_order: BrokerOrder | None = None
     submitted_at: datetime = Field(default_factory=utc_now)
     message_zh: str
 
@@ -378,6 +420,7 @@ class WorkspaceSnapshot(BaseModel):
     risk_decisions: list[RiskDecision] = Field(default_factory=list)
     approval_requests: list[ApprovalRequest] = Field(default_factory=list)
     paper_orders: list[PaperOrder] = Field(default_factory=list)
+    broker_orders: list[BrokerOrder] = Field(default_factory=list)
     strategy_drafts: list[StrategyDraft] = Field(default_factory=list)
     backtest_results: list[BacktestResult] = Field(default_factory=list)
     events: list[SyncEvent] = Field(default_factory=list)

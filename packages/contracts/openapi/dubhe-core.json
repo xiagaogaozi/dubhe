@@ -1017,38 +1017,36 @@
       }
     },
     "/v1/simulation/paper-orders": {
-      "get": {
-        "summary": "List Paper Orders Endpoint",
-        "operationId": "list_paper_orders_endpoint_v1_simulation_paper_orders_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PaperOrder"
-                  },
-                  "type": "array",
-                  "title": "Response List Paper Orders Endpoint V1 Simulation Paper Orders Get"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "summary": "Submit Paper Order Endpoint",
         "operationId": "submit_paper_order_endpoint_v1_simulation_paper_orders_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/OrderIntent"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1057,6 +1055,104 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PaperOrder"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Paper Orders Endpoint",
+        "operationId": "list_paper_orders_endpoint_v1_simulation_paper_orders_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PaperOrder"
+                  },
+                  "title": "Response List Paper Orders Endpoint V1 Simulation Paper Orders Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/simulation/broker-orders": {
+      "get": {
+        "summary": "List Broker Orders Endpoint",
+        "operationId": "list_broker_orders_endpoint_v1_simulation_broker_orders_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BrokerOrder"
+                  },
+                  "title": "Response List Broker Orders Endpoint V1 Simulation Broker Orders Get"
                 }
               }
             }
@@ -1327,6 +1423,178 @@
           "trade_count"
         ],
         "title": "BacktestResult"
+      },
+      "BrokerFill": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "broker_order_id": {
+            "type": "string",
+            "title": "Broker Order Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "side": {
+            "$ref": "#/components/schemas/OrderSide"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity"
+          },
+          "price": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Price"
+          },
+          "notional": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Notional"
+          },
+          "commission": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Commission",
+            "default": 0
+          },
+          "filled_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Filled At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "broker_order_id",
+          "symbol",
+          "side",
+          "quantity",
+          "price",
+          "notional"
+        ],
+        "title": "BrokerFill"
+      },
+      "BrokerOrder": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "paper_order_id": {
+            "type": "string",
+            "title": "Paper Order Id"
+          },
+          "order_intent_id": {
+            "type": "string",
+            "title": "Order Intent Id"
+          },
+          "adapter": {
+            "type": "string",
+            "title": "Adapter",
+            "default": "simulated_paper"
+          },
+          "broker_account_id": {
+            "type": "string",
+            "title": "Broker Account Id"
+          },
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "side": {
+            "$ref": "#/components/schemas/OrderSide"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BrokerOrderStatus"
+          },
+          "filled_quantity": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Filled Quantity",
+            "default": 0
+          },
+          "avg_fill_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Fill Price"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Submitted At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "fills": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerFill"
+            },
+            "type": "array",
+            "title": "Fills"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "raw_response": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Raw Response"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paper_order_id",
+          "order_intent_id",
+          "broker_account_id",
+          "market",
+          "symbol",
+          "side",
+          "quantity",
+          "currency",
+          "status",
+          "message_zh"
+        ],
+        "title": "BrokerOrder"
+      },
+      "BrokerOrderStatus": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "filled",
+          "rejected",
+          "canceled"
+        ],
+        "title": "BrokerOrderStatus"
       },
       "DevicePlatform": {
         "type": "string",
@@ -1918,6 +2186,16 @@
           "risk_decision": {
             "$ref": "#/components/schemas/RiskDecision"
           },
+          "broker_order": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrokerOrder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "submitted_at": {
             "type": "string",
             "format": "date-time",
@@ -2211,7 +2489,8 @@
           "risk_decision",
           "approval_request",
           "kill_switch",
-          "paper_order"
+          "paper_order",
+          "broker_order"
         ],
         "title": "SyncEntityType"
       },
@@ -2476,6 +2755,13 @@
             },
             "type": "array",
             "title": "Paper Orders"
+          },
+          "broker_orders": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerOrder"
+            },
+            "type": "array",
+            "title": "Broker Orders"
           },
           "strategy_drafts": {
             "items": {

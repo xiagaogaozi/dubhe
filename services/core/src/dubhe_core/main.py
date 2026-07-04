@@ -13,6 +13,7 @@ from .models import (
     ApprovalStatus,
     BacktestRequest,
     BacktestResult,
+    BrokerOrder,
     DeviceRevocation,
     KillSwitchState,
     KillSwitchUpdateRequest,
@@ -78,6 +79,7 @@ def capabilities() -> dict[str, object]:
             "strategy_spec_validation",
             "risk_gate",
             "paper_order_mock",
+            "simulated_paper_broker_adapter",
             "device_registration",
             "workspace_sync_snapshot",
             "watchlist_sync",
@@ -317,10 +319,22 @@ def set_kill_switch_endpoint(
 
 
 @app.post("/v1/simulation/paper-orders", response_model=PaperOrder)
-def submit_paper_order_endpoint(intent: OrderIntent) -> PaperOrder:
+def submit_paper_order_endpoint(
+    intent: OrderIntent,
+    _session: DeviceSession = Depends(require_device_session),
+) -> PaperOrder:
     return store.add_paper_order(submit_paper_order(intent, store.current_risk_policy()))
 
 
 @app.get("/v1/simulation/paper-orders", response_model=list[PaperOrder])
-def list_paper_orders_endpoint() -> list[PaperOrder]:
+def list_paper_orders_endpoint(
+    _session: DeviceSession = Depends(require_device_session),
+) -> list[PaperOrder]:
     return store.paper_orders
+
+
+@app.get("/v1/simulation/broker-orders", response_model=list[BrokerOrder])
+def list_broker_orders_endpoint(
+    _session: DeviceSession = Depends(require_device_session),
+) -> list[BrokerOrder]:
+    return store.broker_orders

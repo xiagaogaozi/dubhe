@@ -553,6 +553,10 @@ AI strategy draft
 - Approval flow。
 - Audit log。
 
+当前状态：
+
+- 已完成本地 `simulated_paper` broker adapter：纸面订单通过风控后会生成 `BrokerOrder` 和 `BrokerFill`，并通过同步事件推送到桌面端；真实 Alpaca/IBKR/Futu 仍待接入。
+
 通过标准：
 
 - 订单意图通过风控后进入 paper broker。

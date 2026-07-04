@@ -85,11 +85,45 @@ type KillSwitchState = {
   updated_at: string
 }
 
+type BrokerFill = {
+  id: string
+  broker_order_id: string
+  symbol: string
+  side: 'buy' | 'sell'
+  quantity: number
+  price: number
+  notional: number
+  commission: number
+  filled_at: string
+}
+
+type BrokerOrder = {
+  id: string
+  paper_order_id: string
+  order_intent_id: string
+  adapter: string
+  broker_account_id: string
+  market: Market
+  symbol: string
+  side: 'buy' | 'sell'
+  quantity: number
+  currency: string
+  status: 'accepted' | 'filled' | 'rejected' | 'canceled'
+  filled_quantity: number
+  avg_fill_price?: number | null
+  submitted_at: string
+  updated_at: string
+  fills: BrokerFill[]
+  message_zh: string
+  raw_response: Record<string, unknown>
+}
+
 type PaperOrder = {
   id: string
   order_intent_id: string
   status: 'accepted' | 'blocked'
   risk_decision: RiskDecision
+  broker_order?: BrokerOrder | null
   message_zh: string
   submitted_at: string
 }
@@ -173,6 +207,7 @@ type WorkspaceSnapshot = {
   }
   watchlist: SyncedWatchlistItem[]
   news_events: NewsEvent[]
+  broker_orders: BrokerOrder[]
   server_sequence: number
 }
 
@@ -191,6 +226,7 @@ type SyncEvent = {
     | 'approval_request'
     | 'kill_switch'
     | 'paper_order'
+    | 'broker_order'
   entity_id: string
   action: 'created' | 'updated' | 'deleted'
   payload: Record<string, unknown>
@@ -339,6 +375,7 @@ function syncEntityLabel(entityType: SyncEvent['entity_type']) {
   if (entityType === 'kill_switch') return '急停状态'
   if (entityType === 'risk_decision') return '风控结果'
   if (entityType === 'paper_order') return '纸面订单'
+  if (entityType === 'broker_order') return '模拟券商回报'
   if (entityType === 'backtest_result') return '回测结果'
   if (entityType === 'strategy_draft') return '策略草案'
   if (entityType === 'news_event') return '新闻事件'
@@ -377,6 +414,7 @@ function App() {
   const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([])
   const [killSwitch, setKillSwitch] = useState<KillSwitchState | null>(null)
   const [paperOrder, setPaperOrder] = useState<PaperOrder | null>(null)
+  const [brokerOrder, setBrokerOrder] = useState<BrokerOrder | null>(null)
   const [isBusy, setBusy] = useState(false)
   const [apiStatus, setApiStatus] = useState<'未知' | '已连接' | '离线'>('未知')
   const [syncSocketStatus, setSyncSocketStatus] = useState<'未连接' | '已连接' | '离线'>('未连接')
@@ -436,6 +474,10 @@ function App() {
         }
         return [row, ...current.filter((existing) => existing.symbol !== row.symbol)]
       })
+    }
+
+    if (event.entity_type === 'broker_order') {
+      setBrokerOrder(event.payload as unknown as BrokerOrder)
     }
 
     if (!['news_event', 'news_analysis'].includes(event.entity_type)) {
@@ -505,6 +547,9 @@ function App() {
         if (snapshot.news_events.length > 0) {
           setNewsEvents(snapshot.news_events)
           setSelectedNewsId(snapshot.news_events[0].id)
+        }
+        if (snapshot.broker_orders.length > 0) {
+          setBrokerOrder(snapshot.broker_orders[0])
         }
         if (syncedWatchlist.length > 0) {
           setWatchlistItems(syncedWatchlist)
@@ -734,6 +779,7 @@ function App() {
         source_refs: [analysis.id],
       })
       setPaperOrder(result)
+      setBrokerOrder(result.broker_order ?? null)
       setApiStatus('已连接')
       appendLog(result.status === 'accepted' ? 'success' : 'danger', result.message_zh)
     } catch (error) {
@@ -1018,6 +1064,17 @@ function App() {
             <>
               <p className={paperOrder.status === 'accepted' ? 'paper-ok' : 'paper-blocked'}>{paperOrder.message_zh}</p>
               <p>订单号：{paperOrder.id}</p>
+              {brokerOrder ? (
+                <>
+                  <p>券商回报：{brokerOrder.adapter} · {brokerOrder.status}</p>
+                  <p>
+                    成交：{brokerOrder.filled_quantity} 股，均价{' '}
+                    {brokerOrder.avg_fill_price?.toLocaleString('zh-CN') ?? '待成交'} {brokerOrder.currency}
+                  </p>
+                </>
+              ) : (
+                <p>尚未生成券商回报。</p>
+              )}
             </>
           ) : (
             <p>尚未提交纸面交易。</p>

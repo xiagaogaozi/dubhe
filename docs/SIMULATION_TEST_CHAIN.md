@@ -292,6 +292,30 @@ expected_no_live_order
 - paper result 和 expected risk limits 一致。
 - 所有 rejection 都有用户可读解释。
 
+### 9.1 当前已实现 smoke
+
+Core 当前提供一个本地模拟 paper broker adapter：
+
+```http
+POST /v1/simulation/paper-orders
+GET /v1/simulation/paper-orders
+GET /v1/simulation/broker-orders
+```
+
+当前行为：
+
+- `POST /v1/simulation/paper-orders` 必须携带设备 Bearer token。
+- 订单先经过 `Risk Service`；缺少来源引用、触发 kill switch 或其他风控拒绝时，不会生成 broker order。
+- 通过风控后，`simulated_paper` adapter 生成确定性成交回报和 `BrokerFill`。
+- `PaperOrder`、`BrokerOrder`、`RiskDecision` 会写入 SQLite，并进入工作区同步事件。
+- 桌面端会展示模拟券商状态、成交数量、均价和币种。
+
+边界：
+
+- 当前 adapter 不连接 Alpaca、IBKR、Futu 或任何真实券商。
+- 当前成交是 deterministic fill，不包含真实市场撮合、排队、滑点、部分成交、拒单码或券商断线恢复。
+- 后续真实 paper broker 接入必须复用同一个 Risk Service 后置边界，不能让客户端或 AI 直接调用 broker SDK。
+
 ## 10. Gate 7：Shadow Trading
 
 目标：
