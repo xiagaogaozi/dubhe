@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
     "declaration": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
     "jsx": "react",
     "module": "commonjs",
     "moduleResolution": "node",
@@ -9,7 +13,9 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "target": "es2022"
+    "target": "es2022",
+    "types": ["node", "react", "react-dom"],
+    "useDefineForClassFields": false
   },
   "include": ["src"]
 }

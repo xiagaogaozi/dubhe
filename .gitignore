@@ -24,6 +24,7 @@ node_modules/
 .dart_tool/
 build/
 dist/
+*.tsbuildinfo
 
 # Python
 __pycache__/
@@ -56,5 +57,9 @@ docker-compose.override.yml
 
 # Theia
 .theia-cache/
+apps/theia-desktop/app/esbuild.mjs
+apps/theia-desktop/app/gen-esbuild*.mjs
+apps/theia-desktop/app/lib/
 apps/theia-desktop/app/plugins/
+apps/theia-desktop/app/src-gen/
 apps/theia-desktop/packages/*/lib/

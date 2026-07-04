@@ -2,6 +2,7 @@ import { injectable } from '@theia/core/shared/inversify';
 import {
   AbstractViewContribution,
   FrontendApplication,
+  FrontendApplicationContribution,
 } from '@theia/core/lib/browser';
 import {
   Command,
@@ -18,7 +19,8 @@ export const DUBHE_OPEN_COMMAND: Command = {
 
 @injectable()
 export class DubheViewContribution
-  extends AbstractViewContribution<DubheWidget> {
+  extends AbstractViewContribution<DubheWidget>
+  implements FrontendApplicationContribution {
   constructor() {
     super({
       widgetId: DUBHE_WIDGET_ID,
@@ -31,8 +33,7 @@ export class DubheViewContribution
     });
   }
 
-  override async onStart(app: FrontendApplication): Promise<void> {
-    await super.onStart(app);
+  async onDidInitializeLayout(app: FrontendApplication): Promise<void> {
     await this.openView({ activate: true, reveal: true });
   }
 

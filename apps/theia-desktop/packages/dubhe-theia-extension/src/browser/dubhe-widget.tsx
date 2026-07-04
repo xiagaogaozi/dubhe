@@ -1,4 +1,4 @@
-import * as React from '@theia/core/shared/react';
+import React = require('@theia/core/shared/react');
 import { Message } from '@theia/core/shared/@lumino/messaging';
 import { injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
