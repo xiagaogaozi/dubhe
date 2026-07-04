@@ -2,7 +2,7 @@
 
 ## 1. Chosen Architecture
 
-QuantPilot Studio uses a two-client, one-cloud architecture:
+Dubhe uses a two-client, one-cloud architecture:
 
 - Desktop: Eclipse Theia Desktop for Windows and macOS.
 - Mobile: Flutter for iOS and Android.
@@ -135,4 +135,3 @@ Forbidden AI tools:
 | macOS | `.dmg` / `.pkg` / `.app` |
 | iOS | TestFlight / App Store / enterprise distribution |
 | Android | `.aab` / `.apk` |
-

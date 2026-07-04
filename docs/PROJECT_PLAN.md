@@ -1,19 +1,19 @@
-# QuantPilot Studio / 寰量智舱完整计划书
+# Dubhe 完整计划书
 
 ## 0. 检索证据
 
-- 已检索关键词：`quantpilot-studio`、`work`、`outputs`、`gh auth status`、`git --version`、`gh --version`、`Flutter`、`Tauri`、`React Native`、`Theia`、`LEAN`、`OpenBB`、`Qlib`、`FinGPT`、`GDELT`、`Wind`、`iFinD`、`Choice`、`HKEX`、`SEC EDGAR`、`Benzinga`、`Finnhub`。
+- 已检索关键词：`dubhe`、`work`、`outputs`、`gh auth status`、`git --version`、`gh --version`、`Flutter`、`Tauri`、`React Native`、`Theia`、`LEAN`、`OpenBB`、`Qlib`、`FinGPT`、`GDELT`、`Wind`、`iFinD`、`Choice`、`HKEX`、`SEC EDGAR`、`Benzinga`、`Finnhub`。
 - 已读取/核对来源：
   - 本地工作区 `C:\Users\ASUS\Documents\Codex\2026-07-04\wo`：仅有 `work/` 与 `outputs/`，没有既有产品代码。
-  - `gh auth status`：本机 GitHub CLI 已登录 `Almong-w`，具备 `repo` 权限。
-  - `gh repo view Almong-w/quantpilot-studio`：未找到同名仓库，仓库名可用。
+  - `gh auth status`：本机 GitHub CLI 已登录，具备 `repo` 权限。
+  - `gh repo view xiagaogaozi/dubhe`：用于确认改名后的远端仓库。
   - 官方文档/项目资料：Eclipse Theia、Flutter、QuantConnect LEAN、OpenBB、Microsoft Qlib、FinGPT、PostgreSQL/TimescaleDB、Redis、MinIO、GDELT、SEC EDGAR、HKEX、Benzinga、Finnhub、Alpha Vantage、Polygon/Massive、Wind、iFinD、Choice/Tushare 等。
 - 已确认落点：
   - 产品路线：方案 A，即 Windows/macOS 用 Theia Desktop，iOS/Android 用 Flutter。
   - 同步路线：选项 1，即自建云同步后端。
-  - 初始仓库名：`quantpilot-studio`。
-  - 产品英文名：`QuantPilot Studio`。
-  - 产品中文名：`寰量智舱`。
+  - 项目名：`Dubhe`。
+  - 仓库名：`dubhe`。
+  - 不设置其他本地化项目名。
 - 未确认项：
   - 具体商业新闻 API 合同、价格、授权范围、二次分发权限：`需确认`，由商务/法务与数据供应商确认。
   - 第一批券商 API：`proposed default` 为 Alpaca Paper Trading + Interactive Brokers Paper Trading。
@@ -21,7 +21,7 @@
 
 ## 1. 项目定位
 
-`QuantPilot Studio / 寰量智舱` 是面向不会编程、不会量化、且可能不懂中文的投资用户的 AI 投资研究与量化交易工作台。
+`Dubhe` 是面向不会编程、不会量化、且可能不懂中文的投资用户的 AI 投资研究与量化交易工作台。
 
 产品不是普通新闻软件，也不是给专业量化工程师使用的裸框架。它要把 A 股、港股、美股的权威金融新闻、公告、行情、AI 大数据分析、策略生成、回测、模拟盘和受控实盘交易串成一条可理解、可审计、可兜底的工作流。
 
@@ -35,19 +35,16 @@
 
 ## 2. 产品命名
 
-- 中文名：寰量智舱
-- 英文名：QuantPilot Studio
-- 桌面端：QuantPilot Studio Desktop
-- 移动端：QuantPilot Companion
-- 云端服务：QuantPilot Core
-- 仓库名：`quantpilot-studio`
+- 项目名：Dubhe
+- 桌面端：Dubhe Desktop
+- 移动端：Dubhe Companion
+- 云端服务：Dubhe Core
+- 仓库名：`dubhe`
 
 命名含义：
 
-- `QuantPilot` 表示“量化驾驶员/副驾”，强调 AI 辅助而不是 AI 替用户负责。
-- `Studio` 表示桌面端有类 IDE 的工作台属性。
-- `寰量` 表示全球市场与量化能力。
-- `智舱` 表示可视化、可对话、可操作的投资驾驶舱。
+- `Dubhe` 是北斗七星中天枢星的常用星名，适合作为全球市场导航、AI 投资分析和量化决策工作台的产品名。
+- 命名只使用 `Dubhe`，不设置其他本地化项目名。
 
 ## 3. 目标用户
 
@@ -107,7 +104,7 @@
                | REST/gRPC + WebSocket               |
                v                                     v
 +-------------------------------------------------------------+
-| QuantPilot Core                                             |
+| Dubhe Core                                                  |
 | Auth / Workspace / News / AI / Backtest / Risk / Orders     |
 +-------------------+-------------------+---------------------+
                     |                   |
@@ -145,7 +142,7 @@
 
 ## 7. 客户端设计
 
-### 7.1 桌面端：QuantPilot Studio Desktop
+### 7.1 桌面端：Dubhe Desktop
 
 技术基座：
 
@@ -202,7 +199,7 @@ Beginner UX rules:
 - Dangerous actions require explicit confirmation and show risk explanation.
 - Users can always switch from AI summary to raw source.
 
-### 7.2 移动端：QuantPilot Companion
+### 7.2 移动端：Dubhe Companion
 
 技术基座：
 
@@ -622,4 +619,3 @@ AI strategy draft
 6. 决定后端语言：`proposed default` 为 Python FastAPI + Python workers。
 7. 决定桌面端 Theia extension 开发方式。
 8. 决定 Flutter 移动端状态管理和本地缓存方案。
-
