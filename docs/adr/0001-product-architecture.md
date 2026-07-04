@@ -6,7 +6,7 @@ Accepted for initial planning.
 
 ## Context
 
-The product must support Windows, macOS, iOS, and Android installation packages. It must not be a web-only product. The target users are non-technical investors who may not understand Chinese, while the system still needs to process A-share, Hong Kong, US, and global financial news.
+The product must support Windows, macOS, iOS, and Android installation packages. It must not be a web-only product. The target users are Chinese-only non-technical investors, while the system still needs to process A-share, Hong Kong, US, and global financial news.
 
 The product also needs an IDE-like desktop experience for AI-assisted discussion, news analysis, large-scale data analysis, and strategy creation.
 
@@ -50,4 +50,3 @@ Rejected for the initial plan because mobile maturity and IDE complexity are les
 ### Pure web app
 
 Rejected because the product requirement explicitly asks for installable applications and not a web-only product.
-

@@ -21,14 +21,14 @@
 
 ## 1. 项目定位
 
-`Dubhe` 是面向不会编程、不会量化、且可能不懂中文的投资用户的 AI 投资研究与量化交易工作台。
+`Dubhe` 是面向只会中文、不会编程、不会量化的投资用户的 AI 投资研究与量化交易工作台。
 
 产品不是普通新闻软件，也不是给专业量化工程师使用的裸框架。它要把 A 股、港股、美股的权威金融新闻、公告、行情、AI 大数据分析、策略生成、回测、模拟盘和受控实盘交易串成一条可理解、可审计、可兜底的工作流。
 
 核心原则：
 
-- English-first UI：默认界面语言为英文，支持中文新闻源的机器翻译、摘要和原文对照。
-- Beginner-first workflow：用户通过 AI 对话、按钮、模板和可视化策略块完成分析与策略制作。
+- Chinese-first UI：默认界面语言为中文，外文新闻源必须提供中文翻译、中文摘要和原文对照。
+- Beginner-first workflow：用户通过中文 AI 对话、按钮、模板和可视化策略块完成分析与策略制作。
 - Mature-open-source-first：能缝合成熟开源项目就不自研核心引擎。
 - Server-executed quant：复杂计算、策略运行、新闻处理、AI 分析和交易执行在云端后端完成。
 - No direct AI trading：AI 只能提出建议和生成订单意图，不能绕过风控直接下单。
@@ -156,48 +156,48 @@
 
 ```text
 Activity Bar
-  - Today
-  - News Radar
-  - AI Analyst
-  - Strategy Lab
-  - Backtests
-  - Simulation
-  - Data Sources
-  - Risk Center
+  - 今日市场
+  - 新闻雷达
+  - AI 分析师
+  - 策略工坊
+  - 回测中心
+  - 模拟交易
+  - 数据源
+  - 风控中心
 
 Left Sidebar
-  - Watchlists
-  - News filters
-  - Strategy projects
-  - Backtest runs
+  - 自选列表
+  - 新闻筛选器
+  - 策略项目
+  - 回测记录
 
 Center Workspace
-  - News article tabs
-  - AI analysis tabs
-  - Strategy visual builder
-  - Code editor
-  - Notebook/research viewer
-  - Backtest report
+  - 新闻原文标签页
+  - AI 分析标签页
+  - 可视化策略编辑器
+  - 代码编辑器
+  - Notebook/研究视图
+  - 回测报告
 
 Right Sidebar
-  - AI Analyst Chat
-  - Context cards
-  - Suggested next actions
+  - AI 分析师对话
+  - 上下文卡片
+  - 下一步建议
 
 Bottom Panel
-  - Task logs
-  - Data ingestion status
-  - Backtest progress
-  - Risk warnings
+  - 任务日志
+  - 数据接入状态
+  - 回测进度
+  - 风控告警
 ```
 
-Beginner UX rules:
+小白用户体验规则：
 
-- Every technical result must have a plain-language summary.
-- Every AI claim must show sources: news item, filing, market data, model signal, or backtest run.
-- Strategy generation starts from natural language and templates, not empty code.
-- Dangerous actions require explicit confirmation and show risk explanation.
-- Users can always switch from AI summary to raw source.
+- 所有技术结果都必须提供中文白话摘要。
+- 所有 AI 结论都必须展示来源：新闻、公告、行情数据、模型信号或回测记录。
+- 策略生成从中文自然语言和模板开始，而不是从空代码文件开始。
+- 危险操作必须明确确认，并展示中文风险解释。
+- 用户可以随时从 AI 摘要切换到原始来源。
 
 ### 7.2 移动端：Dubhe Companion
 
@@ -210,12 +210,12 @@ Beginner UX rules:
 
 主 Tab：
 
-- Today：global market briefing、top news、portfolio alerts。
-- Radar：A-share/HK/US news feed、impact score、translation。
-- AI：conversation with context from news/watchlist/backtest。
-- Strategies：running strategies、backtest results、paper orders。
-- Approvals：risk-gated order approvals。
-- Account：devices、data source status、language、notifications。
+- 今日：全球市场简报、重点新闻、组合预警。
+- 雷达：A 股/港股/美股新闻流、影响分、中文翻译。
+- AI：结合新闻、自选股和回测上下文进行中文对话。
+- 策略：运行中策略、回测结果、纸面交易订单。
+- 审批：经过风控拦截的订单审批。
+- 账户：设备、数据源状态、语言偏好、通知设置。
 
 移动端不承担：
 
@@ -262,9 +262,9 @@ NewsEvent
   market_scope
   language
   title_original
-  title_en
+  title_zh
   body_original_ref
-  body_en_ref
+  body_zh_ref
   published_at
   received_at
   url
@@ -286,7 +286,7 @@ NewsEvent
 - 相关标的解释。
 - 策略草案生成。
 - 回测结果解释。
-- 多语言输出。
+- 中文输出优先；外文新闻、公告和财报必须提供中文摘要、中文解释和原文引用。
 
 安全边界：
 
@@ -501,7 +501,7 @@ AI strategy draft
 
 通过标准：
 
-- 输入一条 A/HK/US 新闻，系统能生成英文摘要、影响标的、置信度、来源链接。
+- 输入一条 A/HK/US 新闻，系统能生成中文摘要、影响标的、置信度、来源链接。
 - 去重、延迟、缺失字段场景有测试。
 
 ### Phase 3：桌面端与移动端壳
@@ -510,8 +510,8 @@ AI strategy draft
 
 - Theia Desktop shell。
 - AI Analyst panel。
-- News Radar panel。
-- Strategy Lab placeholder。
+- 新闻雷达面板。
+- 策略工坊占位页。
 - Flutter Companion shell。
 - Push notification skeleton。
 

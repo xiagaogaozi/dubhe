@@ -64,9 +64,9 @@ source_name
 market_scope
 language
 title_original
-title_en
+title_zh
 body_original_ref
-body_en_ref
+body_zh_ref
 published_at
 received_at
 url
@@ -108,7 +108,7 @@ received_at
 document_url
 document_ref
 language
-summary_en
+summary_zh
 license_flags
 ```
 
@@ -131,4 +131,3 @@ Each adapter must provide:
 - If a licensed provider forbids storage of full body, store only reference and permitted fields.
 - If AI processing is not licensed, disable AI on that source and show metadata-only summary.
 - If two providers disagree, show source-level confidence and keep both raw references.
-
