@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 os.environ["DUBHE_CORE_DB_PATH"] = str(
@@ -20,6 +21,29 @@ from dubhe_core.store import SQLiteStore
 client = TestClient(app)
 
 
+def register_test_device(
+    account_key: str,
+    account_name: str = "测试账户",
+    device_name: str = "Windows 测试机",
+    platform: str = "windows",
+) -> dict[str, Any]:
+    response = client.post(
+        "/v1/auth/devices/register",
+        json={
+            "account_key": account_key,
+            "account_name": account_name,
+            "device_name": device_name,
+            "platform": platform,
+        },
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def auth_headers(session: dict[str, Any]) -> dict[str, str]:
+    return {"Authorization": f"Bearer {session['access_token']}"}
+
+
 def test_health() -> None:
     response = client.get("/health")
 
@@ -28,22 +52,18 @@ def test_health() -> None:
 
 
 def test_device_registration_returns_default_workspace_snapshot() -> None:
-    session_response = client.post(
-        "/v1/auth/devices/register",
-        json={
-            "account_key": "sync-fixture-default",
-            "account_name": "同步测试账户",
-            "device_name": "Windows 测试机",
-            "platform": "windows",
-        },
+    session = register_test_device(
+        account_key="sync-fixture-default",
+        account_name="同步测试账户",
     )
 
-    assert session_response.status_code == 200
-    session = session_response.json()
-    assert session["access_token"].startswith("local_")
+    assert session["access_token"].startswith("dubhe_dev_")
     assert session["platform"] == "windows"
 
-    snapshot_response = client.get(f"/v1/workspaces/{session['workspace_id']}/snapshot")
+    snapshot_response = client.get(
+        f"/v1/workspaces/{session['workspace_id']}/snapshot",
+        headers=auth_headers(session),
+    )
 
     assert snapshot_response.status_code == 200
     snapshot = snapshot_response.json()
@@ -58,21 +78,49 @@ def test_device_registration_returns_default_workspace_snapshot() -> None:
     assert snapshot["events"][0]["entity_type"] == "workspace"
 
 
-def test_watchlist_sync_events_are_shared_across_devices() -> None:
-    first_session_response = client.post(
-        "/v1/auth/devices/register",
-        json={
-            "account_key": "sync-fixture-shared",
-            "account_name": "多端同步账户",
-            "device_name": "Windows 测试机",
-            "platform": "windows",
-        },
+def test_sync_endpoints_require_device_token_and_workspace_match() -> None:
+    first_session = register_test_device(
+        account_key="sync-auth-fixture-a",
+        account_name="认证测试账户 A",
     )
-    first_session = first_session_response.json()
+    second_session = register_test_device(
+        account_key="sync-auth-fixture-b",
+        account_name="认证测试账户 B",
+    )
+    workspace_id = first_session["workspace_id"]
+
+    missing_response = client.get(f"/v1/workspaces/{workspace_id}/snapshot")
+    assert missing_response.status_code == 401
+
+    invalid_response = client.get(
+        f"/v1/workspaces/{workspace_id}/snapshot",
+        headers={"Authorization": "Bearer wrong-token"},
+    )
+    assert invalid_response.status_code == 401
+
+    cross_workspace_response = client.get(
+        f"/v1/workspaces/{workspace_id}/snapshot",
+        headers=auth_headers(second_session),
+    )
+    assert cross_workspace_response.status_code == 403
+
+    ok_response = client.get(
+        f"/v1/workspaces/{workspace_id}/snapshot",
+        headers=auth_headers(first_session),
+    )
+    assert ok_response.status_code == 200
+
+
+def test_watchlist_sync_events_are_shared_across_devices() -> None:
+    first_session = register_test_device(
+        account_key="sync-fixture-shared",
+        account_name="多端同步账户",
+    )
     workspace_id = first_session["workspace_id"]
 
     upsert_response = client.put(
         f"/v1/workspaces/{workspace_id}/watchlist/MSFT",
+        headers=auth_headers(first_session),
         json={
             "symbol": "MSFT",
             "name": "微软",
@@ -84,25 +132,27 @@ def test_watchlist_sync_events_are_shared_across_devices() -> None:
     assert upsert_response.status_code == 200
     assert upsert_response.json()["symbol"] == "MSFT"
 
-    second_session_response = client.post(
-        "/v1/auth/devices/register",
-        json={
-            "account_key": "sync-fixture-shared",
-            "account_name": "多端同步账户",
-            "device_name": "iPhone 测试机",
-            "platform": "ios",
-        },
+    second_session = register_test_device(
+        account_key="sync-fixture-shared",
+        account_name="多端同步账户",
+        device_name="iPhone 测试机",
+        platform="ios",
     )
-    second_session = second_session_response.json()
 
     assert second_session["workspace_id"] == workspace_id
 
-    snapshot_response = client.get(f"/v1/workspaces/{workspace_id}/snapshot")
+    snapshot_response = client.get(
+        f"/v1/workspaces/{workspace_id}/snapshot",
+        headers=auth_headers(second_session),
+    )
     snapshot = snapshot_response.json()
     symbols = {item["symbol"] for item in snapshot["watchlist"]}
     assert "MSFT" in symbols
 
-    events_response = client.get(f"/v1/workspaces/{workspace_id}/sync-events?since_sequence=5")
+    events_response = client.get(
+        f"/v1/workspaces/{workspace_id}/sync-events?since_sequence=5",
+        headers=auth_headers(second_session),
+    )
     assert events_response.status_code == 200
     events = events_response.json()
     assert any(event["entity_type"] == "watchlist_item" for event in events)
@@ -283,6 +333,10 @@ def test_strategy_draft_and_replay_backtest_from_news_analysis() -> None:
 
 
 def test_live_ai_order_requires_human_approval() -> None:
+    session = register_test_device(
+        account_key="approval-fixture",
+        account_name="审批测试账户",
+    )
     response = client.post(
         "/v1/risk/evaluate",
         json={
@@ -312,7 +366,9 @@ def test_live_ai_order_requires_human_approval() -> None:
     assert list_response.status_code == 200
     assert any(item["id"] == body["id"] for item in list_response.json())
 
-    approvals_response = client.get("/v1/approvals?status=pending")
+    assert client.get("/v1/approvals?status=pending").status_code == 401
+
+    approvals_response = client.get("/v1/approvals?status=pending", headers=auth_headers(session))
     assert approvals_response.status_code == 200
     approvals = approvals_response.json()
     approval = next(
@@ -322,6 +378,7 @@ def test_live_ai_order_requires_human_approval() -> None:
 
     approve_response = client.post(
         f"/v1/approvals/{approval['id']}/approve",
+        headers=auth_headers(session),
         json={
             "decided_by": "risk_manager_fixture",
             "decision_comment_zh": "测试通过审批。",
@@ -332,8 +389,15 @@ def test_live_ai_order_requires_human_approval() -> None:
 
 
 def test_kill_switch_blocks_new_paper_orders() -> None:
+    session = register_test_device(
+        account_key="kill-switch-fixture",
+        account_name="急停测试账户",
+    )
+    assert client.get("/v1/risk/kill-switch").status_code == 401
+
     enable_response = client.post(
         "/v1/risk/kill-switch",
+        headers=auth_headers(session),
         json={
             "enabled": True,
             "reason_zh": "测试 kill switch 拦截新订单。",
@@ -369,6 +433,7 @@ def test_kill_switch_blocks_new_paper_orders() -> None:
 
     disable_response = client.post(
         "/v1/risk/kill-switch",
+        headers=auth_headers(session),
         json={
             "enabled": False,
             "reason_zh": "测试结束，恢复下单。",

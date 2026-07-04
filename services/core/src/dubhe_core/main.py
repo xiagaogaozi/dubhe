@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .analysis import analyze_news
@@ -82,9 +82,26 @@ def capabilities() -> dict[str, object]:
             "deterministic_replay_backtest",
             "approval_requests",
             "kill_switch",
+            "device_bearer_token_auth",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
+
+
+def require_device_session(authorization: str | None = Header(default=None)) -> DeviceSession:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="需要设备访问令牌。")
+
+    session = store.device_session_by_access_token(token)
+    if session is None:
+        raise HTTPException(status_code=401, detail="设备访问令牌无效或已失效。")
+    return session
+
+
+def require_workspace_access(workspace_id: str, session: DeviceSession) -> None:
+    if session.workspace_id != workspace_id:
+        raise HTTPException(status_code=403, detail="当前设备无权访问该工作区。")
 
 
 @app.post("/v1/auth/devices/register", response_model=DeviceSession)
@@ -96,7 +113,9 @@ def register_device_endpoint(request: DeviceRegistrationRequest) -> DeviceSessio
 def workspace_snapshot_endpoint(
     workspace_id: str,
     since_sequence: int = Query(default=0, ge=0),
+    session: DeviceSession = Depends(require_device_session),
 ) -> WorkspaceSnapshot:
+    require_workspace_access(workspace_id, session)
     try:
         return store.get_workspace_snapshot(workspace_id, since_sequence=since_sequence)
     except KeyError as exc:
@@ -108,7 +127,9 @@ def upsert_watchlist_item_endpoint(
     workspace_id: str,
     symbol: str,
     request: WatchlistUpsertRequest,
+    session: DeviceSession = Depends(require_device_session),
 ) -> WatchlistItem:
+    require_workspace_access(workspace_id, session)
     if request.symbol != symbol.strip().upper():
         raise HTTPException(status_code=400, detail="路径中的股票代码必须与请求体一致。")
     try:
@@ -121,7 +142,9 @@ def upsert_watchlist_item_endpoint(
 def list_sync_events_endpoint(
     workspace_id: str,
     since_sequence: int = Query(default=0, ge=0),
+    session: DeviceSession = Depends(require_device_session),
 ) -> list[SyncEvent]:
+    require_workspace_access(workspace_id, session)
     try:
         return store.list_sync_events(workspace_id, since_sequence=since_sequence)
     except KeyError as exc:
@@ -197,6 +220,7 @@ def list_risk_decisions_endpoint() -> list[RiskDecision]:
 @app.get("/v1/approvals", response_model=list[ApprovalRequest])
 def list_approval_requests_endpoint(
     status: ApprovalStatus | None = Query(default=None),
+    _session: DeviceSession = Depends(require_device_session),
 ) -> list[ApprovalRequest]:
     return store.list_approval_requests(status=status)
 
@@ -205,6 +229,7 @@ def list_approval_requests_endpoint(
 def approve_request_endpoint(
     approval_id: str,
     request: ApprovalActionRequest,
+    _session: DeviceSession = Depends(require_device_session),
 ) -> ApprovalRequest:
     try:
         return store.decide_approval(approval_id, ApprovalStatus.APPROVED, request)
@@ -216,6 +241,7 @@ def approve_request_endpoint(
 def reject_request_endpoint(
     approval_id: str,
     request: ApprovalActionRequest,
+    _session: DeviceSession = Depends(require_device_session),
 ) -> ApprovalRequest:
     try:
         return store.decide_approval(approval_id, ApprovalStatus.REJECTED, request)
@@ -224,12 +250,17 @@ def reject_request_endpoint(
 
 
 @app.get("/v1/risk/kill-switch", response_model=KillSwitchState)
-def get_kill_switch_endpoint() -> KillSwitchState:
+def get_kill_switch_endpoint(
+    _session: DeviceSession = Depends(require_device_session),
+) -> KillSwitchState:
     return store.get_kill_switch_state()
 
 
 @app.post("/v1/risk/kill-switch", response_model=KillSwitchState)
-def set_kill_switch_endpoint(request: KillSwitchUpdateRequest) -> KillSwitchState:
+def set_kill_switch_endpoint(
+    request: KillSwitchUpdateRequest,
+    _session: DeviceSession = Depends(require_device_session),
+) -> KillSwitchState:
     return store.set_kill_switch_state(request)
 
 

@@ -3,6 +3,8 @@ import './App.css'
 
 const API_BASE = import.meta.env.VITE_DUBHE_CORE_URL ?? 'http://127.0.0.1:8000'
 
+let deviceAccessToken: string | null = null
+
 type Market = 'A_SHARE' | 'HK' | 'US' | 'GLOBAL'
 type DevicePlatform = 'windows' | 'macos' | 'ios' | 'android'
 type RiskStatus = 'approved' | 'requires_approval' | 'rejected'
@@ -261,10 +263,15 @@ function percentLabel(value: number) {
   return `${(value * 100).toFixed(2)}%`
 }
 
+function authHeaders(headers: Record<string, string> = {}) {
+  if (!deviceAccessToken) return headers
+  return { ...headers, Authorization: `Bearer ${deviceAccessToken}` }
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
   })
 
@@ -277,7 +284,9 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`)
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: authHeaders(),
+  })
 
   if (!response.ok) {
     const text = await response.text()
@@ -400,6 +409,7 @@ function App() {
           device_name: navigator.platform || 'Dubhe Desktop',
           platform: detectPlatform(),
         })
+        deviceAccessToken = session.access_token
         const snapshot = await getJson<WorkspaceSnapshot>(`/v1/workspaces/${session.workspace_id}/snapshot`)
 
         if (cancelled) return

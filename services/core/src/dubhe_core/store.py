@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
 import sqlite3
 from pathlib import Path
 from threading import RLock
@@ -43,6 +45,10 @@ DEFAULT_WATCHLIST = [
 ]
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+
+
+def hash_access_token(access_token: str) -> str:
+    return hashlib.sha256(access_token.encode("utf-8")).hexdigest()
 
 
 def default_db_path() -> str:
@@ -305,26 +311,46 @@ class SQLiteStore:
                 user_id=user.id,
                 device_id=f"device_{uuid4().hex}",
                 workspace_id=workspace.id,
-                access_token=f"local_{uuid4().hex}",
+                access_token=f"dubhe_dev_{secrets.token_urlsafe(32)}",
                 platform=request.platform,
                 device_name=request.device_name,
             )
+            stored_session = session.model_copy(update={"access_token": ""})
             self._connection.execute(
                 """
-                INSERT INTO devices (id, user_id, workspace_id, platform, created_at, payload)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO devices
+                    (id, user_id, workspace_id, platform, token_hash, revoked_at, created_at, payload)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
                 """,
                 (
                     session.device_id,
                     session.user_id,
                     session.workspace_id,
                     session.platform.value,
+                    hash_access_token(session.access_token),
                     session.created_at.isoformat(),
-                    session.model_dump_json(),
+                    stored_session.model_dump_json(),
                 ),
             )
             self._connection.commit()
             return session
+
+    def device_session_by_access_token(self, access_token: str) -> DeviceSession | None:
+        token = access_token.strip()
+        if not token:
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT payload FROM devices
+                WHERE token_hash = ? AND revoked_at IS NULL
+                """,
+                (hash_access_token(token),),
+            ).fetchone()
+            if row is None:
+                return None
+            session = DeviceSession.model_validate_json(row["payload"])
+            return session.model_copy(update={"access_token": token})
 
     def upsert_watchlist_item(
         self,
@@ -399,6 +425,8 @@ class SQLiteStore:
                     user_id TEXT NOT NULL,
                     workspace_id TEXT NOT NULL,
                     platform TEXT NOT NULL,
+                    token_hash TEXT NOT NULL,
+                    revoked_at TEXT,
                     created_at TEXT NOT NULL,
                     payload TEXT NOT NULL
                 );
@@ -485,6 +513,8 @@ class SQLiteStore:
                 """
             )
             self._ensure_column("watchlist_items", "added_at", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("devices", "token_hash", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("devices", "revoked_at", "TEXT")
             self._connection.commit()
 
     def _load_payloads(
