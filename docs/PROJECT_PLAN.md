@@ -519,6 +519,10 @@ AI strategy draft
 - Flutter Companion shell。
 - Push notification skeleton。
 
+当前状态：
+
+- 已新增 `apps/mobile` Flutter Companion 源码骨架：支持本地账号注册/登录、新闻雷达、中文 AI 影响分析、纸面组合查看和审批通过/拒绝入口；本机尚未安装 Flutter SDK，iOS/Android 平台工程、签名和安装包仍待生成与验证。
+
 通过标准：
 
 - Windows/macOS 能安装并打开桌面端。

@@ -10,6 +10,12 @@ Dubhe uses a two-client, one-cloud architecture:
 
 The desktop app is the full research and strategy workspace. The mobile app is a companion app for news, AI discussion, alerts, monitoring, and approvals.
 
+Current repository status:
+
+- `apps/desktop` is a React + Vite desktop prototype, not the final Theia Desktop shell.
+- `apps/mobile` is the Flutter Companion source skeleton. It can log in through Dubhe Core, read news, request a Chinese analysis, show the paper portfolio, and handle approval actions once Flutter platform projects are generated.
+- The four installable packages are not complete yet. Windows/macOS still need the Theia Desktop packaging path; iOS/Android still need generated Flutter platform projects, signing, icons, push notification setup, and release builds.
+
 ## 2. Runtime Boundaries
 
 ```text
