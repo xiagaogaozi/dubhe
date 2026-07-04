@@ -50,3 +50,5 @@ artifacts/
 .docker/
 docker-compose.override.yml
 
+# External reference source cache
+.reference-code/
