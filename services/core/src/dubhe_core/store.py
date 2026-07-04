@@ -16,6 +16,7 @@ from .models import (
     ApprovalRequest,
     ApprovalStatus,
     DeviceRegistrationRequest,
+    DeviceRevocation,
     DeviceSession,
     BacktestResult,
     KillSwitchState,
@@ -351,6 +352,20 @@ class SQLiteStore:
                 return None
             session = DeviceSession.model_validate_json(row["payload"])
             return session.model_copy(update={"access_token": token})
+
+    def revoke_device_session(self, session: DeviceSession) -> DeviceRevocation:
+        with self._lock:
+            revocation = DeviceRevocation(device_id=session.device_id)
+            self._connection.execute(
+                """
+                UPDATE devices
+                SET revoked_at = ?
+                WHERE id = ? AND revoked_at IS NULL
+                """,
+                (revocation.revoked_at.isoformat(), session.device_id),
+            )
+            self._connection.commit()
+            return revocation
 
     def upsert_watchlist_item(
         self,

@@ -316,6 +316,13 @@ class DeviceSession(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class DeviceRevocation(BaseModel):
+    device_id: str
+    revoked: bool = True
+    revoked_at: datetime = Field(default_factory=utc_now)
+    message_zh: str = "设备访问令牌已撤销。"
+
+
 class Workspace(BaseModel):
     id: str = Field(default_factory=lambda: f"workspace_{uuid4().hex}")
     owner_user_id: str

@@ -11,6 +11,7 @@ from .models import (
     ApprovalStatus,
     BacktestRequest,
     BacktestResult,
+    DeviceRevocation,
     KillSwitchState,
     KillSwitchUpdateRequest,
     NewsAnalysis,
@@ -83,6 +84,7 @@ def capabilities() -> dict[str, object]:
             "approval_requests",
             "kill_switch",
             "device_bearer_token_auth",
+            "device_token_revocation",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
@@ -107,6 +109,13 @@ def require_workspace_access(workspace_id: str, session: DeviceSession) -> None:
 @app.post("/v1/auth/devices/register", response_model=DeviceSession)
 def register_device_endpoint(request: DeviceRegistrationRequest) -> DeviceSession:
     return store.register_device(request)
+
+
+@app.post("/v1/auth/devices/current/revoke", response_model=DeviceRevocation)
+def revoke_current_device_endpoint(
+    session: DeviceSession = Depends(require_device_session),
+) -> DeviceRevocation:
+    return store.revoke_device_session(session)
 
 
 @app.get("/v1/workspaces/{workspace_id}/snapshot", response_model=WorkspaceSnapshot)

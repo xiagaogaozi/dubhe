@@ -111,6 +111,26 @@ def test_sync_endpoints_require_device_token_and_workspace_match() -> None:
     assert ok_response.status_code == 200
 
 
+def test_device_token_can_be_revoked() -> None:
+    session = register_test_device(
+        account_key="sync-revoke-fixture",
+        account_name="撤销测试账户",
+    )
+    workspace_id = session["workspace_id"]
+    headers = auth_headers(session)
+
+    before_response = client.get(f"/v1/workspaces/{workspace_id}/snapshot", headers=headers)
+    assert before_response.status_code == 200
+
+    revoke_response = client.post("/v1/auth/devices/current/revoke", headers=headers)
+    assert revoke_response.status_code == 200
+    assert revoke_response.json()["device_id"] == session["device_id"]
+    assert revoke_response.json()["revoked"] is True
+
+    after_response = client.get(f"/v1/workspaces/{workspace_id}/snapshot", headers=headers)
+    assert after_response.status_code == 401
+
+
 def test_watchlist_sync_events_are_shared_across_devices() -> None:
     first_session = register_test_device(
         account_key="sync-fixture-shared",

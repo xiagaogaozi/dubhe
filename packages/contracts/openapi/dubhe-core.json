@@ -86,6 +86,52 @@
         }
       }
     },
+    "/v1/auth/devices/current/revoke": {
+      "post": {
+        "summary": "Revoke Current Device Endpoint",
+        "operationId": "revoke_current_device_endpoint_v1_auth_devices_current_revoke_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceRevocation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/snapshot": {
       "get": {
         "summary": "Workspace Snapshot Endpoint",
@@ -1321,6 +1367,34 @@
           "platform"
         ],
         "title": "DeviceRegistrationRequest"
+      },
+      "DeviceRevocation": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "revoked": {
+            "type": "boolean",
+            "title": "Revoked",
+            "default": true
+          },
+          "revoked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Revoked At"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh",
+            "default": "设备访问令牌已撤销。"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id"
+        ],
+        "title": "DeviceRevocation"
       },
       "DeviceSession": {
         "properties": {
