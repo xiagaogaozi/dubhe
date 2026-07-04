@@ -13,6 +13,7 @@ The desktop app is the full research and strategy workspace. The mobile app is a
 Current repository status:
 
 - `apps/desktop` is a React + Vite desktop prototype, not the final Theia Desktop shell.
+- `apps/theia-desktop` is the Eclipse Theia Desktop shell skeleton. It defines an Electron target application package and a Dubhe Theia extension that will gradually absorb the React prototype panels.
 - `apps/mobile` is the Flutter Companion source skeleton. It can log in through Dubhe Core, read news, request a Chinese analysis, show the paper portfolio, and handle approval actions once Flutter platform projects are generated.
 - The four installable packages are not complete yet. Windows/macOS still need the Theia Desktop packaging path; iOS/Android still need generated Flutter platform projects, signing, icons, push notification setup, and release builds.
 

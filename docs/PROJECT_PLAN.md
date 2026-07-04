@@ -521,6 +521,7 @@ AI strategy draft
 
 当前状态：
 
+- 已新增 `apps/theia-desktop` Eclipse Theia Desktop 壳骨架：包含 Electron target application package 与 Dubhe Theia extension，用于承载新闻雷达、AI 分析师、策略工坊、回测中心、纸面组合和风控中心；当前仍需在 Node LTS + Yarn 1 环境下安装依赖、构建、打包并逐步迁移 React/Vite 原型面板。
 - 已新增 `apps/mobile` Flutter Companion 源码骨架：支持本地账号注册/登录、新闻雷达、中文 AI 影响分析、纸面组合查看和审批通过/拒绝入口；本机尚未安装 Flutter SDK，iOS/Android 平台工程、签名和安装包仍待生成与验证。
 
 通过标准：

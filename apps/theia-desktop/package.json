@@ -1,0 +1,20 @@
+{
+  "private": true,
+  "name": "@dubhe/theia-desktop-workspace",
+  "version": "0.1.0",
+  "description": "Dubhe Theia Desktop workspace for the Windows and macOS IDE-style client.",
+  "scripts": {
+    "build": "yarn --cwd packages/dubhe-theia-extension build && yarn --cwd app bundle",
+    "start": "yarn --cwd app start",
+    "rebuild": "yarn --cwd app rebuild",
+    "package:electron": "yarn --cwd app package:electron"
+  },
+  "workspaces": [
+    "app",
+    "packages/dubhe-theia-extension"
+  ],
+  "engines": {
+    "node": ">=18 <23",
+    "yarn": ">=1.22 <2"
+  }
+}

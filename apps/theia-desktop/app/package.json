@@ -1,0 +1,39 @@
+{
+  "private": true,
+  "name": "@dubhe/theia-desktop-app",
+  "version": "0.1.0",
+  "description": "Dubhe Desktop Electron application composed with Eclipse Theia.",
+  "dependencies": {
+    "@dubhe/theia-extension": "0.1.0",
+    "@theia/callhierarchy": "1.73.1",
+    "@theia/core": "1.73.1",
+    "@theia/editor": "1.73.1",
+    "@theia/electron": "1.73.1",
+    "@theia/filesystem": "1.73.1",
+    "@theia/markers": "1.73.1",
+    "@theia/messages": "1.73.1",
+    "@theia/monaco": "1.73.1",
+    "@theia/navigator": "1.73.1",
+    "@theia/outline-view": "1.73.1",
+    "@theia/plugin-ext": "1.73.1",
+    "@theia/plugin-ext-vscode": "1.73.1",
+    "@theia/preferences": "1.73.1",
+    "@theia/process": "1.73.1",
+    "@theia/search-in-workspace": "1.73.1",
+    "@theia/terminal": "1.73.1",
+    "@theia/workspace": "1.73.1"
+  },
+  "devDependencies": {
+    "@theia/cli": "1.73.1"
+  },
+  "scripts": {
+    "bundle": "yarn rebuild && theia build --mode development",
+    "rebuild": "theia rebuild:electron --cacheRoot ../.theia-cache",
+    "start": "theia start --plugins=local-dir:plugins",
+    "watch": "yarn rebuild && theia build --watch --mode development",
+    "package:electron": "theia package --mode development"
+  },
+  "theia": {
+    "target": "electron"
+  }
+}

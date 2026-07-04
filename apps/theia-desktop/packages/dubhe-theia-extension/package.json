@@ -1,0 +1,29 @@
+{
+  "name": "@dubhe/theia-extension",
+  "version": "0.1.0",
+  "description": "Dubhe product panels for the Theia Desktop shell.",
+  "license": "UNLICENSED",
+  "main": "lib/browser/dubhe-frontend-module.js",
+  "types": "lib/browser/dubhe-frontend-module.d.ts",
+  "files": [
+    "lib",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "@theia/core": "1.73.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "rimraf": "^6.0.1",
+    "typescript": "~5.8.3"
+  },
+  "theiaExtensions": [
+    {
+      "frontend": "lib/browser/dubhe-frontend-module"
+    }
+  ]
+}

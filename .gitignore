@@ -53,3 +53,8 @@ docker-compose.override.yml
 
 # External reference source cache
 .reference-code/
+
+# Theia
+.theia-cache/
+apps/theia-desktop/app/plugins/
+apps/theia-desktop/packages/*/lib/
