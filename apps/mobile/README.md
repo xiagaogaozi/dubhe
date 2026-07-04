@@ -10,16 +10,16 @@ Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中
 - 查看 `/v1/simulation/paper-portfolio/{account_id}` 纸面组合。
 - 管理员或风控管理员可查看 `/v1/approvals`，并调用通过/拒绝接口。
 
-## 生成平台工程
+## 平台工程
 
-本仓库当前提交的是 Flutter 源码骨架。本机尚未安装 Flutter SDK 时，不能在这台机器上直接验证 `flutter test` 或生成安装包。
+本仓库已经提交 Android / iOS 平台工程。当前本机已验证 Flutter `3.44.4` / Dart `3.12.2` 下的 `flutter analyze` 与 `flutter test`。
 
-安装 Flutter 后，在本目录执行：
+首次拉取后，在本目录执行：
 
 ```powershell
 cd D:\github\dubhe-main\apps\mobile
-flutter create --platforms=ios,android --project-name dubhe_companion .
 flutter pub get
+flutter analyze
 flutter test
 ```
 
@@ -61,4 +61,6 @@ flutter build ios --release --dart-define=DUBHE_CORE_URL=https://your-core.examp
 - Android debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。
 - iOS no-codesign app bundle：`build/ios/iphoneos/Runner.app`。
 
-工作流会先执行 `flutter create --platforms=android/ios --project-name dubhe_companion .` 生成平台工程，再运行 `flutter pub get`、`flutter test` 和对应构建命令。正式发布前仍需要接入 Android release signing、iOS Apple Developer 签名、Bundle ID、图标和商店元数据。
+工作流会运行 `flutter pub get`、`flutter test` 和对应构建命令。正式发布前仍需要接入 Android release signing、iOS Apple Developer 签名、正式图标和商店元数据。
+
+本机当前 `flutter doctor -v` 显示 Android SDK 尚未安装，因此 Android APK 仍需在 CI 或安装 Android Studio / Android SDK 后构建；iOS 构建需要 macOS + Xcode。

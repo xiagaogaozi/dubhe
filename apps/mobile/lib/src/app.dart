@@ -412,7 +412,7 @@ class _NewsPage extends StatelessWidget {
           ),
         );
       },
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemCount: events.length,
     );
   }
@@ -484,9 +484,9 @@ class _PortfolioPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = portfolio;
     if (current == null) {
-      return const ListView(
-        padding: EdgeInsets.all(16),
-        children: [_InfoCard(text: '纸面组合尚未同步。')],
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: const [_InfoCard(text: '纸面组合尚未同步。')],
       );
     }
 
