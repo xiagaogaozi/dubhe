@@ -47,6 +47,8 @@ flutter build apk --debug --dart-define=DUBHE_CORE_URL=https://your-core.example
 flutter build appbundle --release --dart-define=DUBHE_CORE_URL=https://your-core.example.com
 ```
 
+默认没有 `android/key.properties` 时，release 构建会继续使用 debug key 作为本地烟测兜底，不可用于正式分发。准备正式 Android 包时，在 `apps/mobile/android` 下复制 `key.properties.example` 为 `key.properties`，把 `storeFile` 指向本地 keystore，并填入真实 `storePassword`、`keyPassword` 和 `keyAlias`；`key.properties`、`*.jks`、`*.keystore` 已在 `.gitignore` 中排除。
+
 本机开发调试包已验证输出到：
 
 ```text
@@ -66,8 +68,9 @@ flutter build ios --release --dart-define=DUBHE_CORE_URL=https://your-core.examp
 `docs/ci/mobile.yml` 是移动端打包流水线模板。将它复制到 `.github/workflows/mobile.yml` 后，可以手动触发或在 `main` 分支移动端文件变更时构建：
 
 - Android debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。
+- Android release appbundle：配置签名 secrets 后输出 `build/app/outputs/bundle/release/app-release.aab`。
 - iOS no-codesign app bundle：`build/ios/iphoneos/Runner.app`。
 
-工作流会运行 `flutter pub get`、`flutter test` 和对应构建命令。正式发布前仍需要接入 Android release signing、iOS Apple Developer 签名、正式图标和商店元数据。
+工作流会运行 `flutter pub get`、`flutter test` 和对应构建命令。Android release appbundle 需要在仓库 secrets 中提供 `ANDROID_KEYSTORE_BASE64`、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_PASSWORD` 和 `ANDROID_KEY_ALIAS`。正式发布前仍需要接入 iOS Apple Developer 签名、正式图标和商店元数据。
 
 本机当前 `flutter doctor -v` 已识别 Android 工具链且所有 Android licenses 已接受。剩余提示为 Flutter/Dart 未加入全局 `PATH`，以及 `maven.google.com` 网络检查偶发超时；本地 Android debug APK 构建已通过。iOS 构建仍需要 macOS + Xcode。
