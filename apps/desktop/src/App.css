@@ -145,6 +145,8 @@
 .right-panel h2,
 .right-panel h3,
 .news-feed-panel h3,
+.strategy-panel h3,
+.backtest-panel h3,
 .source-panel h3,
 .workflow-panel h3 {
   margin: 0;
@@ -386,6 +388,8 @@
 
 .metric-grid div,
 .news-feed-panel,
+.strategy-panel,
+.backtest-panel,
 .source-panel,
 .workflow-panel,
 .risk-card {
@@ -417,8 +421,82 @@
 
 .source-panel,
 .news-feed-panel,
+.strategy-panel,
+.backtest-panel,
 .workflow-panel {
   padding: 16px;
+}
+
+.strategy-panel,
+.backtest-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.strategy-panel header,
+.backtest-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.strategy-panel header span,
+.backtest-panel header span {
+  color: #647069;
+  font-size: 12px;
+}
+
+.strategy-panel p,
+.backtest-panel p {
+  margin: 0;
+  color: #56625b;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.rule-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rule-list span {
+  min-height: 30px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #dce8df;
+  color: #25362e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.backtest-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.backtest-metrics div {
+  min-height: 68px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(23, 32, 28, 0.05);
+}
+
+.backtest-metrics span {
+  display: block;
+  color: #647069;
+  font-size: 12px;
+}
+
+.backtest-metrics strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
 }
 
 .news-feed-panel {
@@ -670,6 +748,7 @@
   }
 
   .metric-grid,
+  .backtest-metrics,
   .log-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -719,6 +798,7 @@
   }
 
   .metric-grid,
+  .backtest-metrics,
   .log-list {
     grid-template-columns: minmax(0, 1fr);
   }

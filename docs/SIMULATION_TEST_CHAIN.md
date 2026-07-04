@@ -183,6 +183,28 @@ broker_permissions
 
 Golden replay 是本项目最重要的兜底层。它不追求覆盖所有历史，而是固定一批高风险场景，防止后续代码改动破坏关键行为。
 
+### 8.0 当前已实现 smoke
+
+Core 当前提供一个可运行的 deterministic replay smoke：
+
+```http
+POST /v1/strategy/drafts/from-analysis
+POST /v1/backtests/replay
+```
+
+用途：
+
+- 将 `NewsAnalysis` 转成中文可解释的 `StrategyDraft` 和 `StrategySpec`。
+- 生成 LEAN 风格策略代码占位，真实执行仍由后续 LEAN worker 负责。
+- 使用固定 replay close 序列输出收益、基准收益、最大回撤、胜率、交易次数和权益曲线。
+- 将策略草案和回测结果写入 SQLite，并进入工作区同步事件。
+
+边界：
+
+- 这是 Gate 5 的 smoke，不是 Gate 4 的完整 LEAN 历史回测。
+- 不包含真实交易成本、滑点、市场日历、复权、成交撮合和 broker 回报。
+- 任何实盘路径仍必须经过 Risk Service 和人工审批。
+
 ### 8.1 A 股场景
 
 - A 股涨停后策略继续追单。

@@ -233,6 +233,55 @@ def test_news_analysis_returns_chinese_summary_and_sources() -> None:
     assert any(item["id"] == body["id"] for item in list_response.json())
 
 
+def test_strategy_draft_and_replay_backtest_from_news_analysis() -> None:
+    analysis = {
+        "id": "analysis_strategy_fixture",
+        "news_event_id": "news_strategy_fixture",
+        "summary_zh": "这条来自SEC EDGAR的消息显示：英伟达提交 SEC 8-K 文件",
+        "sentiment": "positive",
+        "impact_score": 0.72,
+        "affected_tickers": ["NVDA"],
+        "source_refs": ["https://www.sec.gov/Archives/edgar/data/1045810/example.htm"],
+        "confidence": 0.8,
+        "generated_at": "2026-07-05T00:00:00Z",
+    }
+    draft_response = client.post(
+        "/v1/strategy/drafts/from-analysis",
+        json={
+            "analysis": analysis,
+            "symbol": "NVDA",
+            "market": "US",
+            "max_order_notional": 10000,
+        },
+    )
+
+    assert draft_response.status_code == 200
+    draft = draft_response.json()
+    assert draft["spec"]["asset_universe"] == ["NVDA"]
+    assert draft["spec"]["broker_permissions"] == ["paper"]
+    assert "QCAlgorithm" in draft["generated_code"]
+
+    backtest_response = client.post(
+        "/v1/backtests/replay",
+        json={
+            "strategy": draft,
+            "initial_cash": 100000,
+            "replay_scenario": "golden_news_sentiment_v1",
+        },
+    )
+
+    assert backtest_response.status_code == 200
+    backtest = backtest_response.json()
+    assert backtest["symbol"] == "NVDA"
+    assert backtest["trade_count"] == 2
+    assert backtest["final_equity"] > 100000
+    assert len(backtest["equity_curve"]) >= 5
+
+    list_response = client.get("/v1/backtests")
+    assert list_response.status_code == 200
+    assert any(item["id"] == backtest["id"] for item in list_response.json())
+
+
 def test_live_ai_order_requires_human_approval() -> None:
     response = client.post(
         "/v1/risk/evaluate",

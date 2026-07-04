@@ -72,6 +72,54 @@ type PaperOrder = {
   submitted_at: string
 }
 
+type StrategySpec = {
+  strategy_name: string
+  market_scope: Market[]
+  asset_universe: string[]
+  entry_rules: string[]
+  exit_rules: string[]
+  risk_limits: Record<string, number>
+  timeframe: string
+  rebalance_rule: string
+  data_dependencies: string[]
+  broker_permissions: string[]
+}
+
+type StrategyDraft = {
+  id: string
+  strategy_version_id: string
+  name: string
+  spec: StrategySpec
+  explanation_zh: string
+  generated_code: string
+  source_analysis_id: string
+  created_at: string
+}
+
+type BacktestPoint = {
+  date: string
+  equity: number
+  benchmark: number
+}
+
+type BacktestResult = {
+  id: string
+  strategy_version_id: string
+  replay_scenario: string
+  symbol: string
+  market: Market
+  initial_cash: number
+  final_equity: number
+  total_return: number
+  benchmark_return: number
+  max_drawdown: number
+  win_rate: number
+  trade_count: number
+  risk_notes_zh: string[]
+  equity_curve: BacktestPoint[]
+  generated_at: string
+}
+
 type DeviceSession = {
   user_id: string
   device_id: string
@@ -189,6 +237,10 @@ function sentimentLabel(sentiment: Sentiment) {
   return '中性'
 }
 
+function percentLabel(value: number) {
+  return `${(value * 100).toFixed(2)}%`
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -245,6 +297,8 @@ function App() {
   const [selectedNewsId, setSelectedNewsId] = useState(fallbackNewsEvent.id)
   const [providerStatus, setProviderStatus] = useState<NewsProviderStatus[]>([])
   const [analysis, setAnalysis] = useState<NewsAnalysis>(fallbackAnalysis)
+  const [strategyDraft, setStrategyDraft] = useState<StrategyDraft | null>(null)
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null)
   const [riskDecision, setRiskDecision] = useState<RiskDecision | null>(null)
   const [paperOrder, setPaperOrder] = useState<PaperOrder | null>(null)
   const [isBusy, setBusy] = useState(false)
@@ -389,6 +443,51 @@ function App() {
     }
   }
 
+  async function draftStrategy() {
+    setBusy(true)
+    try {
+      const draft = await postJson<StrategyDraft>('/v1/strategy/drafts/from-analysis', {
+        analysis,
+        symbol: selectedTicker,
+        market: tickerContext.market,
+        max_order_notional: 10000,
+      })
+      setStrategyDraft(draft)
+      setBacktestResult(null)
+      setApiStatus('已连接')
+      appendLog('success', `策略草案已生成：${draft.name}。`)
+    } catch (error) {
+      setApiStatus('离线')
+      appendLog('danger', `策略草案生成失败：${error instanceof Error ? error.message : '未知错误'}。`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runReplayBacktest() {
+    if (!strategyDraft) {
+      appendLog('warning', '请先生成策略草案，再运行回测。')
+      return
+    }
+
+    setBusy(true)
+    try {
+      const result = await postJson<BacktestResult>('/v1/backtests/replay', {
+        strategy: strategyDraft,
+        initial_cash: 100000,
+        replay_scenario: 'golden_news_sentiment_v1',
+      })
+      setBacktestResult(result)
+      setApiStatus('已连接')
+      appendLog('success', `回测完成：收益 ${percentLabel(result.total_return)}，最大回撤 ${percentLabel(result.max_drawdown)}。`)
+    } catch (error) {
+      setApiStatus('离线')
+      appendLog('danger', `回测失败：${error instanceof Error ? error.message : '未知错误'}。`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function evaluateRisk() {
     setBusy(true)
     try {
@@ -521,6 +620,12 @@ function App() {
             <button type="button" onClick={runNewsAnalysis} disabled={isBusy}>
               <Icon label="析" /> 分析新闻
             </button>
+            <button type="button" onClick={draftStrategy} disabled={isBusy}>
+              <Icon label="策" /> 生成策略草案
+            </button>
+            <button type="button" onClick={runReplayBacktest} disabled={isBusy}>
+              <Icon label="回" /> 运行回测
+            </button>
             <button type="button" onClick={evaluateRisk} disabled={isBusy}>
               <Icon label="控" /> 风控评估
             </button>
@@ -604,6 +709,43 @@ function App() {
               <span>纸面交易</span>
             </div>
           </section>
+
+          <section className="strategy-panel">
+            <header>
+              <h3>策略草案</h3>
+              <span>{strategyDraft ? strategyDraft.strategy_version_id : '待生成'}</span>
+            </header>
+            {strategyDraft ? (
+              <>
+                <p>{strategyDraft.explanation_zh}</p>
+                <div className="rule-list">
+                  {strategyDraft.spec.entry_rules.map((rule) => <span key={rule}>{rule}</span>)}
+                </div>
+              </>
+            ) : (
+              <p>点击“生成策略草案”，把当前新闻分析转换成可回测的策略版本。</p>
+            )}
+          </section>
+
+          <section className="backtest-panel">
+            <header>
+              <h3>回测报告</h3>
+              <span>{backtestResult ? backtestResult.replay_scenario : 'golden replay'}</span>
+            </header>
+            {backtestResult ? (
+              <>
+                <div className="backtest-metrics">
+                  <div><span>策略收益</span><strong>{percentLabel(backtestResult.total_return)}</strong></div>
+                  <div><span>基准收益</span><strong>{percentLabel(backtestResult.benchmark_return)}</strong></div>
+                  <div><span>最大回撤</span><strong>{percentLabel(backtestResult.max_drawdown)}</strong></div>
+                  <div><span>胜率</span><strong>{percentLabel(backtestResult.win_rate)}</strong></div>
+                </div>
+                <p>{backtestResult.risk_notes_zh[0]}</p>
+              </>
+            ) : (
+              <p>点击“运行回测”，用确定性 golden replay 先验证策略方向。</p>
+            )}
+          </section>
         </article>
       </section>
 
@@ -629,6 +771,16 @@ function App() {
             ))
           ) : (
             <p>尚未刷新实时新闻源。</p>
+          )}
+        </section>
+
+        <section className="risk-card">
+          <h3>策略 / 回测</h3>
+          {strategyDraft ? <p>策略：{strategyDraft.name}</p> : <p>尚未生成策略草案。</p>}
+          {backtestResult ? (
+            <p>回测收益 {percentLabel(backtestResult.total_return)}，最大回撤 {percentLabel(backtestResult.max_drawdown)}。</p>
+          ) : (
+            <p>尚未运行 replay 回测。</p>
           )}
         </section>
 

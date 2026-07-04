@@ -7,6 +7,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 - 本地 SQLite 持久化存储，服务重启后保留账号、设备、工作区、自选股、分析、风控和纸面订单。
 - SEC EDGAR / GDELT / Fixture 新闻源聚合接口。
 - 新闻事件中文分析占位链路。
+- 新闻分析生成策略草案与 deterministic replay 回测。
 - 策略规格校验。
 - 订单意图风控门禁。
 - 纸面交易订单占位链路。

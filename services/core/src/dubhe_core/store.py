@@ -12,10 +12,12 @@ from pydantic import BaseModel
 from .models import (
     DeviceRegistrationRequest,
     DeviceSession,
+    BacktestResult,
     NewsEvent,
     NewsAnalysis,
     PaperOrder,
     RiskDecision,
+    StrategyDraft,
     SyncEntityType,
     SyncEvent,
     UserAccount,
@@ -72,6 +74,14 @@ class SQLiteStore:
     @property
     def paper_orders(self) -> list[PaperOrder]:
         return self._load_payloads("paper_orders", PaperOrder, "submitted_at, id")
+
+    @property
+    def strategy_drafts(self) -> list[StrategyDraft]:
+        return self._load_payloads("strategy_drafts", StrategyDraft, "created_at DESC, id")
+
+    @property
+    def backtest_results(self) -> list[BacktestResult]:
+        return self._load_payloads("backtest_results", BacktestResult, "generated_at DESC, id")
 
     def close(self) -> None:
         with self._lock:
@@ -149,6 +159,38 @@ class SQLiteStore:
             self._connection.commit()
             return order
 
+    def add_strategy_draft(self, draft: StrategyDraft) -> StrategyDraft:
+        with self._lock:
+            self._upsert_payload(
+                table="strategy_drafts",
+                model_id=draft.id,
+                payload=draft,
+                timestamp=draft.created_at.isoformat(),
+            )
+            self._append_entity_event_to_all_workspaces(
+                entity_type=SyncEntityType.STRATEGY_DRAFT,
+                entity_id=draft.id,
+                payload=draft.model_dump(mode="json"),
+            )
+            self._connection.commit()
+            return draft
+
+    def add_backtest_result(self, result: BacktestResult) -> BacktestResult:
+        with self._lock:
+            self._upsert_payload(
+                table="backtest_results",
+                model_id=result.id,
+                payload=result,
+                timestamp=result.generated_at.isoformat(),
+            )
+            self._append_entity_event_to_all_workspaces(
+                entity_type=SyncEntityType.BACKTEST_RESULT,
+                entity_id=result.id,
+                payload=result.model_dump(mode="json"),
+            )
+            self._connection.commit()
+            return result
+
     def register_device(self, request: DeviceRegistrationRequest) -> DeviceSession:
         with self._lock:
             user = self._user_by_account_key(request.account_key)
@@ -209,6 +251,8 @@ class SQLiteStore:
                 analyses=self.analyses,
                 risk_decisions=self.risk_decisions,
                 paper_orders=self.paper_orders,
+                strategy_drafts=self.strategy_drafts,
+                backtest_results=self.backtest_results,
                 events=self.list_sync_events(workspace_id, since_sequence=since_sequence),
                 server_sequence=self._server_sequence(workspace_id),
             )
@@ -305,6 +349,18 @@ class SQLiteStore:
                     payload TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS strategy_drafts (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS backtest_results (
+                    id TEXT PRIMARY KEY,
+                    generated_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
                 CREATE INDEX IF NOT EXISTS idx_workspaces_owner_user_id ON workspaces(owner_user_id);
                 CREATE INDEX IF NOT EXISTS idx_watchlist_workspace ON watchlist_items(workspace_id);
@@ -329,7 +385,13 @@ class SQLiteStore:
 
     def _upsert_payload(
         self,
-        table: Literal["news_analyses", "risk_decisions", "paper_orders"],
+        table: Literal[
+            "news_analyses",
+            "risk_decisions",
+            "paper_orders",
+            "strategy_drafts",
+            "backtest_results",
+        ],
         model_id: str,
         payload: BaseModel,
         timestamp: str,
@@ -338,6 +400,8 @@ class SQLiteStore:
             "news_analyses": "generated_at",
             "risk_decisions": "evaluated_at",
             "paper_orders": "submitted_at",
+            "strategy_drafts": "created_at",
+            "backtest_results": "generated_at",
         }[table]
         self._connection.execute(
             f"""

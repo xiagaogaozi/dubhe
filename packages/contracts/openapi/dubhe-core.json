@@ -446,6 +446,126 @@
         }
       }
     },
+    "/v1/strategy/drafts/from-analysis": {
+      "post": {
+        "summary": "Draft Strategy From Analysis Endpoint",
+        "operationId": "draft_strategy_from_analysis_endpoint_v1_strategy_drafts_from_analysis_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StrategyDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyDraft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/strategy/drafts": {
+      "get": {
+        "summary": "List Strategy Drafts Endpoint",
+        "operationId": "list_strategy_drafts_endpoint_v1_strategy_drafts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StrategyDraft"
+                  },
+                  "type": "array",
+                  "title": "Response List Strategy Drafts Endpoint V1 Strategy Drafts Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/backtests/replay": {
+      "post": {
+        "summary": "Run Replay Backtest Endpoint",
+        "operationId": "run_replay_backtest_endpoint_v1_backtests_replay_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/backtests": {
+      "get": {
+        "summary": "List Backtests Endpoint",
+        "operationId": "list_backtests_endpoint_v1_backtests_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BacktestResult"
+                  },
+                  "type": "array",
+                  "title": "Response List Backtests Endpoint V1 Backtests Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/risk/evaluate": {
       "post": {
         "summary": "Evaluate Risk Endpoint",
@@ -567,6 +687,146 @@
   },
   "components": {
     "schemas": {
+      "BacktestPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "equity": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Equity"
+          },
+          "benchmark": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Benchmark"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "equity",
+          "benchmark"
+        ],
+        "title": "BacktestPoint"
+      },
+      "BacktestRequest": {
+        "properties": {
+          "strategy": {
+            "$ref": "#/components/schemas/StrategyDraft"
+          },
+          "initial_cash": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Initial Cash",
+            "default": 100000
+          },
+          "replay_scenario": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Replay Scenario",
+            "default": "golden_news_sentiment_v1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategy"
+        ],
+        "title": "BacktestRequest"
+      },
+      "BacktestResult": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "strategy_version_id": {
+            "type": "string",
+            "title": "Strategy Version Id"
+          },
+          "replay_scenario": {
+            "type": "string",
+            "title": "Replay Scenario"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "initial_cash": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Initial Cash"
+          },
+          "final_equity": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Final Equity"
+          },
+          "total_return": {
+            "type": "number",
+            "title": "Total Return"
+          },
+          "benchmark_return": {
+            "type": "number",
+            "title": "Benchmark Return"
+          },
+          "max_drawdown": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Max Drawdown"
+          },
+          "win_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Win Rate"
+          },
+          "trade_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Trade Count"
+          },
+          "risk_notes_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risk Notes Zh"
+          },
+          "equity_curve": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestPoint"
+            },
+            "type": "array",
+            "title": "Equity Curve"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategy_version_id",
+          "replay_scenario",
+          "symbol",
+          "market",
+          "initial_cash",
+          "final_equity",
+          "total_return",
+          "benchmark_return",
+          "max_drawdown",
+          "win_rate",
+          "trade_count"
+        ],
+        "title": "BacktestResult"
+      },
       "DevicePlatform": {
         "type": "string",
         "enum": [
@@ -1181,6 +1441,79 @@
         ],
         "title": "Sentiment"
       },
+      "StrategyDraft": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "strategy_version_id": {
+            "type": "string",
+            "title": "Strategy Version Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/StrategySpec"
+          },
+          "explanation_zh": {
+            "type": "string",
+            "title": "Explanation Zh"
+          },
+          "generated_code": {
+            "type": "string",
+            "title": "Generated Code"
+          },
+          "source_analysis_id": {
+            "type": "string",
+            "title": "Source Analysis Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "spec",
+          "explanation_zh",
+          "generated_code",
+          "source_analysis_id"
+        ],
+        "title": "StrategyDraft"
+      },
+      "StrategyDraftRequest": {
+        "properties": {
+          "analysis": {
+            "$ref": "#/components/schemas/NewsAnalysis"
+          },
+          "symbol": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Symbol"
+          },
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "max_order_notional": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Order Notional",
+            "default": 10000
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysis",
+          "symbol",
+          "market"
+        ],
+        "title": "StrategyDraftRequest"
+      },
       "StrategySpec": {
         "properties": {
           "strategy_name": {
@@ -1293,6 +1626,8 @@
           "watchlist_item",
           "news_event",
           "news_analysis",
+          "strategy_draft",
+          "backtest_result",
           "risk_decision",
           "paper_order"
         ],
@@ -1552,6 +1887,20 @@
             },
             "type": "array",
             "title": "Paper Orders"
+          },
+          "strategy_drafts": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyDraft"
+            },
+            "type": "array",
+            "title": "Strategy Drafts"
+          },
+          "backtest_results": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestResult"
+            },
+            "type": "array",
+            "title": "Backtest Results"
           },
           "events": {
             "items": {

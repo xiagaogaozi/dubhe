@@ -63,6 +63,8 @@ class SyncEntityType(str, Enum):
     WATCHLIST_ITEM = "watchlist_item"
     NEWS_EVENT = "news_event"
     NEWS_ANALYSIS = "news_analysis"
+    STRATEGY_DRAFT = "strategy_draft"
+    BACKTEST_RESULT = "backtest_result"
     RISK_DECISION = "risk_decision"
     PAPER_ORDER = "paper_order"
 
@@ -141,6 +143,59 @@ class StrategySpec(BaseModel):
 class StrategyValidationResult(BaseModel):
     valid: bool
     reasons_zh: list[str] = Field(default_factory=list)
+
+
+class StrategyDraftRequest(BaseModel):
+    analysis: NewsAnalysis
+    symbol: str = Field(min_length=1)
+    market: Market
+    max_order_notional: float = Field(default=10_000, gt=0)
+
+    @field_validator("symbol")
+    @classmethod
+    def normalize_symbol(cls, symbol: str) -> str:
+        return symbol.strip().upper()
+
+
+class StrategyDraft(BaseModel):
+    id: str = Field(default_factory=lambda: f"strategy_draft_{uuid4().hex}")
+    strategy_version_id: str = Field(default_factory=lambda: f"strategy_v_{uuid4().hex}")
+    name: str
+    spec: StrategySpec
+    explanation_zh: str
+    generated_code: str
+    source_analysis_id: str
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class BacktestRequest(BaseModel):
+    strategy: StrategyDraft
+    initial_cash: float = Field(default=100_000, gt=0)
+    replay_scenario: str = Field(default="golden_news_sentiment_v1", min_length=1)
+
+
+class BacktestPoint(BaseModel):
+    date: str
+    equity: float = Field(ge=0)
+    benchmark: float = Field(ge=0)
+
+
+class BacktestResult(BaseModel):
+    id: str = Field(default_factory=lambda: f"backtest_{uuid4().hex}")
+    strategy_version_id: str
+    replay_scenario: str
+    symbol: str
+    market: Market
+    initial_cash: float = Field(gt=0)
+    final_equity: float = Field(ge=0)
+    total_return: float
+    benchmark_return: float
+    max_drawdown: float = Field(ge=0)
+    win_rate: float = Field(ge=0, le=1)
+    trade_count: int = Field(ge=0)
+    risk_notes_zh: list[str] = Field(default_factory=list)
+    equity_curve: list[BacktestPoint] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=utc_now)
 
 
 class OrderIntent(BaseModel):
@@ -275,5 +330,7 @@ class WorkspaceSnapshot(BaseModel):
     analyses: list[NewsAnalysis] = Field(default_factory=list)
     risk_decisions: list[RiskDecision] = Field(default_factory=list)
     paper_orders: list[PaperOrder] = Field(default_factory=list)
+    strategy_drafts: list[StrategyDraft] = Field(default_factory=list)
+    backtest_results: list[BacktestResult] = Field(default_factory=list)
     events: list[SyncEvent] = Field(default_factory=list)
     server_sequence: int = 0

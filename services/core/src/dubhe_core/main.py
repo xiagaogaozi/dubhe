@@ -4,7 +4,10 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .analysis import analyze_news
+from .backtest import draft_strategy_from_analysis, run_replay_backtest
 from .models import (
+    BacktestRequest,
+    BacktestResult,
     NewsAnalysis,
     NewsEvent,
     NewsFeedResponse,
@@ -15,6 +18,8 @@ from .models import (
     DeviceSession,
     Market,
     StrategySpec,
+    StrategyDraft,
+    StrategyDraftRequest,
     StrategyValidationResult,
     SyncEvent,
     WatchlistItem,
@@ -67,6 +72,8 @@ def capabilities() -> dict[str, object]:
             "watchlist_sync",
             "local_sqlite_persistence",
             "public_news_feed_adapters",
+            "strategy_draft_from_news_analysis",
+            "deterministic_replay_backtest",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
@@ -144,6 +151,26 @@ def list_news_analyses_endpoint() -> list[NewsAnalysis]:
 @app.post("/v1/strategy/spec/validate", response_model=StrategyValidationResult)
 def validate_strategy_endpoint(spec: StrategySpec) -> StrategyValidationResult:
     return validate_strategy_spec(spec)
+
+
+@app.post("/v1/strategy/drafts/from-analysis", response_model=StrategyDraft)
+def draft_strategy_from_analysis_endpoint(request: StrategyDraftRequest) -> StrategyDraft:
+    return store.add_strategy_draft(draft_strategy_from_analysis(request))
+
+
+@app.get("/v1/strategy/drafts", response_model=list[StrategyDraft])
+def list_strategy_drafts_endpoint() -> list[StrategyDraft]:
+    return store.strategy_drafts
+
+
+@app.post("/v1/backtests/replay", response_model=BacktestResult)
+def run_replay_backtest_endpoint(request: BacktestRequest) -> BacktestResult:
+    return store.add_backtest_result(run_replay_backtest(request))
+
+
+@app.get("/v1/backtests", response_model=list[BacktestResult])
+def list_backtests_endpoint() -> list[BacktestResult]:
+    return store.backtest_results
 
 
 @app.post("/v1/risk/evaluate", response_model=RiskDecision)
