@@ -1,0 +1,887 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Dubhe Core",
+    "description": "中文优先的 AI 投资研究与受控量化交易后端 API。",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "summary": "Capabilities",
+        "operationId": "capabilities_v1_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Capabilities V1 Capabilities Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/news/analyze": {
+      "post": {
+        "summary": "Analyze News Endpoint",
+        "operationId": "analyze_news_endpoint_v1_news_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewsEvent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsAnalysis"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/news/analyses": {
+      "get": {
+        "summary": "List News Analyses Endpoint",
+        "operationId": "list_news_analyses_endpoint_v1_news_analyses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NewsAnalysis"
+                  },
+                  "type": "array",
+                  "title": "Response List News Analyses Endpoint V1 News Analyses Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/strategy/spec/validate": {
+      "post": {
+        "summary": "Validate Strategy Endpoint",
+        "operationId": "validate_strategy_endpoint_v1_strategy_spec_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StrategySpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyValidationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/risk/evaluate": {
+      "post": {
+        "summary": "Evaluate Risk Endpoint",
+        "operationId": "evaluate_risk_endpoint_v1_risk_evaluate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderIntent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskDecision"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/risk/decisions": {
+      "get": {
+        "summary": "List Risk Decisions Endpoint",
+        "operationId": "list_risk_decisions_endpoint_v1_risk_decisions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RiskDecision"
+                  },
+                  "type": "array",
+                  "title": "Response List Risk Decisions Endpoint V1 Risk Decisions Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/simulation/paper-orders": {
+      "get": {
+        "summary": "List Paper Orders Endpoint",
+        "operationId": "list_paper_orders_endpoint_v1_simulation_paper_orders_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PaperOrder"
+                  },
+                  "type": "array",
+                  "title": "Response List Paper Orders Endpoint V1 Simulation Paper Orders Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Submit Paper Order Endpoint",
+        "operationId": "submit_paper_order_endpoint_v1_simulation_paper_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderIntent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperOrder"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Market": {
+        "type": "string",
+        "enum": [
+          "A_SHARE",
+          "HK",
+          "US",
+          "GLOBAL"
+        ],
+        "title": "Market"
+      },
+      "NewsAnalysis": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "news_event_id": {
+            "type": "string",
+            "title": "News Event Id"
+          },
+          "summary_zh": {
+            "type": "string",
+            "title": "Summary Zh"
+          },
+          "sentiment": {
+            "$ref": "#/components/schemas/Sentiment"
+          },
+          "impact_score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Impact Score"
+          },
+          "affected_tickers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Affected Tickers"
+          },
+          "source_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Source Refs"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "news_event_id",
+          "summary_zh",
+          "sentiment",
+          "impact_score",
+          "source_refs",
+          "confidence"
+        ],
+        "title": "NewsAnalysis"
+      },
+      "NewsEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Provider"
+          },
+          "provider_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Event Id"
+          },
+          "source_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Source Name"
+          },
+          "market_scope": {
+            "items": {
+              "$ref": "#/components/schemas/Market"
+            },
+            "type": "array",
+            "title": "Market Scope"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "zh-CN"
+          },
+          "title_original": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Title Original"
+          },
+          "title_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Zh"
+          },
+          "body_original_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Original Ref"
+          },
+          "body_zh_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Zh Ref"
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Published At"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Received At"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "tickers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tickers"
+          },
+          "entities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Entities"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type",
+            "default": "unknown"
+          },
+          "authority_score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Authority Score",
+            "default": 0.5
+          },
+          "duplicate_group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duplicate Group Id"
+          },
+          "license_flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "License Flags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "source_name",
+          "title_original",
+          "published_at"
+        ],
+        "title": "NewsEvent"
+      },
+      "OrderDestination": {
+        "type": "string",
+        "enum": [
+          "paper",
+          "live"
+        ],
+        "title": "OrderDestination"
+      },
+      "OrderIntent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "strategy_version_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Strategy Version Id"
+          },
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "symbol": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Symbol"
+          },
+          "side": {
+            "$ref": "#/components/schemas/OrderSide"
+          },
+          "order_type": {
+            "$ref": "#/components/schemas/OrderType",
+            "default": "market"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity"
+          },
+          "estimated_price": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Estimated Price"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Price"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency"
+          },
+          "created_by": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "strategy",
+              "user"
+            ],
+            "title": "Created By"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/OrderDestination",
+            "default": "paper"
+          },
+          "rationale_zh": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Rationale Zh"
+          },
+          "source_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Refs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "strategy_version_id",
+          "market",
+          "symbol",
+          "side",
+          "quantity",
+          "estimated_price",
+          "currency",
+          "created_by",
+          "rationale_zh"
+        ],
+        "title": "OrderIntent"
+      },
+      "OrderSide": {
+        "type": "string",
+        "enum": [
+          "buy",
+          "sell"
+        ],
+        "title": "OrderSide"
+      },
+      "OrderType": {
+        "type": "string",
+        "enum": [
+          "market",
+          "limit"
+        ],
+        "title": "OrderType"
+      },
+      "PaperOrder": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "order_intent_id": {
+            "type": "string",
+            "title": "Order Intent Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaperOrderStatus"
+          },
+          "risk_decision": {
+            "$ref": "#/components/schemas/RiskDecision"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Submitted At"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_intent_id",
+          "status",
+          "risk_decision",
+          "message_zh"
+        ],
+        "title": "PaperOrder"
+      },
+      "PaperOrderStatus": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "blocked"
+        ],
+        "title": "PaperOrderStatus"
+      },
+      "RiskDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "order_intent_id": {
+            "type": "string",
+            "title": "Order Intent Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RiskStatus"
+          },
+          "allowed_destination": {
+            "type": "string",
+            "enum": [
+              "none",
+              "paper",
+              "live_after_approval"
+            ],
+            "title": "Allowed Destination"
+          },
+          "notional": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Notional"
+          },
+          "reasons_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons Zh"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Evaluated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_intent_id",
+          "status",
+          "allowed_destination",
+          "notional"
+        ],
+        "title": "RiskDecision"
+      },
+      "RiskStatus": {
+        "type": "string",
+        "enum": [
+          "approved",
+          "requires_approval",
+          "rejected"
+        ],
+        "title": "RiskStatus"
+      },
+      "Sentiment": {
+        "type": "string",
+        "enum": [
+          "positive",
+          "neutral",
+          "negative"
+        ],
+        "title": "Sentiment"
+      },
+      "StrategySpec": {
+        "properties": {
+          "strategy_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Strategy Name"
+          },
+          "market_scope": {
+            "items": {
+              "$ref": "#/components/schemas/Market"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Market Scope"
+          },
+          "asset_universe": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Asset Universe"
+          },
+          "entry_rules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Entry Rules"
+          },
+          "exit_rules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Exit Rules"
+          },
+          "risk_limits": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "minProperties": 1,
+            "title": "Risk Limits"
+          },
+          "timeframe": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Timeframe"
+          },
+          "rebalance_rule": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Rebalance Rule"
+          },
+          "data_dependencies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Data Dependencies"
+          },
+          "broker_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Broker Permissions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategy_name",
+          "market_scope",
+          "asset_universe",
+          "entry_rules",
+          "exit_rules",
+          "risk_limits",
+          "timeframe",
+          "rebalance_rule"
+        ],
+        "title": "StrategySpec"
+      },
+      "StrategyValidationResult": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "reasons_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid"
+        ],
+        "title": "StrategyValidationResult"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
