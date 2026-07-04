@@ -1,0 +1,100 @@
+name: Mobile Companion Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_url:
+        description: Dubhe Core URL baked into the mobile build.
+        required: false
+        default: https://core.example.invalid
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mobile.yml"
+      - "apps/mobile/**"
+
+permissions:
+  contents: read
+
+env:
+  DUBHE_CORE_URL: ${{ github.event.inputs.core_url || 'https://core.example.invalid' }}
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android project
+        run: flutter create --platforms=android --project-name dubhe_companion .
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test
+        run: flutter test
+
+      - name: Build debug APK
+        run: flutter build apk --debug --dart-define=DUBHE_CORE_URL=$DUBHE_CORE_URL
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dubhe-companion-android-debug
+          if-no-files-found: error
+          retention-days: 14
+          path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+
+  ios:
+    name: iOS no-codesign app
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate iOS project
+        run: flutter create --platforms=ios --project-name dubhe_companion .
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test
+        run: flutter test
+
+      - name: Build iOS app without code signing
+        run: flutter build ios --debug --no-codesign --dart-define=DUBHE_CORE_URL=$DUBHE_CORE_URL
+
+      - name: Upload iOS app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dubhe-companion-ios-debug-no-codesign
+          if-no-files-found: error
+          retention-days: 14
+          path: apps/mobile/build/ios/iphoneos/Runner.app

@@ -53,3 +53,12 @@ flutter build ios --release --dart-define=DUBHE_CORE_URL=https://your-core.examp
 ```
 
 当前仍不是最终 App Store / TestFlight / 企业签名包。后续还需要补齐正式 Bundle ID、签名、图标、权限声明、推送通知、离线缓存和生产身份系统。
+
+## GitHub Actions
+
+`docs/ci/mobile.yml` 是移动端打包流水线模板。将它复制到 `.github/workflows/mobile.yml` 后，可以手动触发或在 `main` 分支移动端文件变更时构建：
+
+- Android debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。
+- iOS no-codesign app bundle：`build/ios/iphoneos/Runner.app`。
+
+工作流会先执行 `flutter create --platforms=android/ios --project-name dubhe_companion .` 生成平台工程，再运行 `flutter pub get`、`flutter test` 和对应构建命令。正式发布前仍需要接入 Android release signing、iOS Apple Developer 签名、Bundle ID、图标和商店元数据。
