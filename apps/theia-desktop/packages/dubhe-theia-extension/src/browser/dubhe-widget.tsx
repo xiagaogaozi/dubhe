@@ -70,6 +70,55 @@ type NewsFeedResponse = {
   generated_at: string;
 };
 
+type RuntimeConfigStatus = {
+  key: string;
+  label_zh: string;
+  configured: boolean;
+  required_for: string;
+  message_zh: string;
+};
+
+type NewsAdapterRuntimeStatus = {
+  provider: string;
+  label_zh: string;
+  market_coverage: Market[];
+  configured: boolean;
+  enabled: boolean;
+  requires_license: boolean;
+  message_zh: string;
+};
+
+type StorageRuntimeStatus = {
+  backend: 'sqlite';
+  path: string;
+  persistent: boolean;
+  message_zh: string;
+};
+
+type AuthRuntimeStatus = {
+  mode: 'local_dev';
+  mfa_mode: 'local_placeholder';
+  message_zh: string;
+};
+
+type TradingRuntimeStatus = {
+  paper_broker_enabled: boolean;
+  live_trading_enabled: boolean;
+  message_zh: string;
+};
+
+type SystemStatusResponse = {
+  service: string;
+  version: string;
+  language: string;
+  storage: StorageRuntimeStatus;
+  auth: AuthRuntimeStatus;
+  config_items: RuntimeConfigStatus[];
+  news_adapters: NewsAdapterRuntimeStatus[];
+  trading: TradingRuntimeStatus;
+  generated_at: string;
+};
+
 type NewsAnalysis = {
   id: string;
   news_event_id: string;
@@ -253,6 +302,7 @@ function DubheWorkbench(): React.ReactElement {
   const [newsEvents, setNewsEvents] = React.useState<NewsEvent[]>([fallbackNewsEvent]);
   const [selectedNewsId, setSelectedNewsId] = React.useState(fallbackNewsEvent.id);
   const [providerStatus, setProviderStatus] = React.useState<NewsProviderStatus[]>([]);
+  const [systemStatus, setSystemStatus] = React.useState<SystemStatusResponse | null>(null);
   const [analysis, setAnalysis] = React.useState<NewsAnalysis | null>(null);
   const [strategyDraft, setStrategyDraft] = React.useState<StrategyDraft | null>(null);
   const [backtestResult, setBacktestResult] = React.useState<BacktestResult | null>(null);
@@ -269,6 +319,9 @@ function DubheWorkbench(): React.ReactElement {
   );
   const selectedMarketLabel = marketOptions.find((option) => option.value === market)?.label ?? market;
   const canManageRisk = session?.role === 'admin' || session?.role === 'risk_manager';
+  const enabledAdapterCount = systemStatus?.news_adapters.filter((adapter) => adapter.enabled).length ?? 0;
+  const adapterStatusMeta = systemStatus ? `${enabledAdapterCount}/${systemStatus.news_adapters.length} 可用` : '待检查';
+  const missingConfigCount = systemStatus?.config_items.filter((item) => !item.configured).length ?? 0;
 
   React.useEffect(() => {
     void checkHealth();
@@ -302,10 +355,15 @@ function DubheWorkbench(): React.ReactElement {
   async function checkHealth(): Promise<void> {
     setApiStatus('请求中');
     try {
-      await getJson<Record<string, string>>(coreUrl, '/health');
+      const [, nextSystemStatus] = await Promise.all([
+        getJson<Record<string, string>>(coreUrl, '/health'),
+        getJson<SystemStatusResponse>(coreUrl, '/v1/system/status'),
+      ]);
+      setSystemStatus(nextSystemStatus);
       setApiStatus('已连接');
-      appendLog('positive', 'Dubhe Core 健康检查通过。');
+      appendLog('positive', 'Dubhe Core 健康检查和系统状态读取通过。');
     } catch (error) {
+      setSystemStatus(null);
       setApiStatus('离线');
       appendLog('warning', `Core 暂不可用：${errorMessage(error)}。`);
     }
@@ -792,6 +850,55 @@ function DubheWorkbench(): React.ReactElement {
             <div style={styles.chatAssistant}>不可以。AI 只能生成订单意图；真实订单必须经过确定性风控、审计和人工审批。</div>
           </div>
 
+          <SidePanel title="系统状态" meta={systemStatus ? `Core v${systemStatus.version}` : '待检查'}>
+            {systemStatus ? (
+              <div style={styles.statusList}>
+                <StatusRow
+                  label="本地存储"
+                  value={systemStatus.storage.persistent ? '持久化' : '临时'}
+                  tone={systemStatus.storage.persistent ? 'positive' : 'warning'}
+                  message={`${systemStatus.storage.message_zh} 路径：${systemStatus.storage.path}`}
+                />
+                <StatusRow label="认证模式" value="本地开发" tone="warning" message={systemStatus.auth.message_zh} />
+                <StatusRow
+                  label="交易模式"
+                  value={systemStatus.trading.live_trading_enabled ? '实盘开启' : '实盘关闭'}
+                  tone={systemStatus.trading.live_trading_enabled ? 'negative' : 'positive'}
+                  message={systemStatus.trading.message_zh}
+                />
+              </div>
+            ) : (
+              <p style={styles.bodyText}>点击左侧“检查”后显示 Core、存储、认证和交易开关状态。</p>
+            )}
+          </SidePanel>
+
+          <SidePanel title="数据源配置" meta={systemStatus ? `${missingConfigCount} 项待配置` : adapterStatusMeta}>
+            {systemStatus ? (
+              <div style={styles.statusList}>
+                {systemStatus.config_items.map((item) => (
+                  <StatusRow
+                    key={item.key}
+                    label={item.label_zh}
+                    value={item.configured ? '已配置' : '未配置'}
+                    tone={item.configured ? 'positive' : 'warning'}
+                    message={item.message_zh}
+                  />
+                ))}
+                {systemStatus.news_adapters.map((adapter) => (
+                  <StatusRow
+                    key={adapter.provider}
+                    label={adapter.label_zh}
+                    value={adapter.enabled ? '可用' : '跳过'}
+                    tone={adapter.enabled ? 'positive' : 'warning'}
+                    message={adapter.message_zh}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p style={styles.bodyText}>尚未读取 Core 配置体检。</p>
+            )}
+          </SidePanel>
+
           <SidePanel title="新闻源状态" meta={liveNews ? 'live' : 'fixture'}>
             {providerStatus.length > 0 ? (
               providerStatus.slice(0, 4).map((status) => (
@@ -1034,6 +1141,18 @@ function PanelTitle(props: { title: string; meta: string }): React.ReactElement 
 function StatusPill(props: { value: ApiStatus }): React.ReactElement {
   const tone: Tone = props.value === '已连接' ? 'positive' : props.value === '离线' ? 'negative' : 'neutral';
   return <span style={{ ...styles.onlinePill, ...tonePillStyle(tone) }}>{props.value}</span>;
+}
+
+function StatusRow(props: { label: string; value: string; tone: Tone; message: string }): React.ReactElement {
+  return (
+    <div style={styles.statusRow}>
+      <div style={styles.statusRowHeader}>
+        <strong style={styles.statusName}>{props.label}</strong>
+        <span style={{ ...styles.miniPill, ...tonePillStyle(props.tone) }}>{props.value}</span>
+      </div>
+      <p style={styles.statusMessage}>{props.message}</p>
+    </div>
+  );
 }
 
 function StepPill(props: { label: string; done: boolean }): React.ReactElement {
@@ -1639,6 +1758,42 @@ const styles = {
     border: '1px solid #e1e8e4',
     borderRadius: 8,
     background: '#fbfcfb',
+  } as React.CSSProperties,
+  statusList: {
+    display: 'grid',
+    gap: 8,
+    marginTop: 10,
+  } as React.CSSProperties,
+  statusRow: {
+    padding: '8px 0',
+    borderTop: '1px solid #e5ebe8',
+  } as React.CSSProperties,
+  statusRowHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  } as React.CSSProperties,
+  statusName: {
+    minWidth: 0,
+    color: '#26362f',
+    fontSize: 13,
+    lineHeight: 1.35,
+  } as React.CSSProperties,
+  statusMessage: {
+    margin: '5px 0 0',
+    color: '#65786f',
+    fontSize: 12,
+    lineHeight: 1.45,
+    overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  miniPill: {
+    flex: '0 0 auto',
+    padding: '4px 7px',
+    borderRadius: 8,
+    fontSize: 11,
+    fontWeight: 800,
+    whiteSpace: 'nowrap',
   } as React.CSSProperties,
   safeStatus: {
     margin: '10px 0 0',

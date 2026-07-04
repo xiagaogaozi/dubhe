@@ -55,6 +55,58 @@ def test_health() -> None:
     assert response.json() == {"status": "ok", "service": "dubhe-core"}
 
 
+def test_system_status_reports_missing_provider_config(monkeypatch) -> None:
+    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
+    monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
+    monkeypatch.delenv("DUBHE_SEC_USER_AGENT", raising=False)
+
+    response = client.get("/v1/system/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["service"] == "dubhe-core"
+    assert body["language"] == "zh-CN"
+    assert body["storage"]["backend"] == "sqlite"
+    assert body["trading"]["paper_broker_enabled"] is True
+    assert body["trading"]["live_trading_enabled"] is False
+
+    config_by_key = {item["key"]: item for item in body["config_items"]}
+    assert config_by_key["FINNHUB_API_KEY"]["configured"] is False
+    assert config_by_key["ALPHA_VANTAGE_API_KEY"]["configured"] is False
+    assert config_by_key["DUBHE_SEC_USER_AGENT"]["configured"] is False
+
+    adapters = {item["provider"]: item for item in body["news_adapters"]}
+    assert adapters["finnhub_company_news"]["enabled"] is False
+    assert adapters["alpha_vantage_news_sentiment"]["enabled"] is False
+    assert adapters["sec_edgar"]["enabled"] is True
+    assert adapters["fixture"]["enabled"] is True
+
+
+def test_system_status_reports_configured_keys_without_leaking_values(monkeypatch) -> None:
+    monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-super-secret-token")
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-super-secret-token")
+    monkeypatch.setenv("DUBHE_SEC_USER_AGENT", "Dubhe Test status-secret@example.com")
+
+    response = client.get("/v1/system/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    config_by_key = {item["key"]: item for item in body["config_items"]}
+    assert config_by_key["FINNHUB_API_KEY"]["configured"] is True
+    assert config_by_key["ALPHA_VANTAGE_API_KEY"]["configured"] is True
+    assert config_by_key["DUBHE_SEC_USER_AGENT"]["configured"] is True
+
+    adapters = {item["provider"]: item for item in body["news_adapters"]}
+    assert adapters["finnhub_company_news"]["enabled"] is True
+    assert adapters["alpha_vantage_news_sentiment"]["enabled"] is True
+    assert adapters["sec_edgar"]["configured"] is True
+
+    payload = response.text
+    assert "finnhub-super-secret-token" not in payload
+    assert "alpha-super-secret-token" not in payload
+    assert "status-secret@example.com" not in payload
+
+
 def test_local_desktop_cors_allows_random_theia_port() -> None:
     response = client.options(
         "/health",

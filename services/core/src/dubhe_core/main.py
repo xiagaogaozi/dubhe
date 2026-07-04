@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +22,7 @@ from .models import (
     KillSwitchState,
     KillSwitchUpdateRequest,
     NewsAnalysis,
+    NewsAdapterRuntimeStatus,
     NewsEvent,
     NewsFeedResponse,
     OrderIntent,
@@ -30,14 +32,19 @@ from .models import (
     PaperPortfolioSnapshot,
     RiskDecision,
     RiskStatus,
+    RuntimeConfigStatus,
     DeviceRegistrationRequest,
     DeviceSession,
     Market,
+    AuthRuntimeStatus,
     StrategySpec,
     StrategyDraft,
     StrategyDraftRequest,
     StrategyValidationResult,
+    StorageRuntimeStatus,
     SyncEvent,
+    SystemStatusResponse,
+    TradingRuntimeStatus,
     UserRole,
     UserRoleUpdateRequest,
     UserSummary,
@@ -52,10 +59,11 @@ from .store import store
 from .strategy import validate_strategy_spec
 
 SYNC_WEBSOCKET_POLL_SECONDS = 0.25
+CORE_VERSION = "0.1.0"
 
 app = FastAPI(
     title="Dubhe Core",
-    version="0.1.0",
+    version=CORE_VERSION,
     description="中文优先的 AI 投资研究与受控量化交易后端 API。",
 )
 
@@ -77,6 +85,133 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "dubhe-core"}
+
+
+@app.get("/v1/system/status", response_model=SystemStatusResponse)
+def system_status() -> SystemStatusResponse:
+    finnhub_configured = env_is_configured("FINNHUB_API_KEY")
+    alpha_configured = env_is_configured("ALPHA_VANTAGE_API_KEY")
+    sec_user_agent_configured = env_is_configured("DUBHE_SEC_USER_AGENT")
+    persistent_storage = store.db_path != ":memory:"
+
+    return SystemStatusResponse(
+        service="dubhe-core",
+        version=CORE_VERSION,
+        storage=StorageRuntimeStatus(
+            backend="sqlite",
+            path=store.db_path,
+            persistent=persistent_storage,
+            message_zh=(
+                "SQLite 持久化存储已启用。"
+                if persistent_storage
+                else "当前使用内存数据库，服务重启后数据会丢失。"
+            ),
+        ),
+        auth=AuthRuntimeStatus(
+            mode="local_dev",
+            mfa_mode="local_placeholder",
+            message_zh="当前为本地开发认证：账号密码、设备令牌、角色权限和占位 MFA。生产版需替换为 OIDC/MFA。",
+        ),
+        config_items=[
+            RuntimeConfigStatus(
+                key="FINNHUB_API_KEY",
+                label_zh="Finnhub 授权新闻源 Key",
+                configured=finnhub_configured,
+                required_for="Finnhub company-news 美股公司新闻",
+                message_zh=(
+                    "已配置，刷新实时美股新闻时会尝试调用 Finnhub。"
+                    if finnhub_configured
+                    else "未配置，Finnhub 授权新闻源会被跳过。"
+                ),
+            ),
+            RuntimeConfigStatus(
+                key="ALPHA_VANTAGE_API_KEY",
+                label_zh="Alpha Vantage 新闻情绪 Key",
+                configured=alpha_configured,
+                required_for="Alpha Vantage NEWS_SENTIMENT 新闻情绪",
+                message_zh=(
+                    "已配置，刷新实时新闻时会尝试调用 Alpha Vantage。"
+                    if alpha_configured
+                    else "未配置，Alpha Vantage 新闻情绪源会被跳过。"
+                ),
+            ),
+            RuntimeConfigStatus(
+                key="DUBHE_SEC_USER_AGENT",
+                label_zh="SEC EDGAR User-Agent",
+                configured=sec_user_agent_configured,
+                required_for="SEC EDGAR 官方接口礼貌访问",
+                message_zh=(
+                    "已配置 SEC EDGAR User-Agent。"
+                    if sec_user_agent_configured
+                    else "未配置，将使用开发默认 User-Agent；生产版应配置真实联系人。"
+                ),
+            ),
+        ],
+        news_adapters=[
+            NewsAdapterRuntimeStatus(
+                provider="finnhub_company_news",
+                label_zh="Finnhub 公司新闻",
+                market_coverage=[Market.US, Market.GLOBAL],
+                configured=finnhub_configured,
+                enabled=finnhub_configured,
+                requires_license=True,
+                message_zh=(
+                    "已就绪：需要遵守 Finnhub 套餐和合同条款。"
+                    if finnhub_configured
+                    else "待配置：缺少 FINNHUB_API_KEY，实时拉取时会跳过。"
+                ),
+            ),
+            NewsAdapterRuntimeStatus(
+                provider="alpha_vantage_news_sentiment",
+                label_zh="Alpha Vantage 新闻情绪",
+                market_coverage=[Market.US, Market.GLOBAL],
+                configured=alpha_configured,
+                enabled=alpha_configured,
+                requires_license=True,
+                message_zh=(
+                    "已就绪：需要遵守 Alpha Vantage 套餐和合同条款。"
+                    if alpha_configured
+                    else "待配置：缺少 ALPHA_VANTAGE_API_KEY，实时拉取时会跳过。"
+                ),
+            ),
+            NewsAdapterRuntimeStatus(
+                provider="sec_edgar",
+                label_zh="SEC EDGAR 公告",
+                market_coverage=[Market.US, Market.GLOBAL],
+                configured=sec_user_agent_configured,
+                enabled=True,
+                requires_license=False,
+                message_zh=(
+                    "可用：已配置专用 User-Agent。"
+                    if sec_user_agent_configured
+                    else "可用：当前使用开发默认 User-Agent，生产版应补充联系人。"
+                ),
+            ),
+            NewsAdapterRuntimeStatus(
+                provider="gdelt_doc",
+                label_zh="GDELT 全球新闻索引",
+                market_coverage=[Market.A_SHARE, Market.HK, Market.US, Market.GLOBAL],
+                configured=True,
+                enabled=True,
+                requires_license=False,
+                message_zh="可用：作为公开全球新闻索引和兜底上下文，不代表原文转载授权。",
+            ),
+            NewsAdapterRuntimeStatus(
+                provider="fixture",
+                label_zh="本地演示新闻源",
+                market_coverage=[Market.A_SHARE, Market.HK, Market.US, Market.GLOBAL],
+                configured=True,
+                enabled=True,
+                requires_license=False,
+                message_zh="可用：真实来源为空或故障时兜底，保证分析、回测和纸面交易链路可测试。",
+            ),
+        ],
+        trading=TradingRuntimeStatus(
+            paper_broker_enabled=True,
+            live_trading_enabled=False,
+            message_zh="纸面交易和模拟 broker 已启用；实盘交易保持关闭，需完成券商适配、签名、审批、审计和风控后才能开放。",
+        ),
+    )
 
 
 @app.get("/v1/capabilities")
@@ -112,6 +247,10 @@ def capabilities() -> dict[str, object]:
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
+
+
+def env_is_configured(key: str) -> bool:
+    return bool(os.environ.get(key, "").strip())
 
 
 def authenticate_device_token(access_token: str) -> DeviceSession | None:

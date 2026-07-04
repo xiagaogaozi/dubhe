@@ -28,6 +28,24 @@
         }
       }
     },
+    "/v1/system/status": {
+      "get": {
+        "summary": "System Status",
+        "operationId": "system_status_v1_system_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/capabilities": {
       "get": {
         "summary": "Capabilities",
@@ -1801,6 +1819,31 @@
         ],
         "title": "AuditLogEntry"
       },
+      "AuthRuntimeStatus": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "const": "local_dev",
+            "title": "Mode"
+          },
+          "mfa_mode": {
+            "type": "string",
+            "const": "local_placeholder",
+            "title": "Mfa Mode"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "mfa_mode",
+          "message_zh"
+        ],
+        "title": "AuthRuntimeStatus"
+      },
       "BacktestPoint": {
         "properties": {
           "date": {
@@ -2300,6 +2343,51 @@
           "GLOBAL"
         ],
         "title": "Market"
+      },
+      "NewsAdapterRuntimeStatus": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "market_coverage": {
+            "items": {
+              "$ref": "#/components/schemas/Market"
+            },
+            "type": "array",
+            "title": "Market Coverage"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "requires_license": {
+            "type": "boolean",
+            "title": "Requires License"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "label_zh",
+          "configured",
+          "enabled",
+          "requires_license",
+          "message_zh"
+        ],
+        "title": "NewsAdapterRuntimeStatus"
       },
       "NewsAnalysis": {
         "properties": {
@@ -2915,6 +3003,39 @@
         ],
         "title": "RiskStatus"
       },
+      "RuntimeConfigStatus": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "required_for": {
+            "type": "string",
+            "title": "Required For"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label_zh",
+          "configured",
+          "required_for",
+          "message_zh"
+        ],
+        "title": "RuntimeConfigStatus"
+      },
       "Sentiment": {
         "type": "string",
         "enum": [
@@ -2923,6 +3044,35 @@
           "negative"
         ],
         "title": "Sentiment"
+      },
+      "StorageRuntimeStatus": {
+        "properties": {
+          "backend": {
+            "type": "string",
+            "const": "sqlite",
+            "title": "Backend"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "persistent": {
+            "type": "boolean",
+            "title": "Persistent"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "backend",
+          "path",
+          "persistent",
+          "message_zh"
+        ],
+        "title": "StorageRuntimeStatus"
       },
       "StrategyDraft": {
         "properties": {
@@ -3171,6 +3321,83 @@
           "action"
         ],
         "title": "SyncEvent"
+      },
+      "SystemStatusResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "default": "dubhe-core"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": "0.1.0"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "zh-CN"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/StorageRuntimeStatus"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/AuthRuntimeStatus"
+          },
+          "config_items": {
+            "items": {
+              "$ref": "#/components/schemas/RuntimeConfigStatus"
+            },
+            "type": "array",
+            "title": "Config Items"
+          },
+          "news_adapters": {
+            "items": {
+              "$ref": "#/components/schemas/NewsAdapterRuntimeStatus"
+            },
+            "type": "array",
+            "title": "News Adapters"
+          },
+          "trading": {
+            "$ref": "#/components/schemas/TradingRuntimeStatus"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "storage",
+          "auth",
+          "trading"
+        ],
+        "title": "SystemStatusResponse"
+      },
+      "TradingRuntimeStatus": {
+        "properties": {
+          "paper_broker_enabled": {
+            "type": "boolean",
+            "title": "Paper Broker Enabled"
+          },
+          "live_trading_enabled": {
+            "type": "boolean",
+            "title": "Live Trading Enabled"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paper_broker_enabled",
+          "live_trading_enabled",
+          "message_zh"
+        ],
+        "title": "TradingRuntimeStatus"
       },
       "UserRole": {
         "type": "string",

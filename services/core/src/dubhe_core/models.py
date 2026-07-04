@@ -150,6 +150,55 @@ class NewsFeedResponse(BaseModel):
     generated_at: datetime = Field(default_factory=utc_now)
 
 
+class RuntimeConfigStatus(BaseModel):
+    key: str
+    label_zh: str
+    configured: bool
+    required_for: str
+    message_zh: str
+
+
+class NewsAdapterRuntimeStatus(BaseModel):
+    provider: str
+    label_zh: str
+    market_coverage: list[Market] = Field(default_factory=list)
+    configured: bool
+    enabled: bool
+    requires_license: bool
+    message_zh: str
+
+
+class StorageRuntimeStatus(BaseModel):
+    backend: Literal["sqlite"]
+    path: str
+    persistent: bool
+    message_zh: str
+
+
+class AuthRuntimeStatus(BaseModel):
+    mode: Literal["local_dev"]
+    mfa_mode: Literal["local_placeholder"]
+    message_zh: str
+
+
+class TradingRuntimeStatus(BaseModel):
+    paper_broker_enabled: bool
+    live_trading_enabled: bool
+    message_zh: str
+
+
+class SystemStatusResponse(BaseModel):
+    service: str = "dubhe-core"
+    version: str = "0.1.0"
+    language: str = "zh-CN"
+    storage: StorageRuntimeStatus
+    auth: AuthRuntimeStatus
+    config_items: list[RuntimeConfigStatus] = Field(default_factory=list)
+    news_adapters: list[NewsAdapterRuntimeStatus] = Field(default_factory=list)
+    trading: TradingRuntimeStatus
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
 class StrategySpec(BaseModel):
     strategy_name: str = Field(min_length=1)
     market_scope: list[Market] = Field(min_length=1)

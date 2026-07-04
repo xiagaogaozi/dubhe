@@ -3,6 +3,7 @@
 Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 
 - 健康检查。
+- 系统状态体检，展示存储、认证、交易开关和新闻源配置是否就绪。
 - 本地账号注册/登录、开发级设备注册、设备 Bearer token 认证与撤销、默认工作区、自选股、REST 增量事件和 WebSocket 实时同步链路。
 - 开发期 MFA 占位码、账号角色、管理员角色分配、审计日志和风控管理接口权限门禁。
 - 本地 SQLite 持久化存储，服务重启后保留账号、设备、工作区、自选股、分析、风控、纸面订单、模拟券商回报和纸面组合账户。
@@ -14,7 +15,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 - 人工审批请求与 kill switch。
 - 纸面交易订单、模拟 paper broker 成交链路、纸面组合现金/持仓/权益入账。
 
-当前版本不接真实授权新闻 API、不接真实券商、不执行真实订单。所有交易相关请求必须先经过 `Risk Service`。
+当前版本可选接入 Finnhub / Alpha Vantage 授权新闻 API，但不内置商业合同、不接真实券商、不执行真实订单。所有交易相关请求必须先经过 `Risk Service`。
 
 同步接口说明见 [Dubhe Sync Backend](../../docs/SYNC_BACKEND.md)。
 数据源说明见 [Data Sources](../../docs/DATA_SOURCES.md)。
@@ -86,6 +87,14 @@ $env:DUBHE_SEC_USER_AGENT="Dubhe/0.1 your-email@example.com"
 ```
 
 未配置 key 时，对应 provider 会返回中文 `skipped` 状态，并自动回退到 SEC/GDELT 或本地 fixture，不会导致客户端崩溃。商业源的正文存储、二次展示和 AI 处理范围必须以供应商合同为准；Core 当前只标准化标题、来源、URL、时间、标的、事件类型和 license flags。
+
+配置体检接口：
+
+```http
+GET /v1/system/status
+```
+
+该接口只返回 `configured: true/false`、中文说明和适配器启用状态，不会返回任何 API key 或 User-Agent 原始值。桌面端可用它展示“数据源配置 / 系统状态”面板。
 
 ## 本地运行
 

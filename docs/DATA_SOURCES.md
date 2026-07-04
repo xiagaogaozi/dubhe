@@ -35,6 +35,14 @@ Core endpoint:
 GET /v1/news/feed?market=US&symbol=NVDA&limit=8&live=true
 ```
 
+Configuration readiness endpoint:
+
+```http
+GET /v1/system/status
+```
+
+`/v1/system/status` reports storage, local auth mode, paper/live trading switches, configured/not configured API keys, and adapter readiness. It deliberately does not return API key values or the raw `DUBHE_SEC_USER_AGENT`.
+
 Behavior:
 
 - When `live=true`, Core tries SEC EDGAR and GDELT where applicable.
