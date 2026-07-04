@@ -131,6 +131,94 @@ def test_device_token_can_be_revoked() -> None:
     assert after_response.status_code == 401
 
 
+def test_account_login_mfa_and_role_boundaries() -> None:
+    legacy_session = register_test_device(
+        account_key="auth-claim-fixture",
+        account_name="旧演示账号",
+    )
+    assert legacy_session["role"] == "admin"
+
+    wrong_mfa_response = client.post(
+        "/v1/auth/accounts/register",
+        json={
+            "account_key": "auth-claim-fixture",
+            "account_name": "旧演示账号",
+            "password": "Dubhe@2026",
+            "mfa_code": "111111",
+            "device_name": "Windows 测试机",
+            "platform": "windows",
+        },
+    )
+    assert wrong_mfa_response.status_code == 401
+
+    claim_response = client.post(
+        "/v1/auth/accounts/register",
+        json={
+            "account_key": "auth-claim-fixture",
+            "account_name": "正式登录账号",
+            "password": "Dubhe@2026",
+            "mfa_code": "000000",
+            "device_name": "Windows 测试机",
+            "platform": "windows",
+        },
+    )
+    assert claim_response.status_code == 200
+    claimed_session = claim_response.json()
+    assert claimed_session["workspace_id"] == legacy_session["workspace_id"]
+    assert claimed_session["role"] == "admin"
+
+    login_response = client.post(
+        "/v1/auth/login",
+        json={
+            "account_key": "auth-claim-fixture",
+            "password": "Dubhe@2026",
+            "mfa_code": "000000",
+            "device_name": "Mac 测试机",
+            "platform": "macos",
+        },
+    )
+    assert login_response.status_code == 200
+    assert login_response.json()["role"] == "admin"
+
+    wrong_password_response = client.post(
+        "/v1/auth/login",
+        json={
+            "account_key": "auth-claim-fixture",
+            "password": "wrong-password",
+            "mfa_code": "000000",
+            "device_name": "Mac 测试机",
+            "platform": "macos",
+        },
+    )
+    assert wrong_password_response.status_code == 401
+
+    user_response = client.post(
+        "/v1/auth/accounts/register",
+        json={
+            "account_key": "auth-user-fixture",
+            "account_name": "普通用户账号",
+            "password": "Dubhe@2026",
+            "mfa_code": "000000",
+            "device_name": "iPhone 测试机",
+            "platform": "ios",
+        },
+    )
+    assert user_response.status_code == 200
+    user_session = user_response.json()
+    assert user_session["role"] == "user"
+
+    denied_response = client.post(
+        "/v1/risk/kill-switch",
+        headers=auth_headers(user_session),
+        json={
+            "enabled": True,
+            "reason_zh": "普通用户不能启用急停。",
+            "updated_by": "user_fixture",
+        },
+    )
+    assert denied_response.status_code == 403
+
+
 def test_workspace_sync_websocket_streams_new_events() -> None:
     session = register_test_device(
         account_key="sync-websocket-fixture",

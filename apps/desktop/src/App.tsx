@@ -1,7 +1,9 @@
+import type { FormEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_DUBHE_CORE_URL ?? 'http://127.0.0.1:8000'
+const DEVICE_SESSION_STORAGE_KEY = 'dubhe.deviceSession'
 
 let deviceAccessToken: string | null = null
 
@@ -9,6 +11,7 @@ type Market = 'A_SHARE' | 'HK' | 'US' | 'GLOBAL'
 type DevicePlatform = 'windows' | 'macos' | 'ios' | 'android'
 type RiskStatus = 'approved' | 'requires_approval' | 'rejected'
 type Sentiment = 'positive' | 'neutral' | 'negative'
+type UserRole = 'user' | 'risk_manager' | 'admin'
 
 type NewsAnalysis = {
   id: string
@@ -181,6 +184,7 @@ type DeviceSession = {
   device_id: string
   workspace_id: string
   access_token: string
+  role: UserRole
   platform: DevicePlatform
   device_name: string
   created_at: string
@@ -245,6 +249,15 @@ type LogEntry = {
   time: string
   kind: 'info' | 'success' | 'warning' | 'danger'
   message: string
+}
+
+type AuthMode = 'register' | 'login'
+
+type AuthForm = {
+  account_key: string
+  account_name: string
+  password: string
+  mfa_code: string
 }
 
 const navItems = [
@@ -318,6 +331,26 @@ function sentimentLabel(sentiment: Sentiment) {
 
 function percentLabel(value: number) {
   return `${(value * 100).toFixed(2)}%`
+}
+
+function roleLabel(role: UserRole) {
+  if (role === 'admin') return '管理员'
+  if (role === 'risk_manager') return '风控管理员'
+  return '普通用户'
+}
+
+function readStoredSession() {
+  try {
+    const raw = localStorage.getItem(DEVICE_SESSION_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as DeviceSession
+    const session = { ...parsed, role: parsed.role ?? 'user' }
+    deviceAccessToken = session.access_token
+    return session
+  } catch {
+    localStorage.removeItem(DEVICE_SESSION_STORAGE_KEY)
+    return null
+  }
 }
 
 function authHeaders(headers: Record<string, string> = {}) {
@@ -399,6 +432,16 @@ function Icon({ label }: { label: string }) {
 }
 
 function App() {
+  const [deviceSession, setDeviceSession] = useState<DeviceSession | null>(() => readStoredSession())
+  const [authMode, setAuthMode] = useState<AuthMode>('register')
+  const [authForm, setAuthForm] = useState<AuthForm>({
+    account_key: 'local-demo',
+    account_name: '本地演示账户',
+    password: 'Dubhe@2026',
+    mfa_code: '000000',
+  })
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [isAuthenticating, setAuthenticating] = useState(false)
   const [activeNav, setActiveNav] = useState('新闻雷达')
   const [selectedTicker, setSelectedTicker] = useState('NVDA')
   const [watchlistItems, setWatchlistItems] = useState<WatchRow[]>(fallbackWatchlist)
@@ -435,9 +478,59 @@ function App() {
       fallbackNewsEvent,
     [newsEvents, selectedNewsId, selectedTicker],
   )
+  const canManageRisk = deviceSession?.role === 'admin' || deviceSession?.role === 'risk_manager'
 
   function appendLog(kind: LogEntry['kind'], message: string) {
     setLogs((current) => [{ time: nowTime(), kind, message }, ...current].slice(0, 4))
+  }
+
+  function updateAuthField(field: keyof AuthForm, value: string) {
+    setAuthForm((current) => ({ ...current, [field]: value }))
+  }
+
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAuthenticating(true)
+    setAuthError(null)
+    try {
+      const payload = {
+        ...authForm,
+        device_name: navigator.platform || 'Dubhe Desktop',
+        platform: detectPlatform(),
+      }
+      const session = await postJson<DeviceSession>(
+        authMode === 'register' ? '/v1/auth/accounts/register' : '/v1/auth/login',
+        authMode === 'register' ? payload : {
+          account_key: payload.account_key,
+          password: payload.password,
+          mfa_code: payload.mfa_code,
+          device_name: payload.device_name,
+          platform: payload.platform,
+        },
+      )
+      deviceAccessToken = session.access_token
+      localStorage.setItem(DEVICE_SESSION_STORAGE_KEY, JSON.stringify(session))
+      setDeviceSession(session)
+      appendLog('success', `已登录：${roleLabel(session.role)}。`)
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : '登录失败，请稍后重试。')
+    } finally {
+      setAuthenticating(false)
+    }
+  }
+
+  async function signOut() {
+    try {
+      await postJson('/v1/auth/devices/current/revoke', {})
+    } catch {
+      // 本地退出优先，服务端撤销失败时也清理本机令牌。
+    }
+    deviceAccessToken = null
+    localStorage.removeItem(DEVICE_SESSION_STORAGE_KEY)
+    setDeviceSession(null)
+    setApiStatus('未知')
+    setSyncSocketStatus('未连接')
+    appendLog('warning', '已退出当前设备。')
   }
 
   async function refreshSafetyState() {
@@ -518,17 +611,13 @@ function App() {
   }
 
   useEffect(() => {
+    if (!deviceSession) return
+    const session = deviceSession
     let cancelled = false
     let syncSocket: WebSocket | null = null
 
     async function connectWorkspaceSync() {
       try {
-        const session = await postJson<DeviceSession>('/v1/auth/devices/register', {
-          account_key: 'local-demo',
-          account_name: '本地演示账户',
-          device_name: navigator.platform || 'Dubhe Desktop',
-          platform: detectPlatform(),
-        })
         deviceAccessToken = session.access_token
         const snapshot = await getJson<WorkspaceSnapshot>(`/v1/workspaces/${session.workspace_id}/snapshot`)
 
@@ -568,7 +657,12 @@ function App() {
         setNewsEvents(feed.events.length > 0 ? feed.events : [fallbackNewsEvent])
         setProviderStatus(feed.provider_status)
         setSelectedNewsId(feed.events[0]?.id ?? fallbackNewsEvent.id)
-        await refreshSafetyState()
+        if (canManageRisk) {
+          await refreshSafetyState()
+        } else {
+          setApprovalRequests([])
+          setKillSwitch(null)
+        }
         if (cancelled) return
         syncSocket = new WebSocket(syncSocketUrl(session.workspace_id, snapshot.server_sequence))
         syncSocket.onopen = () => {
@@ -600,7 +694,7 @@ function App() {
       cancelled = true
       syncSocket?.close()
     }
-  }, [])
+  }, [canManageRisk, deviceSession])
 
   async function runNewsAnalysis() {
     setBusy(true)
@@ -687,7 +781,9 @@ function App() {
         source_refs: [analysis.id],
       })
       setRiskDecision(result)
-      await refreshSafetyState()
+      if (canManageRisk) {
+        await refreshSafetyState()
+      }
       setApiStatus('已连接')
       appendLog('warning', `风控完成：${result.status === 'requires_approval' ? '需要人工审批' : result.status}。`)
     } catch (error) {
@@ -699,6 +795,10 @@ function App() {
   }
 
   async function approveLatestRequest() {
+    if (!canManageRisk) {
+      appendLog('warning', '当前账号没有审批权限，请使用风控管理员或管理员账号。')
+      return
+    }
     const pending = approvalRequests.find((approval) => approval.status === 'pending')
     if (!pending) {
       appendLog('warning', '当前没有待审批请求。')
@@ -721,6 +821,10 @@ function App() {
   }
 
   async function rejectLatestRequest() {
+    if (!canManageRisk) {
+      appendLog('warning', '当前账号没有审批权限，请使用风控管理员或管理员账号。')
+      return
+    }
     const pending = approvalRequests.find((approval) => approval.status === 'pending')
     if (!pending) {
       appendLog('warning', '当前没有待审批请求。')
@@ -743,6 +847,10 @@ function App() {
   }
 
   async function toggleKillSwitch() {
+    if (!canManageRisk) {
+      appendLog('warning', '当前账号没有急停权限，请使用风控管理员或管理员账号。')
+      return
+    }
     setBusy(true)
     try {
       const nextEnabled = !killSwitch?.enabled
@@ -790,6 +898,81 @@ function App() {
     }
   }
 
+  if (!deviceSession) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel" aria-label="Dubhe 登录">
+          <div className="login-brand">
+            <div className="brand-mark">D</div>
+            <div>
+              <strong>Dubhe</strong>
+              <span>AI 投资研究与受控量化工作台</span>
+            </div>
+          </div>
+          <div className="auth-switch" role="tablist" aria-label="登录模式">
+            <button
+              className={authMode === 'register' ? 'is-active' : ''}
+              type="button"
+              onClick={() => setAuthMode('register')}
+            >
+              创建 / 接管账号
+            </button>
+            <button
+              className={authMode === 'login' ? 'is-active' : ''}
+              type="button"
+              onClick={() => setAuthMode('login')}
+            >
+              登录
+            </button>
+          </div>
+          <form className="login-form" onSubmit={submitAuth}>
+            <label>
+              账号
+              <input
+                value={authForm.account_key}
+                onChange={(event) => updateAuthField('account_key', event.target.value)}
+                autoComplete="username"
+              />
+            </label>
+            {authMode === 'register' && (
+              <label>
+                显示名称
+                <input
+                  value={authForm.account_name}
+                  onChange={(event) => updateAuthField('account_name', event.target.value)}
+                  autoComplete="name"
+                />
+              </label>
+            )}
+            <label>
+              密码
+              <input
+                type="password"
+                value={authForm.password}
+                onChange={(event) => updateAuthField('password', event.target.value)}
+                autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
+              />
+            </label>
+            <label>
+              MFA 验证码
+              <input
+                value={authForm.mfa_code}
+                onChange={(event) => updateAuthField('mfa_code', event.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+              />
+            </label>
+            {authError && <p className="auth-error">{authError}</p>}
+            <button className="login-submit" type="submit" disabled={isAuthenticating}>
+              {isAuthenticating ? '正在进入...' : authMode === 'register' ? '创建并进入' : '登录工作台'}
+            </button>
+          </form>
+          <p className="login-note">本地开发 MFA 默认码为 000000；生产环境需要替换为正式验证器或企业身份系统。</p>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className="workspace-shell">
       <aside className="activity-rail" aria-label="主导航">
@@ -812,9 +995,11 @@ function App() {
         <header className="sidebar-header">
           <div>
             <strong>Dubhe</strong>
-            <small>{workspaceName}</small>
+            <small>{workspaceName} · {roleLabel(deviceSession.role)}</small>
           </div>
-          <span className={apiStatus === '已连接' ? 'status-dot online' : 'status-dot'}>{apiStatus}</span>
+          <button className={apiStatus === '已连接' ? 'status-dot online' : 'status-dot'} type="button" onClick={signOut}>
+            {apiStatus}
+          </button>
         </header>
 
         <section className="sidebar-section">
@@ -1031,17 +1216,23 @@ function App() {
 
         <section className="risk-card">
           <h3>审批中心</h3>
-          <p className={killSwitch?.enabled ? 'paper-blocked' : 'paper-ok'}>
-            {killSwitch?.enabled ? 'Kill switch 已启用' : 'Kill switch 未启用'}
-          </p>
-          <p>{killSwitch?.reason_zh ?? '尚未同步急停状态。'}</p>
-          <p>待审批：{approvalRequests.filter((approval) => approval.status === 'pending').length} 条</p>
+          {canManageRisk ? (
+            <>
+              <p className={killSwitch?.enabled ? 'paper-blocked' : 'paper-ok'}>
+                {killSwitch?.enabled ? 'Kill switch 已启用' : 'Kill switch 未启用'}
+              </p>
+              <p>{killSwitch?.reason_zh ?? '尚未同步急停状态。'}</p>
+              <p>待审批：{approvalRequests.filter((approval) => approval.status === 'pending').length} 条</p>
+            </>
+          ) : (
+            <p>当前账号只能做研究、回测和纸面交易，审批与急停需要风控管理员权限。</p>
+          )}
           <div className="risk-actions">
-            <button type="button" onClick={toggleKillSwitch} disabled={isBusy}>
+            <button type="button" onClick={toggleKillSwitch} disabled={isBusy || !canManageRisk}>
               {killSwitch?.enabled ? '解除急停' : '启用急停'}
             </button>
-            <button type="button" onClick={approveLatestRequest} disabled={isBusy}>通过</button>
-            <button type="button" onClick={rejectLatestRequest} disabled={isBusy}>拒绝</button>
+            <button type="button" onClick={approveLatestRequest} disabled={isBusy || !canManageRisk}>通过</button>
+            <button type="button" onClick={rejectLatestRequest} disabled={isBusy || !canManageRisk}>拒绝</button>
           </div>
         </section>
 

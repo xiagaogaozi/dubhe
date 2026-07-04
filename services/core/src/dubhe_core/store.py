@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import hashlib
 import os
 import secrets
@@ -12,12 +13,15 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 from .models import (
+    AccountLoginRequest,
+    AccountRegistrationRequest,
     ApprovalActionRequest,
     ApprovalRequest,
     ApprovalStatus,
     DeviceRegistrationRequest,
     DeviceRevocation,
     DeviceSession,
+    DevicePlatform,
     BacktestResult,
     BrokerOrder,
     KillSwitchState,
@@ -31,6 +35,7 @@ from .models import (
     SyncEntityType,
     SyncEvent,
     UserAccount,
+    UserRole,
     WatchlistItem,
     WatchlistUpsertRequest,
     Workspace,
@@ -47,10 +52,50 @@ DEFAULT_WATCHLIST = [
 ]
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 120_000
+LOCAL_MFA_CODE = os.environ.get("DUBHE_LOCAL_MFA_CODE", "000000")
 
 
 def hash_access_token(access_token: str) -> str:
     return hashlib.sha256(access_token.encode("utf-8")).hexdigest()
+
+
+def hash_password(password: str, salt: str | None = None) -> str:
+    actual_salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        actual_salt.encode("utf-8"),
+        PASSWORD_HASH_ITERATIONS,
+    ).hex()
+    return f"{PASSWORD_HASH_ALGORITHM}${PASSWORD_HASH_ITERATIONS}${actual_salt}${digest}"
+
+
+def verify_password(password: str, stored_hash: str | None) -> bool:
+    if not stored_hash:
+        return False
+    try:
+        algorithm, iterations, salt, expected = stored_hash.split("$", 3)
+    except ValueError:
+        return False
+    if algorithm != PASSWORD_HASH_ALGORITHM:
+        return False
+    try:
+        iteration_count = int(iterations)
+    except ValueError:
+        return False
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iteration_count,
+    ).hex()
+    return hmac.compare_digest(digest, expected)
+
+
+def verify_local_mfa_code(mfa_code: str) -> bool:
+    return hmac.compare_digest(mfa_code, LOCAL_MFA_CODE)
 
 
 def default_db_path() -> str:
@@ -319,37 +364,63 @@ class SQLiteStore:
         with self._lock:
             user = self._user_by_account_key(request.account_key)
             if user is None:
-                user = UserAccount(account_key=request.account_key, display_name=request.account_name)
+                user = UserAccount(
+                    account_key=request.account_key,
+                    display_name=request.account_name,
+                    role=UserRole.ADMIN,
+                    mfa_enabled=False,
+                )
                 self._save_user(user)
                 workspace = self._create_workspace_for_user(user)
             else:
                 workspace = self._workspace_by_user_id(user.id)
 
-            session = DeviceSession(
-                user_id=user.id,
-                device_id=f"device_{uuid4().hex}",
-                workspace_id=workspace.id,
-                access_token=f"dubhe_dev_{secrets.token_urlsafe(32)}",
-                platform=request.platform,
-                device_name=request.device_name,
-            )
-            stored_session = session.model_copy(update={"access_token": ""})
-            self._connection.execute(
-                """
-                INSERT INTO devices
-                    (id, user_id, workspace_id, platform, token_hash, revoked_at, created_at, payload)
-                VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
-                """,
-                (
-                    session.device_id,
-                    session.user_id,
-                    session.workspace_id,
-                    session.platform.value,
-                    hash_access_token(session.access_token),
-                    session.created_at.isoformat(),
-                    stored_session.model_dump_json(),
-                ),
-            )
+            session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            self._connection.commit()
+            return session
+
+    def register_account(self, request: AccountRegistrationRequest) -> DeviceSession:
+        with self._lock:
+            existing_user = self._user_by_account_key(request.account_key)
+            if existing_user is not None and existing_user.password_hash is not None:
+                raise ValueError("account_exists")
+            if not verify_local_mfa_code(request.mfa_code):
+                raise PermissionError("invalid_mfa")
+
+            if existing_user is None:
+                user = UserAccount(
+                    account_key=request.account_key,
+                    display_name=request.account_name,
+                    role=UserRole.ADMIN if self._user_count() == 0 else UserRole.USER,
+                    password_hash=hash_password(request.password),
+                    mfa_enabled=True,
+                )
+                self._save_user(user)
+                workspace = self._create_workspace_for_user(user)
+            else:
+                user = existing_user.model_copy(
+                    update={
+                        "display_name": request.account_name,
+                        "password_hash": hash_password(request.password),
+                        "mfa_enabled": True,
+                    },
+                )
+                self._save_user(user)
+                workspace = self._workspace_by_user_id(user.id)
+            session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            self._connection.commit()
+            return session
+
+    def login_account(self, request: AccountLoginRequest) -> DeviceSession:
+        with self._lock:
+            user = self._user_by_account_key(request.account_key)
+            if user is None or not verify_password(request.password, user.password_hash):
+                raise PermissionError("invalid_credentials")
+            if user.mfa_enabled and not verify_local_mfa_code(request.mfa_code):
+                raise PermissionError("invalid_mfa")
+
+            workspace = self._workspace_by_user_id(user.id)
+            session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
             self._connection.commit()
             return session
 
@@ -673,7 +744,7 @@ class SQLiteStore:
     def _save_user(self, user: UserAccount) -> None:
         self._connection.execute(
             """
-            INSERT INTO users (id, account_key, display_name, created_at, payload)
+            INSERT OR REPLACE INTO users (id, account_key, display_name, created_at, payload)
             VALUES (?, ?, ?, ?, ?)
             """,
             (
@@ -684,6 +755,41 @@ class SQLiteStore:
                 user.model_dump_json(),
             ),
         )
+
+    def _create_device_session(
+        self,
+        user: UserAccount,
+        workspace_id: str,
+        device_name: str,
+        platform: DevicePlatform,
+    ) -> DeviceSession:
+        session = DeviceSession(
+            user_id=user.id,
+            device_id=f"device_{uuid4().hex}",
+            workspace_id=workspace_id,
+            access_token=f"dubhe_dev_{secrets.token_urlsafe(32)}",
+            role=user.role,
+            platform=platform,
+            device_name=device_name,
+        )
+        stored_session = session.model_copy(update={"access_token": ""})
+        self._connection.execute(
+            """
+            INSERT INTO devices
+                (id, user_id, workspace_id, platform, token_hash, revoked_at, created_at, payload)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+            """,
+            (
+                session.device_id,
+                session.user_id,
+                session.workspace_id,
+                session.platform.value,
+                hash_access_token(session.access_token),
+                session.created_at.isoformat(),
+                stored_session.model_dump_json(),
+            ),
+        )
+        return session
 
     def _save_workspace(self, workspace: Workspace) -> None:
         self._connection.execute(
@@ -825,6 +931,10 @@ class SQLiteStore:
         if row is None:
             return None
         return UserAccount.model_validate_json(row["payload"])
+
+    def _user_count(self) -> int:
+        row = self._connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()
+        return int(row["count"])
 
     def _workspace_by_user_id(self, user_id: str) -> Workspace:
         row = self._connection.execute(

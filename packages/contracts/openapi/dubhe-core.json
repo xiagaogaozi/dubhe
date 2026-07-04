@@ -86,6 +86,82 @@
         }
       }
     },
+    "/v1/auth/accounts/register": {
+      "post": {
+        "summary": "Register Account Endpoint",
+        "operationId": "register_account_endpoint_v1_auth_accounts_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "summary": "Login Account Endpoint",
+        "operationId": "login_account_endpoint_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/devices/current/revoke": {
       "post": {
         "summary": "Revoke Current Device Endpoint",
@@ -1173,6 +1249,86 @@
   },
   "components": {
     "schemas": {
+      "AccountLoginRequest": {
+        "properties": {
+          "account_key": {
+            "type": "string",
+            "minLength": 3,
+            "title": "Account Key"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          },
+          "mfa_code": {
+            "type": "string",
+            "maxLength": 6,
+            "minLength": 6,
+            "title": "Mfa Code"
+          },
+          "device_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Device Name"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatform"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_key",
+          "password",
+          "mfa_code",
+          "device_name",
+          "platform"
+        ],
+        "title": "AccountLoginRequest"
+      },
+      "AccountRegistrationRequest": {
+        "properties": {
+          "account_key": {
+            "type": "string",
+            "minLength": 3,
+            "title": "Account Key"
+          },
+          "account_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Name"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password"
+          },
+          "mfa_code": {
+            "type": "string",
+            "maxLength": 6,
+            "minLength": 6,
+            "title": "Mfa Code",
+            "default": "000000"
+          },
+          "device_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Device Name"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatform"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_key",
+          "account_name",
+          "password",
+          "device_name",
+          "platform"
+        ],
+        "title": "AccountRegistrationRequest"
+      },
       "ApprovalActionRequest": {
         "properties": {
           "decided_by": {
@@ -1681,6 +1837,10 @@
           "access_token": {
             "type": "string",
             "title": "Access Token"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole",
+            "default": "user"
           },
           "platform": {
             "$ref": "#/components/schemas/DevicePlatform"
@@ -2545,6 +2705,15 @@
           "action"
         ],
         "title": "SyncEvent"
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "user",
+          "risk_manager",
+          "admin"
+        ],
+        "title": "UserRole"
       },
       "ValidationError": {
         "properties": {

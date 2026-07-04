@@ -71,6 +71,12 @@ class DevicePlatform(str, Enum):
     ANDROID = "android"
 
 
+class UserRole(str, Enum):
+    USER = "user"
+    RISK_MANAGER = "risk_manager"
+    ADMIN = "admin"
+
+
 class SyncEntityType(str, Enum):
     WORKSPACE = "workspace"
     WATCHLIST_ITEM = "watchlist_item"
@@ -341,10 +347,30 @@ class DeviceRegistrationRequest(BaseModel):
     platform: DevicePlatform
 
 
+class AccountRegistrationRequest(BaseModel):
+    account_key: str = Field(min_length=3)
+    account_name: str = Field(min_length=1)
+    password: str = Field(min_length=8)
+    mfa_code: str = Field(default="000000", min_length=6, max_length=6)
+    device_name: str = Field(min_length=1)
+    platform: DevicePlatform
+
+
+class AccountLoginRequest(BaseModel):
+    account_key: str = Field(min_length=3)
+    password: str = Field(min_length=8)
+    mfa_code: str = Field(min_length=6, max_length=6)
+    device_name: str = Field(min_length=1)
+    platform: DevicePlatform
+
+
 class UserAccount(BaseModel):
     id: str = Field(default_factory=lambda: f"user_{uuid4().hex}")
     account_key: str = Field(min_length=3)
     display_name: str = Field(min_length=1)
+    role: UserRole = UserRole.USER
+    password_hash: str | None = None
+    mfa_enabled: bool = True
     created_at: datetime = Field(default_factory=utc_now)
 
 
@@ -353,6 +379,7 @@ class DeviceSession(BaseModel):
     device_id: str
     workspace_id: str
     access_token: str
+    role: UserRole = UserRole.USER
     platform: DevicePlatform
     device_name: str
     created_at: datetime = Field(default_factory=utc_now)

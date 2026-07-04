@@ -3,7 +3,8 @@
 Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 
 - 健康检查。
-- 设备注册、设备 Bearer token 认证与撤销、默认工作区、自选股、REST 增量事件和 WebSocket 实时同步链路。
+- 本地账号注册/登录、开发级设备注册、设备 Bearer token 认证与撤销、默认工作区、自选股、REST 增量事件和 WebSocket 实时同步链路。
+- 开发期 MFA 占位码、账号角色和风控管理接口权限门禁。
 - 本地 SQLite 持久化存储，服务重启后保留账号、设备、工作区、自选股、分析、风控、纸面订单和模拟券商回报。
 - SEC EDGAR / GDELT / Fixture 新闻源聚合接口。
 - 新闻事件中文分析占位链路。
@@ -13,7 +14,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 - 人工审批请求与 kill switch。
 - 纸面交易订单与模拟 paper broker 成交链路。
 
-当前版本不接真实新闻 API、不接真实券商、不执行真实订单。所有交易相关请求必须先经过 `Risk Service`。
+当前版本不接真实授权新闻 API、不接真实券商、不执行真实订单。所有交易相关请求必须先经过 `Risk Service`。
 
 同步接口说明见 [Dubhe Sync Backend](../../docs/SYNC_BACKEND.md)。
 数据源说明见 [Data Sources](../../docs/DATA_SOURCES.md)。
@@ -33,6 +34,34 @@ $env:DUBHE_CORE_DB_PATH="D:\dubhe-data\dubhe-core.sqlite"
 ```
 
 `data/` 已加入忽略规则，不会提交本地运行数据。
+
+## 本地认证与权限
+
+当前 Core 提供两套开发期入口：
+
+- `POST /v1/auth/accounts/register`：创建或接管本地账号，返回设备会话。
+- `POST /v1/auth/login`：账号密码登录，返回设备会话。
+- `POST /v1/auth/devices/register`：保留给本地演示和旧客户端的开发入口，会创建/复用开发级设备会话。
+
+默认 MFA 验证码是：
+
+```text
+000000
+```
+
+可通过环境变量覆盖：
+
+```powershell
+$env:DUBHE_LOCAL_MFA_CODE="123456"
+```
+
+角色：
+
+- `admin`：管理员，可访问审批列表、审批/拒绝请求、查看和切换 kill switch。
+- `risk_manager`：风控管理员，可访问同一组风控管理接口。
+- `user`：普通用户，可做研究、回测、纸面交易，但不能管理审批和 kill switch。
+
+生产版必须替换为正式 OIDC/企业身份、真实 MFA、刷新令牌、密码策略、审计日志和管理员角色分配 UI。当前 PBKDF2 密码哈希与本地 MFA 只用于最小可运行链路。
 
 ## 本地运行
 

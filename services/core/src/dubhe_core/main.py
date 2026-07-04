@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .analysis import analyze_news
 from .backtest import draft_strategy_from_analysis, run_replay_backtest
 from .models import (
+    AccountLoginRequest,
+    AccountRegistrationRequest,
     ApprovalActionRequest,
     ApprovalRequest,
     ApprovalStatus,
@@ -32,6 +34,7 @@ from .models import (
     StrategyDraftRequest,
     StrategyValidationResult,
     SyncEvent,
+    UserRole,
     WatchlistItem,
     WatchlistUpsertRequest,
     WorkspaceSnapshot,
@@ -91,6 +94,9 @@ def capabilities() -> dict[str, object]:
             "kill_switch",
             "device_bearer_token_auth",
             "device_token_revocation",
+            "account_password_login",
+            "local_mfa_placeholder",
+            "role_based_risk_controls",
             "workspace_sync_websocket",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
@@ -120,9 +126,41 @@ def require_workspace_access(workspace_id: str, session: DeviceSession) -> None:
         raise HTTPException(status_code=403, detail="当前设备无权访问该工作区。")
 
 
+def require_roles(session: DeviceSession, allowed_roles: set[UserRole]) -> None:
+    if session.role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="当前账号权限不足。")
+
+
+def require_risk_manager_session(
+    session: DeviceSession = Depends(require_device_session),
+) -> DeviceSession:
+    require_roles(session, {UserRole.RISK_MANAGER, UserRole.ADMIN})
+    return session
+
+
 @app.post("/v1/auth/devices/register", response_model=DeviceSession)
 def register_device_endpoint(request: DeviceRegistrationRequest) -> DeviceSession:
     return store.register_device(request)
+
+
+@app.post("/v1/auth/accounts/register", response_model=DeviceSession)
+def register_account_endpoint(request: AccountRegistrationRequest) -> DeviceSession:
+    try:
+        return store.register_account(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="账号已存在，请直接登录。") from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail="MFA 验证码不正确。") from exc
+
+
+@app.post("/v1/auth/login", response_model=DeviceSession)
+def login_account_endpoint(request: AccountLoginRequest) -> DeviceSession:
+    try:
+        return store.login_account(request)
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail="账号、密码或 MFA 验证码不正确。") from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="账号工作区不存在。") from exc
 
 
 @app.post("/v1/auth/devices/current/revoke", response_model=DeviceRevocation)
@@ -274,7 +312,7 @@ def list_risk_decisions_endpoint() -> list[RiskDecision]:
 @app.get("/v1/approvals", response_model=list[ApprovalRequest])
 def list_approval_requests_endpoint(
     status: ApprovalStatus | None = Query(default=None),
-    _session: DeviceSession = Depends(require_device_session),
+    _session: DeviceSession = Depends(require_risk_manager_session),
 ) -> list[ApprovalRequest]:
     return store.list_approval_requests(status=status)
 
@@ -283,7 +321,7 @@ def list_approval_requests_endpoint(
 def approve_request_endpoint(
     approval_id: str,
     request: ApprovalActionRequest,
-    _session: DeviceSession = Depends(require_device_session),
+    _session: DeviceSession = Depends(require_risk_manager_session),
 ) -> ApprovalRequest:
     try:
         return store.decide_approval(approval_id, ApprovalStatus.APPROVED, request)
@@ -295,7 +333,7 @@ def approve_request_endpoint(
 def reject_request_endpoint(
     approval_id: str,
     request: ApprovalActionRequest,
-    _session: DeviceSession = Depends(require_device_session),
+    _session: DeviceSession = Depends(require_risk_manager_session),
 ) -> ApprovalRequest:
     try:
         return store.decide_approval(approval_id, ApprovalStatus.REJECTED, request)
@@ -305,7 +343,7 @@ def reject_request_endpoint(
 
 @app.get("/v1/risk/kill-switch", response_model=KillSwitchState)
 def get_kill_switch_endpoint(
-    _session: DeviceSession = Depends(require_device_session),
+    _session: DeviceSession = Depends(require_risk_manager_session),
 ) -> KillSwitchState:
     return store.get_kill_switch_state()
 
@@ -313,7 +351,7 @@ def get_kill_switch_endpoint(
 @app.post("/v1/risk/kill-switch", response_model=KillSwitchState)
 def set_kill_switch_endpoint(
     request: KillSwitchUpdateRequest,
-    _session: DeviceSession = Depends(require_device_session),
+    _session: DeviceSession = Depends(require_risk_manager_session),
 ) -> KillSwitchState:
     return store.set_kill_switch_state(request)
 
