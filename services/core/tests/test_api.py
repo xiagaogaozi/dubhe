@@ -15,7 +15,11 @@ from fastapi.testclient import TestClient
 from dubhe_core.main import app
 from dubhe_core.models import Market
 from dubhe_core.models import DeviceRegistrationRequest, WatchlistUpsertRequest
-from dubhe_core.news_sources import fetch_news_feed
+from dubhe_core.news_sources import (
+    fetch_alpha_vantage_news_sentiment,
+    fetch_finnhub_company_news,
+    fetch_news_feed,
+)
 from dubhe_core.store import SQLiteStore
 
 client = TestClient(app)
@@ -390,6 +394,66 @@ def test_public_news_adapters_parse_sec_and_gdelt_payloads() -> None:
     assert {event.provider for event in feed.events} == {"sec_edgar", "gdelt_doc"}
     assert any(event.event_type == "filing" for event in feed.events)
     assert any(status.status == "ok" for status in feed.provider_status)
+
+
+def test_licensed_news_adapters_parse_finnhub_and_alpha_vantage_payloads(monkeypatch) -> None:
+    monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-test-token")
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-test-token")
+
+    def fake_fetcher(url: str, _headers: dict[str, str], _timeout: float) -> object:
+        if "finnhub.io/api/v1/company-news" in url:
+            assert "token=finnhub-test-token" in url
+            return [
+                {
+                    "category": "company",
+                    "datetime": 1783209600,
+                    "headline": "NVIDIA announces new AI platform",
+                    "id": 42,
+                    "source": "Finnhub Test",
+                    "url": "https://example.com/finnhub-nvda",
+                }
+            ]
+        if "alphavantage.co/query" in url:
+            assert "function=NEWS_SENTIMENT" in url
+            assert "apikey=alpha-test-token" in url
+            return {
+                "feed": [
+                    {
+                        "title": "NVIDIA sentiment improves",
+                        "url": "https://example.com/alpha-nvda",
+                        "time_published": "20260705T093000",
+                        "source": "Alpha Test",
+                        "category_within_source": "Technology",
+                        "ticker_sentiment": [{"ticker": "NVDA"}],
+                    }
+                ]
+            }
+        raise AssertionError(url)
+
+    finnhub_events, finnhub_status = fetch_finnhub_company_news(
+        market=Market.US,
+        symbol="NVDA",
+        limit=5,
+        fetcher=fake_fetcher,
+    )
+    alpha_events, alpha_status = fetch_alpha_vantage_news_sentiment(
+        market=Market.US,
+        symbol="NVDA",
+        limit=5,
+        fetcher=fake_fetcher,
+    )
+
+    assert finnhub_status.status == "ok"
+    assert finnhub_events[0].provider == "finnhub_company_news"
+    assert finnhub_events[0].source_name == "Finnhub Test"
+    assert finnhub_events[0].tickers == ["NVDA"]
+    assert "provider_terms_required" in finnhub_events[0].license_flags
+
+    assert alpha_status.status == "ok"
+    assert alpha_events[0].provider == "alpha_vantage_news_sentiment"
+    assert alpha_events[0].source_name == "Alpha Test"
+    assert alpha_events[0].tickers == ["NVDA"]
+    assert "provider_terms_required" in alpha_events[0].license_flags
 
 
 def test_sqlite_store_persists_workspace_and_watchlist_across_restarts(tmp_path: Path) -> None:

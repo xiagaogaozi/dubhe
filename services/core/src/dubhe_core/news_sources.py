@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha1
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 from .models import Market, NewsEvent, NewsFeedResponse, NewsProviderStatus, ProviderStatus, utc_now
 
-JsonFetcher = Callable[[str, dict[str, str], float], dict[str, Any]]
+JsonFetcher = Callable[[str, dict[str, str], float], Any]
 
 SEC_TICKERS: dict[str, tuple[str, str]] = {
     "AAPL": ("0000320193", "苹果"),
@@ -50,6 +50,25 @@ def fetch_news_feed(
 
     if live:
         http_fetcher = fetcher or fetch_json
+
+        finnhub_events, finnhub_status = fetch_finnhub_company_news(
+            market=market,
+            symbol=normalized_symbol,
+            limit=limit,
+            fetcher=http_fetcher,
+        )
+        events.extend(finnhub_events)
+        statuses.append(finnhub_status)
+
+        alpha_vantage_events, alpha_vantage_status = fetch_alpha_vantage_news_sentiment(
+            market=market,
+            symbol=normalized_symbol,
+            limit=limit,
+            fetcher=http_fetcher,
+        )
+        events.extend(alpha_vantage_events)
+        statuses.append(alpha_vantage_status)
+
         sec_events, sec_status = fetch_sec_edgar_filings(
             market=market,
             symbol=normalized_symbol,
@@ -99,6 +118,229 @@ def fetch_json(url: str, headers: dict[str, str], timeout: float) -> dict[str, A
     request = Request(url, headers=headers)
     with urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def fetch_finnhub_company_news(
+    market: Market,
+    symbol: str | None,
+    limit: int,
+    fetcher: JsonFetcher,
+) -> tuple[list[NewsEvent], NewsProviderStatus]:
+    api_key = os.environ.get("FINNHUB_API_KEY")
+    if not api_key:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="finnhub_company_news",
+                status=ProviderStatus.SKIPPED,
+                message_zh="未配置 FINNHUB_API_KEY，已跳过 Finnhub 授权新闻源。",
+            ),
+        )
+    if market not in {Market.US, Market.GLOBAL}:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="finnhub_company_news",
+                status=ProviderStatus.SKIPPED,
+                message_zh="Finnhub company-news 当前仅作为美股/全球新闻源调用。",
+            ),
+        )
+    if symbol is None:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="finnhub_company_news",
+                status=ProviderStatus.SKIPPED,
+                message_zh="Finnhub company-news 需要股票代码。",
+            ),
+        )
+
+    end_date = datetime.now(timezone.utc).date()
+    start_date = end_date - timedelta(days=7)
+    url = "https://finnhub.io/api/v1/company-news?" + urlencode(
+        {
+            "symbol": symbol,
+            "from": start_date.isoformat(),
+            "to": end_date.isoformat(),
+            "token": api_key,
+        },
+    )
+
+    try:
+        payload = fetcher(url, {"Accept": "application/json"}, 6)
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="finnhub_company_news",
+                status=ProviderStatus.UNAVAILABLE,
+                message_zh=f"Finnhub 授权新闻源暂不可用：{exc}",
+            ),
+        )
+
+    if not isinstance(payload, list):
+        return (
+            [],
+            NewsProviderStatus(
+                provider="finnhub_company_news",
+                status=ProviderStatus.UNAVAILABLE,
+                message_zh="Finnhub 返回格式不是新闻列表。",
+            ),
+        )
+
+    events: list[NewsEvent] = []
+    for article in payload[:limit]:
+        if not isinstance(article, dict):
+            continue
+        headline = str(article.get("headline") or "").strip()
+        article_url = str(article.get("url") or "").strip()
+        if not headline:
+            continue
+        source = str(article.get("source") or "Finnhub").strip() or "Finnhub"
+        published_at = parse_unix_datetime(article.get("datetime"))
+        events.append(
+            NewsEvent(
+                id=stable_news_id("finnhub_company_news", article_url or headline),
+                provider="finnhub_company_news",
+                provider_event_id=str(article.get("id") or article_url or headline),
+                source_name=source,
+                market_scope=[Market.US],
+                language="en",
+                title_original=headline,
+                title_zh=headline,
+                published_at=published_at,
+                url=article_url or None,
+                tickers=[symbol],
+                entities=[GDELT_ENTITY_HINTS.get(symbol, symbol)],
+                event_type=str(article.get("category") or "company_news"),
+                authority_score=0.78,
+                license_flags=["finnhub_api", "provider_terms_required", "metadata_only"],
+            ),
+        )
+
+    return (
+        events,
+        NewsProviderStatus(
+            provider="finnhub_company_news",
+            status=ProviderStatus.OK,
+            fetched_count=len(events),
+            message_zh=f"已从 Finnhub 授权新闻源拉取 {len(events)} 条公司新闻。",
+        ),
+    )
+
+
+def fetch_alpha_vantage_news_sentiment(
+    market: Market,
+    symbol: str | None,
+    limit: int,
+    fetcher: JsonFetcher,
+) -> tuple[list[NewsEvent], NewsProviderStatus]:
+    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+    if not api_key:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="alpha_vantage_news_sentiment",
+                status=ProviderStatus.SKIPPED,
+                message_zh="未配置 ALPHA_VANTAGE_API_KEY，已跳过 Alpha Vantage 新闻情绪源。",
+            ),
+        )
+    if symbol is None:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="alpha_vantage_news_sentiment",
+                status=ProviderStatus.SKIPPED,
+                message_zh="Alpha Vantage NEWS_SENTIMENT 需要股票代码。",
+            ),
+        )
+
+    url = "https://www.alphavantage.co/query?" + urlencode(
+        {
+            "function": "NEWS_SENTIMENT",
+            "tickers": symbol,
+            "sort": "LATEST",
+            "limit": str(max(1, min(limit, 50))),
+            "apikey": api_key,
+        },
+    )
+
+    try:
+        payload = fetcher(url, {"Accept": "application/json"}, 6)
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="alpha_vantage_news_sentiment",
+                status=ProviderStatus.UNAVAILABLE,
+                message_zh=f"Alpha Vantage 新闻情绪源暂不可用：{exc}",
+            ),
+        )
+
+    if not isinstance(payload, dict):
+        return (
+            [],
+            NewsProviderStatus(
+                provider="alpha_vantage_news_sentiment",
+                status=ProviderStatus.UNAVAILABLE,
+                message_zh="Alpha Vantage 返回格式不是 JSON 对象。",
+            ),
+        )
+    provider_error = payload.get("Error Message") or payload.get("Note") or payload.get("Information")
+    if provider_error:
+        return (
+            [],
+            NewsProviderStatus(
+                provider="alpha_vantage_news_sentiment",
+                status=ProviderStatus.UNAVAILABLE,
+                message_zh=f"Alpha Vantage 返回提示：{provider_error}",
+            ),
+        )
+
+    feed = payload.get("feed", [])
+    if not isinstance(feed, list):
+        feed = []
+
+    events: list[NewsEvent] = []
+    scope = [market] if market != Market.GLOBAL else [Market.GLOBAL]
+    for article in feed[:limit]:
+        if not isinstance(article, dict):
+            continue
+        title = str(article.get("title") or "").strip()
+        article_url = str(article.get("url") or "").strip()
+        if not title:
+            continue
+        source = str(article.get("source") or "Alpha Vantage").strip() or "Alpha Vantage"
+        mentioned_tickers = alpha_vantage_tickers(article.get("ticker_sentiment"), fallback=symbol)
+        events.append(
+            NewsEvent(
+                id=stable_news_id("alpha_vantage_news_sentiment", article_url or title),
+                provider="alpha_vantage_news_sentiment",
+                provider_event_id=article_url or title,
+                source_name=source,
+                market_scope=scope,
+                language="en",
+                title_original=title,
+                title_zh=title,
+                published_at=parse_alpha_vantage_time(article.get("time_published")),
+                url=article_url or None,
+                tickers=mentioned_tickers,
+                entities=[GDELT_ENTITY_HINTS.get(symbol, symbol)],
+                event_type=str(article.get("category_within_source") or "news_sentiment"),
+                authority_score=0.72,
+                license_flags=["alpha_vantage_api", "provider_terms_required", "metadata_only"],
+            ),
+        )
+
+    return (
+        events,
+        NewsProviderStatus(
+            provider="alpha_vantage_news_sentiment",
+            status=ProviderStatus.OK,
+            fetched_count=len(events),
+            message_zh=f"已从 Alpha Vantage 新闻情绪源拉取 {len(events)} 条新闻。",
+        ),
+    )
 
 
 def fetch_sec_edgar_filings(
@@ -322,6 +564,36 @@ def parse_datetime(value: object) -> datetime:
         return datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return utc_now()
+
+
+def parse_unix_datetime(value: object) -> datetime:
+    try:
+        return datetime.fromtimestamp(float(str(value)), tz=timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return utc_now()
+
+
+def parse_alpha_vantage_time(value: object) -> datetime:
+    if not value:
+        return utc_now()
+    text = str(value)
+    try:
+        return datetime.strptime(text, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return parse_datetime(text)
+
+
+def alpha_vantage_tickers(value: object, fallback: str) -> list[str]:
+    if not isinstance(value, list):
+        return [fallback]
+    tickers: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        ticker = str(item.get("ticker") or "").strip().upper()
+        if ticker:
+            tickers.append(ticker)
+    return tickers or [fallback]
 
 
 def stable_news_id(provider: str, key: str) -> str:

@@ -6,7 +6,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 - 本地账号注册/登录、开发级设备注册、设备 Bearer token 认证与撤销、默认工作区、自选股、REST 增量事件和 WebSocket 实时同步链路。
 - 开发期 MFA 占位码、账号角色、管理员角色分配、审计日志和风控管理接口权限门禁。
 - 本地 SQLite 持久化存储，服务重启后保留账号、设备、工作区、自选股、分析、风控、纸面订单、模拟券商回报和纸面组合账户。
-- SEC EDGAR / GDELT / Fixture 新闻源聚合接口。
+- SEC EDGAR / GDELT / Finnhub / Alpha Vantage / Fixture 新闻源聚合接口。
 - 新闻事件中文分析占位链路。
 - 新闻分析生成策略草案与 deterministic replay 回测。
 - 策略规格校验。
@@ -74,6 +74,18 @@ $env:DUBHE_LOCAL_MFA_CODE="123456"
 纸面卖出会先校验当前持仓；空仓或超持仓卖出会被拦截，不会生成模拟券商回报，也不会写出负持仓。
 
 生产版必须替换为正式 OIDC/企业身份、真实 MFA、刷新令牌、密码策略、不可篡改审计存储和更完整的管理员 UI。当前 PBKDF2 密码哈希、本地 MFA 和 SQLite 审计日志只用于最小可运行链路。
+
+## 授权新闻源配置
+
+`/v1/news/feed?live=true` 会自动尝试已配置的授权新闻源。当前支持：
+
+```powershell
+$env:FINNHUB_API_KEY="..."
+$env:ALPHA_VANTAGE_API_KEY="..."
+$env:DUBHE_SEC_USER_AGENT="Dubhe/0.1 your-email@example.com"
+```
+
+未配置 key 时，对应 provider 会返回中文 `skipped` 状态，并自动回退到 SEC/GDELT 或本地 fixture，不会导致客户端崩溃。商业源的正文存储、二次展示和 AI 处理范围必须以供应商合同为准；Core 当前只标准化标题、来源、URL、时间、标的、事件类型和 license flags。
 
 ## 本地运行
 

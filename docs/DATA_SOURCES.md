@@ -23,6 +23,8 @@ Current runnable adapters:
 
 | Provider | Endpoint | Market | Runtime status |
 | --- | --- | --- | --- |
+| Finnhub Company News | `https://finnhub.io/api/v1/company-news` | US company news | implemented when `FINNHUB_API_KEY` is configured |
+| Alpha Vantage News & Sentiment | `https://www.alphavantage.co/query?function=NEWS_SENTIMENT` | US/global ticker news sentiment | implemented when `ALPHA_VANTAGE_API_KEY` is configured |
 | SEC EDGAR | `https://data.sec.gov/submissions/CIK##########.json` | US filings | implemented for a first CIK map: NVDA, AAPL, MSFT, AMD, TSLA, AMZN, GOOGL, META |
 | GDELT DOC 2.1 | `https://api.gdeltproject.org/api/v2/doc/doc` | global news index | implemented as public macro/news context, not a licensed exchange-grade source |
 | Fixture | local generated `NewsEvent` | all markets | implemented as deterministic fallback for tests and outages |
@@ -36,6 +38,8 @@ GET /v1/news/feed?market=US&symbol=NVDA&limit=8&live=true
 Behavior:
 
 - When `live=true`, Core tries SEC EDGAR and GDELT where applicable.
+- If `FINNHUB_API_KEY` is configured, Core tries Finnhub company news for US/global ticker news.
+- If `ALPHA_VANTAGE_API_KEY` is configured, Core tries Alpha Vantage News & Sentiment for ticker news context.
 - Provider failures return Chinese provider status instead of crashing the client.
 - If no live event is available, Core returns fixture events so the AI analysis and simulation chain remains testable.
 - Returned events are persisted in SQLite and included in workspace snapshots.
@@ -44,6 +48,7 @@ Compliance notes:
 
 - SEC EDGAR events are official public filings metadata and links; Core sets a configurable `DUBHE_SEC_USER_AGENT`.
 - GDELT is a public news index; it does not grant redistribution rights for original publisher article bodies. Dubhe stores title, source URL, metadata, and license flags only.
+- Finnhub and Alpha Vantage require API keys and plan/terms review. Dubhe stores normalized metadata and sets `provider_terms_required` / `metadata_only` license flags until contract terms are confirmed.
 - Commercial A-share, Hong Kong, and institutional news feeds still require contracts before production use.
 
 ## 2. A-share Sources

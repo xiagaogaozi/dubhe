@@ -96,6 +96,7 @@ def capabilities() -> dict[str, object]:
             "watchlist_sync",
             "local_sqlite_persistence",
             "public_news_feed_adapters",
+            "licensed_news_api_adapters",
             "strategy_draft_from_news_analysis",
             "deterministic_replay_backtest",
             "approval_requests",
