@@ -40,6 +40,12 @@ yarn build
 
 ## 打包目标
 
+Windows 图标资源位于 `app/resources/`，如需重新生成图标：
+
+```powershell
+.\scripts\generate-icons.ps1
+```
+
 ```powershell
 yarn package:electron
 ```

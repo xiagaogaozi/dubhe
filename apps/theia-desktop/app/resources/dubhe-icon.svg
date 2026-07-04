@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Dubhe app icon">
+  <rect width="256" height="256" rx="56" fill="#17231f"/>
+  <path d="M84 56h52c44 0 76 30 76 72s-32 72-76 72H84V56zm36 35v74h16c23 0 39-15 39-37s-16-37-39-37h-16z" fill="#8bd6ba"/>
+  <path d="M188 36l10 25 25 10-25 10-10 25-10-25-25-10 25-10 10-25z" fill="#f2c94c"/>
+  <path d="M62 205c32 19 84 20 126-8" fill="none" stroke="#f6fbf8" stroke-width="12" stroke-linecap="round" opacity=".82"/>
+</svg>

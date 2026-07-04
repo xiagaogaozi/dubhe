@@ -15,6 +15,7 @@ files:
   - "!lib/**/*.map"
 
 win:
+  icon: resources/icon.ico
   target:
     - target: nsis
       arch:
