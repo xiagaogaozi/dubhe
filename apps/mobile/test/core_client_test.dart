@@ -86,6 +86,91 @@ void main() {
     expect(portfolio.positions.single.quantity, 1);
   });
 
+  test('system status parses configuration readiness', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/system/status');
+        return http.Response(
+          '''
+          {
+            "service": "dubhe-core",
+            "version": "0.1.0",
+            "language": "zh-CN",
+            "storage": {
+              "backend": "sqlite",
+              "path": "D:/dubhe-data/dubhe-core.sqlite",
+              "persistent": true,
+              "message_zh": "SQLite 持久化存储已启用。"
+            },
+            "auth": {
+              "mode": "local_dev",
+              "mfa_mode": "local_placeholder",
+              "message_zh": "当前为本地开发认证。"
+            },
+            "config_items": [
+              {
+                "key": "FINNHUB_API_KEY",
+                "label_zh": "Finnhub 授权新闻源 Key",
+                "configured": false,
+                "required_for": "Finnhub company-news 美股公司新闻",
+                "message_zh": "未配置，Finnhub 授权新闻源会被跳过。"
+              },
+              {
+                "key": "ALPHA_VANTAGE_API_KEY",
+                "label_zh": "Alpha Vantage 新闻情绪 Key",
+                "configured": true,
+                "required_for": "Alpha Vantage NEWS_SENTIMENT 新闻情绪",
+                "message_zh": "已配置，刷新实时新闻时会尝试调用 Alpha Vantage。"
+              }
+            ],
+            "news_adapters": [
+              {
+                "provider": "finnhub_company_news",
+                "label_zh": "Finnhub 公司新闻",
+                "market_coverage": ["US", "GLOBAL"],
+                "configured": false,
+                "enabled": false,
+                "requires_license": true,
+                "message_zh": "待配置：缺少 FINNHUB_API_KEY，实时拉取时会跳过。"
+              },
+              {
+                "provider": "fixture",
+                "label_zh": "本地演示新闻源",
+                "market_coverage": ["A_SHARE", "HK", "US", "GLOBAL"],
+                "configured": true,
+                "enabled": true,
+                "requires_license": false,
+                "message_zh": "可用：真实来源为空或故障时兜底。"
+              }
+            ],
+            "trading": {
+              "paper_broker_enabled": true,
+              "live_trading_enabled": false,
+              "message_zh": "纸面交易已启用；实盘交易保持关闭。"
+            },
+            "generated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final status = await client.fetchSystemStatus();
+
+    expect(status.service, 'dubhe-core');
+    expect(status.storagePath, 'D:/dubhe-data/dubhe-core.sqlite');
+    expect(status.paperBrokerEnabled, isTrue);
+    expect(status.liveTradingEnabled, isFalse);
+    expect(status.missingConfigCount, 1);
+    expect(status.enabledAdapterCount, 1);
+    expect(status.configItems.first.key, 'FINNHUB_API_KEY');
+    expect(status.newsAdapters.last.labelZh, '本地演示新闻源');
+  });
+
   test(
     'strategy, backtest, and paper order use Core workflow endpoints',
     () async {

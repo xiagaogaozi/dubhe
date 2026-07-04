@@ -80,6 +80,11 @@ class CoreClient {
     return NewsFeed.fromJson(_map(json));
   }
 
+  Future<SystemStatus> fetchSystemStatus() async {
+    final json = await _getJson('/v1/system/status');
+    return SystemStatus.fromJson(_map(json));
+  }
+
   Future<NewsAnalysis> analyzeNews(NewsEvent event) async {
     final json = await _postJson('/v1/news/analyze', event.toJson());
     return NewsAnalysis.fromJson(_map(json));
@@ -296,6 +301,109 @@ class ProviderStatus {
     return ProviderStatus(
       provider: _string(json['provider']),
       status: _string(json['status']),
+      messageZh: _string(json['message_zh']),
+    );
+  }
+}
+
+class SystemStatus {
+  SystemStatus({
+    required this.service,
+    required this.version,
+    required this.storagePath,
+    required this.storageMessageZh,
+    required this.authMessageZh,
+    required this.paperBrokerEnabled,
+    required this.liveTradingEnabled,
+    required this.tradingMessageZh,
+    required this.configItems,
+    required this.newsAdapters,
+  });
+
+  final String service;
+  final String version;
+  final String storagePath;
+  final String storageMessageZh;
+  final String authMessageZh;
+  final bool paperBrokerEnabled;
+  final bool liveTradingEnabled;
+  final String tradingMessageZh;
+  final List<RuntimeConfigItem> configItems;
+  final List<NewsAdapterReadiness> newsAdapters;
+
+  int get missingConfigCount =>
+      configItems.where((item) => !item.configured).length;
+
+  int get enabledAdapterCount =>
+      newsAdapters.where((adapter) => adapter.enabled).length;
+
+  factory SystemStatus.fromJson(Map<String, dynamic> json) {
+    final storage = _map(json['storage']);
+    final auth = _map(json['auth']);
+    final trading = _map(json['trading']);
+    return SystemStatus(
+      service: _string(json['service']),
+      version: _string(json['version']),
+      storagePath: _string(storage['path']),
+      storageMessageZh: _string(storage['message_zh']),
+      authMessageZh: _string(auth['message_zh']),
+      paperBrokerEnabled: _bool(trading['paper_broker_enabled']),
+      liveTradingEnabled: _bool(trading['live_trading_enabled']),
+      tradingMessageZh: _string(trading['message_zh']),
+      configItems: _mapList(
+        json['config_items'],
+      ).map(RuntimeConfigItem.fromJson).toList(),
+      newsAdapters: _mapList(
+        json['news_adapters'],
+      ).map(NewsAdapterReadiness.fromJson).toList(),
+    );
+  }
+}
+
+class RuntimeConfigItem {
+  RuntimeConfigItem({
+    required this.key,
+    required this.labelZh,
+    required this.configured,
+    required this.messageZh,
+  });
+
+  final String key;
+  final String labelZh;
+  final bool configured;
+  final String messageZh;
+
+  factory RuntimeConfigItem.fromJson(Map<String, dynamic> json) {
+    return RuntimeConfigItem(
+      key: _string(json['key']),
+      labelZh: _string(json['label_zh']),
+      configured: _bool(json['configured']),
+      messageZh: _string(json['message_zh']),
+    );
+  }
+}
+
+class NewsAdapterReadiness {
+  NewsAdapterReadiness({
+    required this.provider,
+    required this.labelZh,
+    required this.configured,
+    required this.enabled,
+    required this.messageZh,
+  });
+
+  final String provider;
+  final String labelZh;
+  final bool configured;
+  final bool enabled;
+  final String messageZh;
+
+  factory NewsAdapterReadiness.fromJson(Map<String, dynamic> json) {
+    return NewsAdapterReadiness(
+      provider: _string(json['provider']),
+      labelZh: _string(json['label_zh']),
+      configured: _bool(json['configured']),
+      enabled: _bool(json['enabled']),
       messageZh: _string(json['message_zh']),
     );
   }
@@ -691,4 +799,10 @@ double _double(dynamic value) {
 int _int(dynamic value) {
   if (value is num) return value.toInt();
   return int.tryParse('$value') ?? 0;
+}
+
+bool _bool(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  return '$value'.toLowerCase() == 'true';
 }

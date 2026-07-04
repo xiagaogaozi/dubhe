@@ -213,6 +213,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   BacktestResult? _backtestResult;
   PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
+  SystemStatus? _systemStatus;
   List<ApprovalRequest> _approvals = const [];
 
   @override
@@ -234,10 +235,14 @@ class _CompanionHomeState extends State<CompanionHome> {
     });
 
     try {
-      final newsFeed = await widget.client.fetchNewsFeed(live: false);
-      final portfolio = await widget.client.fetchPaperPortfolio(
-        defaultPaperAccountId,
-      );
+      final coreResponses = await Future.wait<dynamic>([
+        widget.client.fetchSystemStatus(),
+        widget.client.fetchNewsFeed(live: false),
+        widget.client.fetchPaperPortfolio(defaultPaperAccountId),
+      ]);
+      final systemStatus = coreResponses[0] as SystemStatus;
+      final newsFeed = coreResponses[1] as NewsFeed;
+      final portfolio = coreResponses[2] as PaperPortfolio;
       var approvals = <ApprovalRequest>[];
       String? approvalMessage;
       try {
@@ -250,6 +255,7 @@ class _CompanionHomeState extends State<CompanionHome> {
 
       if (!mounted) return;
       setState(() {
+        _systemStatus = systemStatus;
         _newsFeed = newsFeed;
         _portfolio = portfolio;
         _approvals = approvals;
@@ -440,6 +446,7 @@ class _CompanionHomeState extends State<CompanionHome> {
     final pages = [
       _TodayPage(
         session: widget.session,
+        systemStatus: _systemStatus,
         newsFeed: _newsFeed,
         portfolio: _portfolio,
         message: _message,
@@ -506,6 +513,7 @@ class _CompanionHomeState extends State<CompanionHome> {
 class _TodayPage extends StatelessWidget {
   const _TodayPage({
     required this.session,
+    required this.systemStatus,
     required this.newsFeed,
     required this.portfolio,
     required this.message,
@@ -513,6 +521,7 @@ class _TodayPage extends StatelessWidget {
   });
 
   final DeviceSession session;
+  final SystemStatus? systemStatus;
   final NewsFeed? newsFeed;
   final PaperPortfolio? portfolio;
   final String? message;
@@ -546,10 +555,16 @@ class _TodayPage extends StatelessWidget {
             _Metric('新闻', '${newsFeed?.events.length ?? 0} 条'),
             _Metric('USD 权益', _money('USD', usdEquity)),
             _Metric('待审批', session.canReviewApprovals ? '可查看' : '无权限'),
-            _Metric('实盘', '默认关闭'),
+            _Metric(
+              '数据源',
+              systemStatus == null
+                  ? '--'
+                  : '${systemStatus!.enabledAdapterCount}/${systemStatus!.newsAdapters.length}',
+            ),
           ],
         ),
         const SizedBox(height: 12),
+        _SystemStatusPanel(status: systemStatus),
         _ProviderStatusList(statuses: newsFeed?.providerStatus ?? const []),
       ],
     );
@@ -1017,6 +1032,97 @@ class _ProviderStatusList extends StatelessWidget {
             )
             .toList(),
       ),
+    );
+  }
+}
+
+class _SystemStatusPanel extends StatelessWidget {
+  const _SystemStatusPanel({required this.status});
+
+  final SystemStatus? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = status;
+    if (current == null) {
+      return const _InfoCard(text: '系统状态尚未同步。');
+    }
+
+    return _SectionCard(
+      title: '系统状态',
+      trailing: 'Core v${current.version}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _MetricGrid(
+            metrics: [
+              _Metric('纸面交易', current.paperBrokerEnabled ? '可用' : '关闭'),
+              _Metric('实盘交易', current.liveTradingEnabled ? '开启' : '关闭'),
+              _Metric('待配置', '${current.missingConfigCount} 项'),
+              _Metric(
+                '新闻适配器',
+                '${current.enabledAdapterCount}/${current.newsAdapters.length}',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(current.tradingMessageZh),
+          const SizedBox(height: 8),
+          Text(current.storageMessageZh),
+          if (current.storagePath.isNotEmpty)
+            Text('存储路径：${current.storagePath}'),
+          const Divider(height: 24),
+          Text('配置项', style: Theme.of(context).textTheme.titleSmall),
+          ...current.configItems.map(
+            (item) => _ReadinessTile(
+              label: item.labelZh,
+              value: item.configured ? '已配置' : '未配置',
+              ok: item.configured,
+              message: item.messageZh,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text('新闻适配器', style: Theme.of(context).textTheme.titleSmall),
+          ...current.newsAdapters.map(
+            (adapter) => _ReadinessTile(
+              label: adapter.labelZh,
+              value: adapter.enabled ? '可用' : '跳过',
+              ok: adapter.enabled,
+              message: adapter.messageZh,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadinessTile extends StatelessWidget {
+  const _ReadinessTile({
+    required this.label,
+    required this.value,
+    required this.ok,
+    required this.message,
+  });
+
+  final String label;
+  final String value;
+  final bool ok;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: Icon(
+        ok ? Icons.check_circle_outline : Icons.warning_amber_outlined,
+        color: ok ? scheme.primary : scheme.tertiary,
+      ),
+      title: Text(label),
+      subtitle: Text(message),
+      trailing: Text(value),
     );
   }
 }
