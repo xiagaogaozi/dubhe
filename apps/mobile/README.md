@@ -12,7 +12,7 @@ Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中
 
 ## 平台工程
 
-本仓库已经提交 Android / iOS 平台工程。当前本机已验证 Flutter `3.44.4` / Dart `3.12.2` 下的 `flutter analyze` 与 `flutter test`。
+本仓库已经提交 Android / iOS 平台工程。当前本机已验证 Flutter `3.44.4` / Dart `3.12.2`、Android SDK `36.0.0`、Temurin JDK `17.0.19` 下的 `flutter analyze`、`flutter test` 与 Android debug APK 构建。
 
 首次拉取后，在本目录执行：
 
@@ -21,6 +21,7 @@ cd D:\github\dubhe-main\apps\mobile
 flutter pub get
 flutter analyze
 flutter test
+flutter build apk --debug --dart-define=DUBHE_CORE_URL=http://10.0.2.2:8019
 ```
 
 Android 模拟器连接本机 Core 时通常使用：
@@ -46,6 +47,12 @@ flutter build apk --debug --dart-define=DUBHE_CORE_URL=https://your-core.example
 flutter build appbundle --release --dart-define=DUBHE_CORE_URL=https://your-core.example.com
 ```
 
+本机开发调试包已验证输出到：
+
+```text
+D:\github\dubhe-main\apps\mobile\build\app\outputs\flutter-apk\app-debug.apk
+```
+
 iOS 需要在 macOS + Xcode 环境执行：
 
 ```bash
@@ -63,4 +70,4 @@ flutter build ios --release --dart-define=DUBHE_CORE_URL=https://your-core.examp
 
 工作流会运行 `flutter pub get`、`flutter test` 和对应构建命令。正式发布前仍需要接入 Android release signing、iOS Apple Developer 签名、正式图标和商店元数据。
 
-本机当前 `flutter doctor -v` 显示 Android SDK 尚未安装，因此 Android APK 仍需在 CI 或安装 Android Studio / Android SDK 后构建；iOS 构建需要 macOS + Xcode。
+本机当前 `flutter doctor -v` 已识别 Android 工具链且所有 Android licenses 已接受。剩余提示为 Flutter/Dart 未加入全局 `PATH`，以及 `maven.google.com` 网络检查偶发超时；本地 Android debug APK 构建已通过。iOS 构建仍需要 macOS + Xcode。
