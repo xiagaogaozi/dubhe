@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import os
+import tempfile
+from pathlib import Path
+from uuid import uuid4
+
+os.environ["DUBHE_CORE_DB_PATH"] = str(
+    Path(tempfile.gettempdir()) / f"dubhe-core-test-{uuid4().hex}.sqlite",
+)
+
 from fastapi.testclient import TestClient
 
 from dubhe_core.main import app
+from dubhe_core.models import DeviceRegistrationRequest, WatchlistUpsertRequest
+from dubhe_core.store import SQLiteStore
 
 client = TestClient(app)
 
@@ -93,6 +104,46 @@ def test_watchlist_sync_events_are_shared_across_devices() -> None:
     assert events_response.status_code == 200
     events = events_response.json()
     assert any(event["entity_type"] == "watchlist_item" for event in events)
+
+
+def test_sqlite_store_persists_workspace_and_watchlist_across_restarts(tmp_path: Path) -> None:
+    db_path = tmp_path / "dubhe-core.sqlite"
+    first_store = SQLiteStore(db_path)
+    first_session = first_store.register_device(
+        DeviceRegistrationRequest(
+            account_key="sqlite-restart-fixture",
+            account_name="重启持久化账户",
+            device_name="Windows 测试机",
+            platform="windows",
+        ),
+    )
+    first_store.upsert_watchlist_item(
+        first_session.workspace_id,
+        WatchlistUpsertRequest(
+            symbol="TSLA",
+            name="特斯拉",
+            market="US",
+            notes_zh="重启后必须仍然存在的自选股",
+        ),
+    )
+    first_store.close()
+
+    second_store = SQLiteStore(db_path)
+    second_session = second_store.register_device(
+        DeviceRegistrationRequest(
+            account_key="sqlite-restart-fixture",
+            account_name="重启持久化账户",
+            device_name="iPhone 测试机",
+            platform="ios",
+        ),
+    )
+    snapshot = second_store.get_workspace_snapshot(second_session.workspace_id)
+    second_store.close()
+
+    assert second_session.workspace_id == first_session.workspace_id
+    assert "TSLA" in {item.symbol for item in snapshot.watchlist}
+    assert snapshot.server_sequence >= 6
+    assert any(event.entity_id for event in snapshot.events if event.entity_type == "watchlist_item")
 
 
 def test_news_analysis_returns_chinese_summary_and_sources() -> None:

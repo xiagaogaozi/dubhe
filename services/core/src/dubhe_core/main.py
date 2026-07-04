@@ -62,6 +62,7 @@ def capabilities() -> dict[str, object]:
             "device_registration",
             "workspace_sync_snapshot",
             "watchlist_sync",
+            "local_sqlite_persistence",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
