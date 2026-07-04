@@ -43,6 +43,13 @@ cd D:\github\dubhe-main\services\core
 .\scripts\run.ps1
 ```
 
+Windows 本地一键启动（先启动 Core，再打开 Theia 桌面壳；如果没有打包产物，会回退到 Theia 开发启动）：
+
+```powershell
+cd D:\github\dubhe-main
+.\scripts\start-local-dubhe.ps1
+```
+
 测试：
 
 ```powershell
