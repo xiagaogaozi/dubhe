@@ -1,12 +1,16 @@
 # Dubhe Companion
 
-Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中文用户在手机上完成登录、查看新闻雷达、触发中文 AI 影响分析、查看纸面组合和处理风控审批。
+Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中文用户在手机上完成登录、查看新闻雷达、触发中文 AI 影响分析、生成策略草案、运行回测、提交纸面交易、查看纸面组合和处理风控审批。
 
 ## 当前能力
 
 - 复用 Dubhe Core 本地账号登录和开发期 MFA。
+- 保存用户最近使用的 Core 地址，方便真机、模拟器和局域网环境复用。
 - 拉取 `/v1/news/feed` 新闻源。
 - 调用 `/v1/news/analyze` 生成中文影响分析。
+- 调用 `/v1/strategy/drafts/from-analysis` 生成策略草案。
+- 调用 `/v1/backtests/replay` 运行 deterministic replay 回测。
+- 调用 `/v1/simulation/paper-orders` 提交纸面买入验证。
 - 查看 `/v1/simulation/paper-portfolio/{account_id}` 纸面组合。
 - 管理员或风控管理员可查看 `/v1/approvals`，并调用通过/拒绝接口。
 
@@ -21,22 +25,22 @@ cd D:\github\dubhe-main\apps\mobile
 flutter pub get
 flutter analyze
 flutter test
-flutter build apk --debug --dart-define=DUBHE_CORE_URL=http://10.0.2.2:8019
+flutter build apk --debug --dart-define=DUBHE_CORE_URL=http://10.0.2.2:8000
 ```
 
 Android 模拟器连接本机 Core 时通常使用：
 
 ```powershell
-flutter run --dart-define=DUBHE_CORE_URL=http://10.0.2.2:8019
+flutter run --dart-define=DUBHE_CORE_URL=http://10.0.2.2:8000
 ```
 
 iOS 模拟器连接本机 Core 时可使用：
 
 ```powershell
-flutter run --dart-define=DUBHE_CORE_URL=http://127.0.0.1:8019
+flutter run --dart-define=DUBHE_CORE_URL=http://127.0.0.1:8000
 ```
 
-真机需要把 `DUBHE_CORE_URL` 改成局域网或公网可访问的 Dubhe Core 地址。
+真机需要把 `DUBHE_CORE_URL` 改成局域网或公网可访问的 Dubhe Core 地址；用户也可以在登录页直接修改 Core 地址，成功进入后会自动保存。
 
 ## 安装包命令
 
@@ -48,6 +52,8 @@ flutter build appbundle --release --dart-define=DUBHE_CORE_URL=https://your-core
 ```
 
 默认没有 `android/key.properties` 时，release 构建会继续使用 debug key 作为本地烟测兜底，不可用于正式分发。准备正式 Android 包时，在 `apps/mobile/android` 下复制 `key.properties.example` 为 `key.properties`，把 `storeFile` 指向本地 keystore，并填入真实 `storePassword`、`keyPassword` 和 `keyAlias`；`key.properties`、`*.jks`、`*.keystore` 已在 `.gitignore` 中排除。
+
+Android 工程禁用了 Kotlin incremental build，以避免 Windows 上 Pub cache 与仓库位于不同盘符时 `shared_preferences_android` 增量缓存路径 relativize 失败。
 
 本机开发调试包已验证输出到：
 

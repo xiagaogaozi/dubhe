@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core_client.dart';
 
+const coreUrlPreferenceKey = 'dubhe.core_url';
 const defaultCoreUrl = String.fromEnvironment(
   'DUBHE_CORE_URL',
-  defaultValue: 'http://127.0.0.1:8019',
+  defaultValue: 'http://127.0.0.1:8000',
 );
 
 class DubheCompanionApp extends StatelessWidget {
@@ -56,6 +58,12 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedCoreUrl();
+  }
+
+  @override
   void dispose() {
     _apiController.dispose();
     _accountController.dispose();
@@ -63,6 +71,13 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     _mfaController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedCoreUrl() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedUrl = preferences.getString(coreUrlPreferenceKey);
+    if (!mounted || savedUrl == null || savedUrl.isEmpty) return;
+    _apiController.text = savedUrl;
   }
 
   Future<void> _enterWorkspace() async {
@@ -74,6 +89,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final client = CoreClient(baseUrl: _apiController.text.trim());
     final platform = _mobilePlatform();
     try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(
+        coreUrlPreferenceKey,
+        _apiController.text.trim(),
+      );
       final session = _authMode == _AuthMode.login
           ? await client.login(
               accountKey: _accountController.text.trim(),
@@ -100,7 +120,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (error) {
       client.close();
       setState(() {
-        _error = error is DubheApiException ? error.message : '无法连接 Dubhe Core。';
+        _error = error is DubheApiException
+            ? error.message
+            : '无法连接 Dubhe Core。';
       });
     } finally {
       if (mounted) {
@@ -144,12 +166,21 @@ class _LoginScreenState extends State<LoginScreen> {
             _TextInput(controller: _mfaController, label: 'MFA 验证码'),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
             const SizedBox(height: 16),
             FilledButton(
               onPressed: _busy ? null : _enterWorkspace,
-              child: Text(_busy ? '正在进入...' : _authMode == _AuthMode.login ? '登录工作台' : '创建并进入'),
+              child: Text(
+                _busy
+                    ? '正在进入...'
+                    : _authMode == _AuthMode.login
+                    ? '登录工作台'
+                    : '创建并进入',
+              ),
             ),
           ],
         ),
@@ -161,11 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
 enum _AuthMode { register, login }
 
 class CompanionHome extends StatefulWidget {
-  const CompanionHome({
-    required this.client,
-    required this.session,
-    super.key,
-  });
+  const CompanionHome({required this.client, required this.session, super.key});
 
   final CoreClient client;
   final DeviceSession session;
@@ -182,6 +209,9 @@ class _CompanionHomeState extends State<CompanionHome> {
   String? _approvalMessage;
   NewsFeed? _newsFeed;
   NewsAnalysis? _analysis;
+  StrategyDraft? _strategyDraft;
+  BacktestResult? _backtestResult;
+  PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
   List<ApprovalRequest> _approvals = const [];
 
@@ -204,14 +234,18 @@ class _CompanionHomeState extends State<CompanionHome> {
     });
 
     try {
-      final newsFeed = await widget.client.fetchNewsFeed();
-      final portfolio = await widget.client.fetchPaperPortfolio(defaultPaperAccountId);
+      final newsFeed = await widget.client.fetchNewsFeed(live: false);
+      final portfolio = await widget.client.fetchPaperPortfolio(
+        defaultPaperAccountId,
+      );
       var approvals = <ApprovalRequest>[];
       String? approvalMessage;
       try {
         approvals = await widget.client.fetchApprovals();
       } on DubheApiException catch (error) {
-        approvalMessage = error.statusCode == 403 ? '当前账号没有审批权限。' : error.message;
+        approvalMessage = error.statusCode == 403
+            ? '当前账号没有审批权限。'
+            : error.message;
       }
 
       if (!mounted) return;
@@ -223,7 +257,9 @@ class _CompanionHomeState extends State<CompanionHome> {
       });
     } catch (error) {
       setState(() {
-        _message = error is DubheApiException ? error.message : '同步失败，请检查 Core 地址。';
+        _message = error is DubheApiException
+            ? error.message
+            : '同步失败，请检查 Core 地址。';
       });
     } finally {
       if (mounted) {
@@ -248,6 +284,9 @@ class _CompanionHomeState extends State<CompanionHome> {
       if (!mounted) return;
       setState(() {
         _analysis = analysis;
+        _strategyDraft = null;
+        _backtestResult = null;
+        _paperOrder = null;
       });
     } catch (error) {
       setState(() {
@@ -260,6 +299,125 @@ class _CompanionHomeState extends State<CompanionHome> {
         });
       }
     }
+  }
+
+  Future<void> _draftStrategy() async {
+    final analysis = _analysis;
+    final event = _firstNewsEvent;
+    if (analysis == null || event == null) {
+      setState(() => _message = '请先生成新闻影响分析。');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      final draft = await widget.client.draftStrategyFromAnalysis(
+        analysis: analysis,
+        symbol: _primarySymbol(event),
+        market: _primaryMarket(event),
+      );
+      if (!mounted) return;
+      setState(() {
+        _strategyDraft = draft;
+        _backtestResult = null;
+        _paperOrder = null;
+      });
+    } catch (error) {
+      setState(() {
+        _message = error is DubheApiException ? error.message : '策略草案生成失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _runBacktest() async {
+    final draft = _strategyDraft;
+    if (draft == null) {
+      setState(() => _message = '请先生成策略草案。');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      final backtest = await widget.client.runReplayBacktest(strategy: draft);
+      if (!mounted) return;
+      setState(() {
+        _backtestResult = backtest;
+      });
+    } catch (error) {
+      setState(() {
+        _message = error is DubheApiException ? error.message : '回测失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitPaperBuy() async {
+    final analysis = _analysis;
+    final event = _firstNewsEvent;
+    if (analysis == null || event == null) {
+      setState(() => _message = '请先完成新闻分析。');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      final market = _primaryMarket(event);
+      final symbol = _primarySymbol(event);
+      final order = await widget.client.submitPaperBuy(
+        accountId: defaultPaperAccountId,
+        strategyVersionId:
+            _strategyDraft?.strategyVersionId ?? 'mobile_manual_strategy',
+        market: market,
+        symbol: symbol,
+        quantity: 1,
+        estimatedPrice: _estimatedPrice(symbol),
+        currency: _currencyForMarket(market),
+        sourceRefs: [analysis.id],
+      );
+      final portfolio = await widget.client.fetchPaperPortfolio(
+        defaultPaperAccountId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _paperOrder = order;
+        _portfolio = portfolio;
+      });
+    } catch (error) {
+      setState(() {
+        _message = error is DubheApiException ? error.message : '纸面交易提交失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  NewsEvent? get _firstNewsEvent {
+    final events = _newsFeed?.events ?? const <NewsEvent>[];
+    return events.isEmpty ? null : events.first;
   }
 
   Future<void> _decideApproval(ApprovalRequest approval, bool approve) async {
@@ -291,8 +449,15 @@ class _CompanionHomeState extends State<CompanionHome> {
       _AiPage(
         newsFeed: _newsFeed,
         analysis: _analysis,
+        strategyDraft: _strategyDraft,
+        backtestResult: _backtestResult,
+        paperOrder: _paperOrder,
         analyzing: _analyzing,
+        busy: _loading,
         onAnalyze: _analyzeTopNews,
+        onDraftStrategy: _draftStrategy,
+        onRunBacktest: _runBacktest,
+        onSubmitPaperBuy: _submitPaperBuy,
       ),
       _PortfolioPage(portfolio: _portfolio),
       _ApprovalPage(
@@ -313,19 +478,25 @@ class _CompanionHomeState extends State<CompanionHome> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: pages[_tabIndex],
-      ),
+      body: RefreshIndicator(onRefresh: _refresh, child: pages[_tabIndex]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (index) => setState(() => _tabIndex = index),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.today_outlined), label: '今日'),
           NavigationDestination(icon: Icon(Icons.radar_outlined), label: '雷达'),
-          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), label: 'AI'),
-          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: '组合'),
-          NavigationDestination(icon: Icon(Icons.verified_user_outlined), label: '审批'),
+          NavigationDestination(
+            icon: Icon(Icons.auto_awesome_outlined),
+            label: 'AI',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            label: '组合',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.verified_user_outlined),
+            label: '审批',
+          ),
         ],
       ),
     );
@@ -360,19 +531,24 @@ class _TodayPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(session.roleZh, style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                session.roleZh,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 8),
               Text('设备：${session.deviceName}'),
               Text('工作区：${session.workspaceId}'),
             ],
           ),
         ),
-        _MetricGrid(metrics: [
-          _Metric('新闻', '${newsFeed?.events.length ?? 0} 条'),
-          _Metric('USD 权益', _money('USD', usdEquity)),
-          _Metric('待审批', session.canReviewApprovals ? '可查看' : '无权限'),
-          _Metric('实盘', '默认关闭'),
-        ]),
+        _MetricGrid(
+          metrics: [
+            _Metric('新闻', '${newsFeed?.events.length ?? 0} 条'),
+            _Metric('USD 权益', _money('USD', usdEquity)),
+            _Metric('待审批', session.canReviewApprovals ? '可查看' : '无权限'),
+            _Metric('实盘', '默认关闭'),
+          ],
+        ),
         const SizedBox(height: 12),
         _ProviderStatusList(statuses: newsFeed?.providerStatus ?? const []),
       ],
@@ -405,7 +581,9 @@ class _NewsPage extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   Chip(label: Text(event.eventType)),
-                  Chip(label: Text('权威度 ${(event.authorityScore * 100).round()}')),
+                  Chip(
+                    label: Text('权威度 ${(event.authorityScore * 100).round()}'),
+                  ),
                 ],
               ),
             ],
@@ -422,14 +600,28 @@ class _AiPage extends StatelessWidget {
   const _AiPage({
     required this.newsFeed,
     required this.analysis,
+    required this.strategyDraft,
+    required this.backtestResult,
+    required this.paperOrder,
     required this.analyzing,
+    required this.busy,
     required this.onAnalyze,
+    required this.onDraftStrategy,
+    required this.onRunBacktest,
+    required this.onSubmitPaperBuy,
   });
 
   final NewsFeed? newsFeed;
   final NewsAnalysis? analysis;
+  final StrategyDraft? strategyDraft;
+  final BacktestResult? backtestResult;
+  final PaperOrder? paperOrder;
   final bool analyzing;
+  final bool busy;
   final VoidCallback onAnalyze;
+  final VoidCallback onDraftStrategy;
+  final VoidCallback onRunBacktest;
+  final VoidCallback onSubmitPaperBuy;
 
   @override
   Widget build(BuildContext context) {
@@ -461,16 +653,97 @@ class _AiPage extends StatelessWidget {
               children: [
                 Text(analysis!.summaryZh),
                 const SizedBox(height: 12),
-                _MetricGrid(metrics: [
-                  _Metric('情绪', _sentimentZh(analysis!.sentiment)),
-                  _Metric('影响分', '${(analysis!.impactScore * 100).round()}'),
-                  _Metric('置信度', '${(analysis!.confidence * 100).round()}%'),
-                  _Metric('标的', analysis!.affectedTickers.join(' / ')),
-                ]),
+                _MetricGrid(
+                  metrics: [
+                    _Metric('情绪', _sentimentZh(analysis!.sentiment)),
+                    _Metric('影响分', '${(analysis!.impactScore * 100).round()}'),
+                    _Metric('置信度', '${(analysis!.confidence * 100).round()}%'),
+                    _Metric('标的', analysis!.affectedTickers.join(' / ')),
+                  ],
+                ),
               ],
             ),
           ),
+        _SectionCard(
+          title: '策略 / 回测 / 纸面交易',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _WorkflowStepTile(
+                title: '策略草案',
+                subtitle: strategyDraft?.explanationZh ?? '把当前分析转换成可回测策略。',
+                done: strategyDraft != null,
+                buttonLabel: '生成策略',
+                onPressed: analysis == null || busy ? null : onDraftStrategy,
+              ),
+              _WorkflowStepTile(
+                title: '回测报告',
+                subtitle: backtestResult == null
+                    ? '运行 deterministic replay，先看收益、回撤和胜率。'
+                    : '收益 ${_percent(backtestResult!.totalReturn)}，最大回撤 ${_percent(backtestResult!.maxDrawdown)}，胜率 ${_percent(backtestResult!.winRate)}。',
+                done: backtestResult != null,
+                buttonLabel: '运行回测',
+                onPressed: strategyDraft == null || busy ? null : onRunBacktest,
+              ),
+              _WorkflowStepTile(
+                title: '纸面交易',
+                subtitle: paperOrder?.messageZh ?? '只进入纸面账户，不连接真实券商。',
+                done: paperOrder != null,
+                buttonLabel: '纸面买入 1 股',
+                onPressed: analysis == null || busy ? null : onSubmitPaperBuy,
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _WorkflowStepTile extends StatelessWidget {
+  const _WorkflowStepTile({
+    required this.title,
+    required this.subtitle,
+    required this.done,
+    required this.buttonLabel,
+    required this.onPressed,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool done;
+  final String buttonLabel;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                done ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: done ? Theme.of(context).colorScheme.primary : null,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              OutlinedButton(onPressed: onPressed, child: Text(buttonLabel)),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 32, top: 4),
+            child: Text(subtitle),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -497,7 +770,9 @@ class _PortfolioPage extends StatelessWidget {
           title: '权益',
           child: _MetricGrid(
             metrics: current.equityByCurrency.entries
-                .map((entry) => _Metric(entry.key, _money(entry.key, entry.value)))
+                .map(
+                  (entry) => _Metric(entry.key, _money(entry.key, entry.value)),
+                )
                 .toList(),
           ),
         ),
@@ -506,7 +781,10 @@ class _PortfolioPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: current.cashByCurrency.entries
-                .map((entry) => Text('${entry.key}：${_money(entry.key, entry.value)}'))
+                .map(
+                  (entry) =>
+                      Text('${entry.key}：${_money(entry.key, entry.value)}'),
+                )
                 .toList(),
           ),
         ),
@@ -519,9 +797,15 @@ class _PortfolioPage extends StatelessWidget {
                       .map(
                         (position) => ListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text('${position.symbol} ${position.quantity.g} 股'),
-                          subtitle: Text('均价 ${_money(position.currency, position.avgCost)}'),
-                          trailing: Text(_money(position.currency, position.marketValue)),
+                          title: Text(
+                            '${position.symbol} ${position.quantity.g} 股',
+                          ),
+                          subtitle: Text(
+                            '均价 ${_money(position.currency, position.avgCost)}',
+                          ),
+                          trailing: Text(
+                            _money(position.currency, position.marketValue),
+                          ),
                         ),
                       )
                       .toList(),
@@ -549,7 +833,8 @@ class _ApprovalPage extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         if (message != null) _InfoCard(text: message!),
-        if (approvals.isEmpty && message == null) const _InfoCard(text: '当前没有待处理审批。'),
+        if (approvals.isEmpty && message == null)
+          const _InfoCard(text: '当前没有待处理审批。'),
         ...approvals.map(
           (approval) => _SectionCard(
             title: approval.status,
@@ -604,14 +889,20 @@ class _BrandHeader extends StatelessWidget {
             color: Theme.of(context).colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Text('D', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          child: const Text(
+            'D',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
         ),
         const SizedBox(width: 14),
         const Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Dubhe', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+              Text(
+                'Dubhe',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+              ),
               Text('AI 投资研究与风控 companion'),
             ],
           ),
@@ -649,11 +940,7 @@ class _TextInput extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    required this.child,
-    this.trailing,
-  });
+  const _SectionCard({required this.title, required this.child, this.trailing});
 
   final String title;
   final Widget child;
@@ -671,7 +958,10 @@ class _SectionCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 if (trailing != null) Text(trailing!),
               ],
@@ -688,10 +978,7 @@ class _SectionCard extends StatelessWidget {
 enum _InfoTone { normal, danger }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.text,
-    this.tone = _InfoTone.normal,
-  });
+  const _InfoCard({required this.text, this.tone = _InfoTone.normal});
 
   final String text;
   final _InfoTone tone;
@@ -700,11 +987,10 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
-      color: tone == _InfoTone.danger ? scheme.errorContainer : scheme.secondaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Text(text),
-      ),
+      color: tone == _InfoTone.danger
+          ? scheme.errorContainer
+          : scheme.secondaryContainer,
+      child: Padding(padding: const EdgeInsets.all(14), child: Text(text)),
     );
   }
 }
@@ -757,7 +1043,9 @@ class _MetricGrid extends StatelessWidget {
               .map(
                 (metric) => DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Padding(
@@ -765,13 +1053,20 @@ class _MetricGrid extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(metric.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          metric.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         const Spacer(),
                         Text(
                           metric.value,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ],
                     ),
@@ -796,10 +1091,42 @@ String _money(String currency, double value) {
   return '$currency ${value.toStringAsFixed(2)}';
 }
 
+String _percent(double value) {
+  return '${(value * 100).toStringAsFixed(2)}%';
+}
+
 String _sentimentZh(String sentiment) {
   if (sentiment == 'positive') return '正面';
   if (sentiment == 'negative') return '负面';
   return '中性';
+}
+
+String _primarySymbol(NewsEvent event) {
+  if (event.tickers.isNotEmpty) return event.tickers.first;
+  return 'NVDA';
+}
+
+String _primaryMarket(NewsEvent event) {
+  if (event.marketScope.isNotEmpty) return event.marketScope.first;
+  final symbol = _primarySymbol(event);
+  if (symbol.endsWith('.HK')) return 'HK';
+  if (symbol.endsWith('.SH') || symbol.endsWith('.SZ')) return 'A_SHARE';
+  return 'US';
+}
+
+String _currencyForMarket(String market) {
+  if (market == 'HK') return 'HKD';
+  if (market == 'A_SHARE') return 'CNY';
+  return 'USD';
+}
+
+double _estimatedPrice(String symbol) {
+  final normalized = symbol.toUpperCase();
+  if (normalized == 'NVDA') return 120;
+  if (normalized == 'AAPL') return 210;
+  if (normalized.endsWith('.HK')) return 380;
+  if (normalized.endsWith('.SH') || normalized.endsWith('.SZ')) return 1600;
+  return 100;
 }
 
 String _mobilePlatform() {
