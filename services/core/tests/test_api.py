@@ -218,6 +218,33 @@ def test_account_login_mfa_and_role_boundaries() -> None:
     )
     assert denied_response.status_code == 403
 
+    assert client.get("/v1/admin/users", headers=auth_headers(user_session)).status_code == 403
+
+    users_response = client.get("/v1/admin/users", headers=auth_headers(claimed_session))
+    assert users_response.status_code == 200
+    users = users_response.json()
+    target_user = next(user for user in users if user["account_key"] == "auth-user-fixture")
+
+    promote_response = client.post(
+        f"/v1/admin/users/{target_user['id']}/role",
+        headers=auth_headers(claimed_session),
+        json={
+            "role": "risk_manager",
+            "reason_zh": "测试将普通用户提升为风控管理员。",
+        },
+    )
+    assert promote_response.status_code == 200
+    assert promote_response.json()["role"] == "risk_manager"
+
+    assert client.get("/v1/approvals", headers=auth_headers(user_session)).status_code == 200
+    assert client.get("/v1/admin/users", headers=auth_headers(user_session)).status_code == 403
+
+    audit_response = client.get("/v1/audit/logs?limit=20", headers=auth_headers(user_session))
+    assert audit_response.status_code == 200
+    audit_logs = audit_response.json()
+    assert any(log["action"] == "admin.user_role_updated" for log in audit_logs)
+    assert any(log["action"] == "auth.login_succeeded" for log in audit_logs)
+
 
 def test_workspace_sync_websocket_streams_new_events() -> None:
     session = register_test_device(
@@ -479,6 +506,7 @@ def test_live_ai_order_requires_human_approval() -> None:
     )
     response = client.post(
         "/v1/risk/evaluate",
+        headers=auth_headers(session),
         json={
             "account_id": "acct_fixture",
             "strategy_version_id": "strategy_v1",
@@ -502,7 +530,9 @@ def test_live_ai_order_requires_human_approval() -> None:
     assert body["allowed_destination"] == "live_after_approval"
     assert "人工审批" in body["reasons_zh"][0]
 
-    list_response = client.get("/v1/risk/decisions")
+    assert client.get("/v1/risk/decisions").status_code == 401
+
+    list_response = client.get("/v1/risk/decisions", headers=auth_headers(session))
     assert list_response.status_code == 200
     assert any(item["id"] == body["id"] for item in list_response.json())
 

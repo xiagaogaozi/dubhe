@@ -758,7 +758,7 @@
   grid-column: 4;
   grid-row: 1;
   padding: 16px;
-  overflow: hidden;
+  overflow: auto;
   box-shadow: inset 1px 0 0 var(--line);
 }
 
@@ -840,6 +840,80 @@
   color: var(--amber);
   font-size: 18px;
   font-weight: 800;
+}
+
+.admin-user-list,
+.audit-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.admin-user-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(242, 240, 232, 0.06);
+}
+
+.admin-user-row strong,
+.admin-user-row span,
+.audit-row span,
+.audit-row p {
+  display: block;
+}
+
+.admin-user-row strong {
+  color: #f1f5f0;
+  font-size: 13px;
+}
+
+.admin-user-row span,
+.audit-row span {
+  color: #8d978f;
+  font-size: 12px;
+}
+
+.role-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.role-actions button {
+  min-height: 30px;
+  border-radius: 7px;
+  background: rgba(242, 240, 232, 0.09);
+  color: #dbe3de;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.role-actions button:hover,
+.role-actions button.is-active {
+  background: rgba(123, 216, 143, 0.16);
+  color: var(--green);
+}
+
+.role-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.audit-row {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: rgba(242, 240, 232, 0.06);
+}
+
+.audit-row p {
+  margin: 0;
+  color: #dbe3de;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .bottom-panel {

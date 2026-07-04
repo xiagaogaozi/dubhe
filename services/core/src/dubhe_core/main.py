@@ -10,6 +10,7 @@ from .backtest import draft_strategy_from_analysis, run_replay_backtest
 from .models import (
     AccountLoginRequest,
     AccountRegistrationRequest,
+    AuditLogEntry,
     ApprovalActionRequest,
     ApprovalRequest,
     ApprovalStatus,
@@ -35,6 +36,8 @@ from .models import (
     StrategyValidationResult,
     SyncEvent,
     UserRole,
+    UserRoleUpdateRequest,
+    UserSummary,
     WatchlistItem,
     WatchlistUpsertRequest,
     WorkspaceSnapshot,
@@ -97,6 +100,8 @@ def capabilities() -> dict[str, object]:
             "account_password_login",
             "local_mfa_placeholder",
             "role_based_risk_controls",
+            "admin_user_role_management",
+            "audit_log",
             "workspace_sync_websocket",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
@@ -138,6 +143,13 @@ def require_risk_manager_session(
     return session
 
 
+def require_admin_session(
+    session: DeviceSession = Depends(require_device_session),
+) -> DeviceSession:
+    require_roles(session, {UserRole.ADMIN})
+    return session
+
+
 @app.post("/v1/auth/devices/register", response_model=DeviceSession)
 def register_device_endpoint(request: DeviceRegistrationRequest) -> DeviceSession:
     return store.register_device(request)
@@ -148,8 +160,20 @@ def register_account_endpoint(request: AccountRegistrationRequest) -> DeviceSess
     try:
         return store.register_account(request)
     except ValueError as exc:
+        store.append_audit_log(
+            action="auth.account_registration_failed",
+            target_type="user",
+            summary_zh="账号注册失败：账号已存在。",
+            metadata={"account_key": request.account_key},
+        )
         raise HTTPException(status_code=409, detail="账号已存在，请直接登录。") from exc
     except PermissionError as exc:
+        store.append_audit_log(
+            action="auth.account_registration_failed",
+            target_type="user",
+            summary_zh="账号注册失败：MFA 验证码不正确。",
+            metadata={"account_key": request.account_key},
+        )
         raise HTTPException(status_code=401, detail="MFA 验证码不正确。") from exc
 
 
@@ -158,8 +182,20 @@ def login_account_endpoint(request: AccountLoginRequest) -> DeviceSession:
     try:
         return store.login_account(request)
     except PermissionError as exc:
+        store.append_audit_log(
+            action="auth.login_failed",
+            target_type="user",
+            summary_zh="账号登录失败：账号、密码或 MFA 验证码不正确。",
+            metadata={"account_key": request.account_key},
+        )
         raise HTTPException(status_code=401, detail="账号、密码或 MFA 验证码不正确。") from exc
     except KeyError as exc:
+        store.append_audit_log(
+            action="auth.login_failed",
+            target_type="user",
+            summary_zh="账号登录失败：账号工作区不存在。",
+            metadata={"account_key": request.account_key},
+        )
         raise HTTPException(status_code=404, detail="账号工作区不存在。") from exc
 
 
@@ -168,6 +204,35 @@ def revoke_current_device_endpoint(
     session: DeviceSession = Depends(require_device_session),
 ) -> DeviceRevocation:
     return store.revoke_device_session(session)
+
+
+@app.get("/v1/admin/users", response_model=list[UserSummary])
+def list_users_endpoint(
+    _session: DeviceSession = Depends(require_admin_session),
+) -> list[UserSummary]:
+    return store.list_users()
+
+
+@app.post("/v1/admin/users/{user_id}/role", response_model=UserSummary)
+def update_user_role_endpoint(
+    user_id: str,
+    request: UserRoleUpdateRequest,
+    session: DeviceSession = Depends(require_admin_session),
+) -> UserSummary:
+    try:
+        return store.update_user_role(user_id, request, session)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="账号不存在。") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="不能移除最后一个管理员。") from exc
+
+
+@app.get("/v1/audit/logs", response_model=list[AuditLogEntry])
+def list_audit_logs_endpoint(
+    limit: int = Query(default=50, ge=1, le=200),
+    _session: DeviceSession = Depends(require_risk_manager_session),
+) -> list[AuditLogEntry]:
+    return store.list_audit_logs(limit=limit)
 
 
 @app.get("/v1/workspaces/{workspace_id}/snapshot", response_model=WorkspaceSnapshot)
@@ -297,15 +362,33 @@ def list_backtests_endpoint() -> list[BacktestResult]:
 
 
 @app.post("/v1/risk/evaluate", response_model=RiskDecision)
-def evaluate_risk_endpoint(intent: OrderIntent) -> RiskDecision:
+def evaluate_risk_endpoint(
+    intent: OrderIntent,
+    session: DeviceSession = Depends(require_device_session),
+) -> RiskDecision:
     decision = store.add_risk_decision(evaluate_order_intent(intent, store.current_risk_policy()))
     if decision.status == RiskStatus.REQUIRES_APPROVAL:
         store.create_approval_request(decision, intent.created_by)
+    store.append_audit_log(
+        actor_session=session,
+        action="risk.order_evaluated",
+        target_type="risk_decision",
+        target_id=decision.id,
+        summary_zh=f"订单意图已完成风控评估：{decision.status.value}。",
+        metadata={
+            "order_intent_id": decision.order_intent_id,
+            "symbol": intent.symbol,
+            "destination": intent.destination.value,
+            "notional": decision.notional,
+        },
+    )
     return decision
 
 
 @app.get("/v1/risk/decisions", response_model=list[RiskDecision])
-def list_risk_decisions_endpoint() -> list[RiskDecision]:
+def list_risk_decisions_endpoint(
+    _session: DeviceSession = Depends(require_device_session),
+) -> list[RiskDecision]:
     return store.risk_decisions
 
 
@@ -321,10 +404,10 @@ def list_approval_requests_endpoint(
 def approve_request_endpoint(
     approval_id: str,
     request: ApprovalActionRequest,
-    _session: DeviceSession = Depends(require_risk_manager_session),
+    session: DeviceSession = Depends(require_risk_manager_session),
 ) -> ApprovalRequest:
     try:
-        return store.decide_approval(approval_id, ApprovalStatus.APPROVED, request)
+        return store.decide_approval(approval_id, ApprovalStatus.APPROVED, request, session)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="审批请求不存在。") from exc
 
@@ -333,10 +416,10 @@ def approve_request_endpoint(
 def reject_request_endpoint(
     approval_id: str,
     request: ApprovalActionRequest,
-    _session: DeviceSession = Depends(require_risk_manager_session),
+    session: DeviceSession = Depends(require_risk_manager_session),
 ) -> ApprovalRequest:
     try:
-        return store.decide_approval(approval_id, ApprovalStatus.REJECTED, request)
+        return store.decide_approval(approval_id, ApprovalStatus.REJECTED, request, session)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="审批请求不存在。") from exc
 
@@ -351,17 +434,17 @@ def get_kill_switch_endpoint(
 @app.post("/v1/risk/kill-switch", response_model=KillSwitchState)
 def set_kill_switch_endpoint(
     request: KillSwitchUpdateRequest,
-    _session: DeviceSession = Depends(require_risk_manager_session),
+    session: DeviceSession = Depends(require_risk_manager_session),
 ) -> KillSwitchState:
-    return store.set_kill_switch_state(request)
+    return store.set_kill_switch_state(request, session)
 
 
 @app.post("/v1/simulation/paper-orders", response_model=PaperOrder)
 def submit_paper_order_endpoint(
     intent: OrderIntent,
-    _session: DeviceSession = Depends(require_device_session),
+    session: DeviceSession = Depends(require_device_session),
 ) -> PaperOrder:
-    return store.add_paper_order(submit_paper_order(intent, store.current_risk_policy()))
+    return store.add_paper_order(submit_paper_order(intent, store.current_risk_policy()), session)
 
 
 @app.get("/v1/simulation/paper-orders", response_model=list[PaperOrder])

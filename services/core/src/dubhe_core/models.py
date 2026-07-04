@@ -374,6 +374,20 @@ class UserAccount(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class UserSummary(BaseModel):
+    id: str
+    account_key: str
+    display_name: str
+    role: UserRole
+    mfa_enabled: bool
+    created_at: datetime
+
+
+class UserRoleUpdateRequest(BaseModel):
+    role: UserRole
+    reason_zh: str = Field(min_length=1)
+
+
 class DeviceSession(BaseModel):
     user_id: str
     device_id: str
@@ -390,6 +404,19 @@ class DeviceRevocation(BaseModel):
     revoked: bool = True
     revoked_at: datetime = Field(default_factory=utc_now)
     message_zh: str = "设备访问令牌已撤销。"
+
+
+class AuditLogEntry(BaseModel):
+    id: str = Field(default_factory=lambda: f"audit_{uuid4().hex}")
+    actor_user_id: str | None = None
+    actor_device_id: str | None = None
+    actor_role: UserRole | None = None
+    action: str = Field(min_length=1)
+    target_type: str = Field(min_length=1)
+    target_id: str | None = None
+    summary_zh: str = Field(min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Workspace(BaseModel):

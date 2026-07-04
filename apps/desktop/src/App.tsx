@@ -1,11 +1,12 @@
 import type { FormEvent } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_DUBHE_CORE_URL ?? 'http://127.0.0.1:8000'
 const DEVICE_SESSION_STORAGE_KEY = 'dubhe.deviceSession'
 
 let deviceAccessToken: string | null = null
+let logSequence = 0
 
 type Market = 'A_SHARE' | 'HK' | 'US' | 'GLOBAL'
 type DevicePlatform = 'windows' | 'macos' | 'ios' | 'android'
@@ -190,6 +191,28 @@ type DeviceSession = {
   created_at: string
 }
 
+type UserSummary = {
+  id: string
+  account_key: string
+  display_name: string
+  role: UserRole
+  mfa_enabled: boolean
+  created_at: string
+}
+
+type AuditLogEntry = {
+  id: string
+  actor_user_id?: string | null
+  actor_device_id?: string | null
+  actor_role?: UserRole | null
+  action: string
+  target_type: string
+  target_id?: string | null
+  summary_zh: string
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
 type SyncedWatchlistItem = {
   id: string
   workspace_id: string
@@ -246,6 +269,7 @@ type WatchRow = {
 }
 
 type LogEntry = {
+  id: string
   time: string
   kind: 'info' | 'success' | 'warning' | 'danger'
   message: string
@@ -270,6 +294,8 @@ const navItems = [
   ['数据源', '源'],
   ['风控中心', '控'],
 ] as const
+
+const roleOptions: UserRole[] = ['user', 'risk_manager', 'admin']
 
 const fallbackWatchlist: WatchRow[] = [
   { symbol: 'NVDA', name: '英伟达', market: 'US', move: '+2.8%' },
@@ -323,6 +349,16 @@ function nowTime() {
   }).format(new Date())
 }
 
+function createLogEntry(kind: LogEntry['kind'], message: string): LogEntry {
+  logSequence += 1
+  return {
+    id: `log_${Date.now()}_${logSequence}`,
+    time: nowTime(),
+    kind,
+    message,
+  }
+}
+
 function sentimentLabel(sentiment: Sentiment) {
   if (sentiment === 'positive') return '正面'
   if (sentiment === 'negative') return '负面'
@@ -337,6 +373,21 @@ function roleLabel(role: UserRole) {
   if (role === 'admin') return '管理员'
   if (role === 'risk_manager') return '风控管理员'
   return '普通用户'
+}
+
+function roleShortLabel(role: UserRole) {
+  if (role === 'admin') return '管理员'
+  if (role === 'risk_manager') return '风控'
+  return '普通'
+}
+
+function formatShortDateTime(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
 }
 
 function readStoredSession() {
@@ -456,14 +507,16 @@ function App() {
   const [riskDecision, setRiskDecision] = useState<RiskDecision | null>(null)
   const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([])
   const [killSwitch, setKillSwitch] = useState<KillSwitchState | null>(null)
+  const [adminUsers, setAdminUsers] = useState<UserSummary[]>([])
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
   const [paperOrder, setPaperOrder] = useState<PaperOrder | null>(null)
   const [brokerOrder, setBrokerOrder] = useState<BrokerOrder | null>(null)
   const [isBusy, setBusy] = useState(false)
   const [apiStatus, setApiStatus] = useState<'未知' | '已连接' | '离线'>('未知')
   const [syncSocketStatus, setSyncSocketStatus] = useState<'未连接' | '已连接' | '离线'>('未连接')
   const [logs, setLogs] = useState<LogEntry[]>([
-    { time: nowTime(), kind: 'info', message: '工作台已载入，可连接 Dubhe Core。' },
-    { time: nowTime(), kind: 'warning', message: '实盘交易关闭：所有真实订单必须先通过风控与人工审批。' },
+    createLogEntry('info', '工作台已载入，可连接 Dubhe Core。'),
+    createLogEntry('warning', '实盘交易关闭：所有真实订单必须先通过风控与人工审批。'),
   ])
 
   const tickerContext = useMemo(
@@ -479,9 +532,10 @@ function App() {
     [newsEvents, selectedNewsId, selectedTicker],
   )
   const canManageRisk = deviceSession?.role === 'admin' || deviceSession?.role === 'risk_manager'
+  const canManageAdmin = deviceSession?.role === 'admin'
 
   function appendLog(kind: LogEntry['kind'], message: string) {
-    setLogs((current) => [{ time: nowTime(), kind, message }, ...current].slice(0, 4))
+    setLogs((current) => [createLogEntry(kind, message), ...current].slice(0, 4))
   }
 
   function updateAuthField(field: keyof AuthForm, value: string) {
@@ -530,10 +584,12 @@ function App() {
     setDeviceSession(null)
     setApiStatus('未知')
     setSyncSocketStatus('未连接')
+    setAdminUsers([])
+    setAuditLogs([])
     appendLog('warning', '已退出当前设备。')
   }
 
-  async function refreshSafetyState() {
+  const refreshSafetyState = useCallback(async () => {
     const [approvals, killSwitchState] = await Promise.all([
       getJson<ApprovalRequest[]>('/v1/approvals'),
       getJson<KillSwitchState>('/v1/risk/kill-switch'),
@@ -541,6 +597,47 @@ function App() {
     setApprovalRequests(approvals)
     setKillSwitch(killSwitchState)
     return { approvals, killSwitchState }
+  }, [])
+
+  const refreshGovernanceState = useCallback(async () => {
+    const [users, audits] = await Promise.all([
+      canManageAdmin ? getJson<UserSummary[]>('/v1/admin/users') : Promise.resolve([]),
+      canManageRisk ? getJson<AuditLogEntry[]>('/v1/audit/logs?limit=6') : Promise.resolve([]),
+    ])
+    setAdminUsers(users)
+    setAuditLogs(audits)
+    return { users, audits }
+  }, [canManageAdmin, canManageRisk])
+
+  async function setUserRole(user: UserSummary, role: UserRole) {
+    if (!canManageAdmin || user.role === role) return
+    setBusy(true)
+    try {
+      const updatedUser = await postJson<UserSummary>(`/v1/admin/users/${user.id}/role`, {
+        role,
+        reason_zh: `桌面端管理员将 ${user.account_key} 调整为${roleLabel(role)}。`,
+      })
+      setAdminUsers((current) => current.map((item) => (item.id === updatedUser.id ? updatedUser : item)))
+      if (deviceSession?.user_id === updatedUser.id) {
+        const updatedSession = { ...deviceSession, role: updatedUser.role }
+        deviceAccessToken = updatedSession.access_token
+        localStorage.setItem(DEVICE_SESSION_STORAGE_KEY, JSON.stringify(updatedSession))
+        setDeviceSession(updatedSession)
+        setAdminUsers([])
+        setAuditLogs(
+          updatedUser.role === 'admin' || updatedUser.role === 'risk_manager'
+            ? await getJson<AuditLogEntry[]>('/v1/audit/logs?limit=6')
+            : [],
+        )
+      } else {
+        await refreshGovernanceState()
+      }
+      appendLog('success', `已更新 ${updatedUser.account_key} 的角色：${roleLabel(updatedUser.role)}。`)
+    } catch (error) {
+      appendLog('danger', `角色更新失败：${error instanceof Error ? error.message : '未知错误'}。`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   function applySyncEvent(event: SyncEvent) {
@@ -659,9 +756,12 @@ function App() {
         setSelectedNewsId(feed.events[0]?.id ?? fallbackNewsEvent.id)
         if (canManageRisk) {
           await refreshSafetyState()
+          await refreshGovernanceState()
         } else {
           setApprovalRequests([])
           setKillSwitch(null)
+          setAdminUsers([])
+          setAuditLogs([])
         }
         if (cancelled) return
         syncSocket = new WebSocket(syncSocketUrl(session.workspace_id, snapshot.server_sequence))
@@ -694,7 +794,7 @@ function App() {
       cancelled = true
       syncSocket?.close()
     }
-  }, [canManageRisk, deviceSession])
+  }, [canManageRisk, deviceSession, refreshGovernanceState, refreshSafetyState])
 
   async function runNewsAnalysis() {
     setBusy(true)
@@ -783,6 +883,7 @@ function App() {
       setRiskDecision(result)
       if (canManageRisk) {
         await refreshSafetyState()
+        await refreshGovernanceState()
       }
       setApiStatus('已连接')
       appendLog('warning', `风控完成：${result.status === 'requires_approval' ? '需要人工审批' : result.status}。`)
@@ -812,6 +913,7 @@ function App() {
         decision_comment_zh: '桌面端演示审批通过，仅用于验证审批链路。',
       })
       await refreshSafetyState()
+      await refreshGovernanceState()
       appendLog('success', `审批已通过：${approval.id}。`)
     } catch (error) {
       appendLog('danger', `审批失败：${error instanceof Error ? error.message : '未知错误'}。`)
@@ -838,6 +940,7 @@ function App() {
         decision_comment_zh: '桌面端演示拒绝，高风险订单不进入实盘。',
       })
       await refreshSafetyState()
+      await refreshGovernanceState()
       appendLog('warning', `审批已拒绝：${approval.id}。`)
     } catch (error) {
       appendLog('danger', `拒绝审批失败：${error instanceof Error ? error.message : '未知错误'}。`)
@@ -860,6 +963,7 @@ function App() {
         updated_by: 'desktop-risk-manager',
       })
       setKillSwitch(state)
+      await refreshGovernanceState()
       appendLog(state.enabled ? 'danger' : 'success', state.enabled ? 'Kill switch 已启用。' : 'Kill switch 已解除。')
     } catch (error) {
       appendLog('danger', `Kill switch 更新失败：${error instanceof Error ? error.message : '未知错误'}。`)
@@ -888,6 +992,9 @@ function App() {
       })
       setPaperOrder(result)
       setBrokerOrder(result.broker_order ?? null)
+      if (canManageRisk) {
+        await refreshGovernanceState()
+      }
       setApiStatus('已连接')
       appendLog(result.status === 'accepted' ? 'success' : 'danger', result.message_zh)
     } catch (error) {
@@ -1236,6 +1343,57 @@ function App() {
           </div>
         </section>
 
+        {canManageAdmin && (
+          <section className="risk-card governance-card">
+            <h3>账号权限</h3>
+            {adminUsers.length > 0 ? (
+              <div className="admin-user-list">
+                {adminUsers.slice(0, 4).map((user) => (
+                  <div className="admin-user-row" key={user.id}>
+                    <div>
+                      <strong>{user.display_name}</strong>
+                      <span>{user.account_key} · {roleLabel(user.role)}</span>
+                    </div>
+                    <div className="role-actions" aria-label={`${user.account_key} 角色`}>
+                      {roleOptions.map((role) => (
+                        <button
+                          className={user.role === role ? 'is-active' : ''}
+                          disabled={isBusy || user.role === role}
+                          key={role}
+                          onClick={() => void setUserRole(user, role)}
+                          type="button"
+                        >
+                          {roleShortLabel(role)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>账号列表尚未同步。</p>
+            )}
+          </section>
+        )}
+
+        {canManageRisk && (
+          <section className="risk-card audit-card">
+            <h3>审计日志</h3>
+            {auditLogs.length > 0 ? (
+              <div className="audit-list">
+                {auditLogs.slice(0, 5).map((entry) => (
+                  <div className="audit-row" key={entry.id}>
+                    <span>{formatShortDateTime(entry.created_at)} · {entry.actor_role ? roleLabel(entry.actor_role) : '系统'}</span>
+                    <p>{entry.summary_zh}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>尚未同步审计日志。</p>
+            )}
+          </section>
+        )}
+
         <section className="risk-card">
           <h3>风控快照</h3>
           {riskDecision ? (
@@ -1277,7 +1435,7 @@ function App() {
         <div className="bottom-title">任务日志 / 风控告警</div>
         <div className="log-list">
           {logs.map((entry) => (
-            <div className={`log-entry ${entry.kind}`} key={`${entry.time}-${entry.message}`}>
+            <div className={`log-entry ${entry.kind}`} key={entry.id}>
               <span>{entry.time}</span>
               <p>{entry.message}</p>
             </div>

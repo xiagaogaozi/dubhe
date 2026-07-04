@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from .models import (
     AccountLoginRequest,
     AccountRegistrationRequest,
+    AuditLogEntry,
     ApprovalActionRequest,
     ApprovalRequest,
     ApprovalStatus,
@@ -36,6 +37,8 @@ from .models import (
     SyncEvent,
     UserAccount,
     UserRole,
+    UserRoleUpdateRequest,
+    UserSummary,
     WatchlistItem,
     WatchlistUpsertRequest,
     Workspace,
@@ -150,6 +153,10 @@ class SQLiteStore:
     def approval_requests(self) -> list[ApprovalRequest]:
         return self._load_payloads("approval_requests", ApprovalRequest, "created_at DESC, id")
 
+    @property
+    def audit_logs(self) -> list[AuditLogEntry]:
+        return self._load_payloads("audit_logs", AuditLogEntry, "created_at DESC, id DESC")
+
     def close(self) -> None:
         with self._lock:
             self._connection.close()
@@ -232,6 +239,7 @@ class SQLiteStore:
         approval_id: str,
         status: ApprovalStatus,
         request: ApprovalActionRequest,
+        actor_session: DeviceSession | None = None,
     ) -> ApprovalRequest:
         with self._lock:
             approval = self._approval_by_id(approval_id)
@@ -252,6 +260,17 @@ class SQLiteStore:
                 entity_id=decided.id,
                 action="updated",
                 payload=decided.model_dump(mode="json"),
+            )
+            self._append_audit_log(
+                actor_session=actor_session,
+                action=f"approval.{status.value}",
+                target_type="approval_request",
+                target_id=decided.id,
+                summary_zh=f"审批请求已{'通过' if status == ApprovalStatus.APPROVED else '拒绝'}。",
+                metadata={
+                    "order_intent_id": decided.order_intent_id,
+                    "decided_by": request.decided_by,
+                },
             )
             self._connection.commit()
             return decided
@@ -274,7 +293,11 @@ class SQLiteStore:
                 return KillSwitchState()
             return KillSwitchState.model_validate_json(row["payload"])
 
-    def set_kill_switch_state(self, request: KillSwitchUpdateRequest) -> KillSwitchState:
+    def set_kill_switch_state(
+        self,
+        request: KillSwitchUpdateRequest,
+        actor_session: DeviceSession | None = None,
+    ) -> KillSwitchState:
         with self._lock:
             state = KillSwitchState(
                 enabled=request.enabled,
@@ -288,13 +311,29 @@ class SQLiteStore:
                 action="updated",
                 payload=state.model_dump(mode="json"),
             )
+            self._append_audit_log(
+                actor_session=actor_session,
+                action="risk.kill_switch_updated",
+                target_type="kill_switch",
+                target_id="global",
+                summary_zh="Kill switch 已更新。",
+                metadata={
+                    "enabled": state.enabled,
+                    "updated_by": request.updated_by,
+                    "reason_zh": request.reason_zh,
+                },
+            )
             self._connection.commit()
             return state
 
     def current_risk_policy(self) -> RiskPolicy:
         return RiskPolicy(kill_switch_enabled=self.get_kill_switch_state().enabled)
 
-    def add_paper_order(self, order: PaperOrder) -> PaperOrder:
+    def add_paper_order(
+        self,
+        order: PaperOrder,
+        actor_session: DeviceSession | None = None,
+    ) -> PaperOrder:
         with self._lock:
             self._save_risk_decision(order.risk_decision)
             self._append_entity_event_to_all_workspaces(
@@ -325,6 +364,18 @@ class SQLiteStore:
                     entity_id=order.broker_order.id,
                     payload=order.broker_order.model_dump(mode="json"),
                 )
+            self._append_audit_log(
+                actor_session=actor_session,
+                action="simulation.paper_order_submitted",
+                target_type="paper_order",
+                target_id=order.id,
+                summary_zh=order.message_zh,
+                metadata={
+                    "status": order.status.value,
+                    "order_intent_id": order.order_intent_id,
+                    "broker_order_id": order.broker_order.id if order.broker_order else None,
+                },
+            )
             self._connection.commit()
             return order
 
@@ -376,12 +427,24 @@ class SQLiteStore:
                 workspace = self._workspace_by_user_id(user.id)
 
             session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            self._append_audit_log(
+                actor_session=session,
+                action="auth.device_registered",
+                target_type="device",
+                target_id=session.device_id,
+                summary_zh="开发级设备会话已创建。",
+                metadata={
+                    "account_key": user.account_key,
+                    "platform": request.platform.value,
+                },
+            )
             self._connection.commit()
             return session
 
     def register_account(self, request: AccountRegistrationRequest) -> DeviceSession:
         with self._lock:
             existing_user = self._user_by_account_key(request.account_key)
+            is_claiming_existing = existing_user is not None
             if existing_user is not None and existing_user.password_hash is not None:
                 raise ValueError("account_exists")
             if not verify_local_mfa_code(request.mfa_code):
@@ -408,6 +471,18 @@ class SQLiteStore:
                 self._save_user(user)
                 workspace = self._workspace_by_user_id(user.id)
             session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            self._append_audit_log(
+                actor_session=session,
+                action="auth.account_claimed" if is_claiming_existing else "auth.account_registered",
+                target_type="user",
+                target_id=user.id,
+                summary_zh="账号已接管并启用密码登录。" if is_claiming_existing else "本地账号已创建。",
+                metadata={
+                    "account_key": user.account_key,
+                    "role": user.role.value,
+                    "platform": request.platform.value,
+                },
+            )
             self._connection.commit()
             return session
 
@@ -421,8 +496,87 @@ class SQLiteStore:
 
             workspace = self._workspace_by_user_id(user.id)
             session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            self._append_audit_log(
+                actor_session=session,
+                action="auth.login_succeeded",
+                target_type="user",
+                target_id=user.id,
+                summary_zh="账号登录成功。",
+                metadata={
+                    "account_key": user.account_key,
+                    "platform": request.platform.value,
+                },
+            )
             self._connection.commit()
             return session
+
+    def list_users(self) -> list[UserSummary]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT payload FROM users ORDER BY account_key",
+            ).fetchall()
+            return [self._user_summary(UserAccount.model_validate_json(row["payload"])) for row in rows]
+
+    def update_user_role(
+        self,
+        user_id: str,
+        request: UserRoleUpdateRequest,
+        actor_session: DeviceSession,
+    ) -> UserSummary:
+        with self._lock:
+            user = self._user_by_id(user_id)
+            if user.role == UserRole.ADMIN and request.role != UserRole.ADMIN and self._admin_count() <= 1:
+                raise ValueError("last_admin")
+            updated_user = user.model_copy(update={"role": request.role})
+            self._save_user(updated_user)
+            self._append_audit_log(
+                actor_session=actor_session,
+                action="admin.user_role_updated",
+                target_type="user",
+                target_id=updated_user.id,
+                summary_zh=f"账号 {updated_user.account_key} 的角色已更新为 {request.role.value}。",
+                metadata={
+                    "account_key": updated_user.account_key,
+                    "previous_role": user.role.value,
+                    "new_role": request.role.value,
+                    "reason_zh": request.reason_zh,
+                },
+            )
+            self._connection.commit()
+            return self._user_summary(updated_user)
+
+    def list_audit_logs(self, limit: int = 50) -> list[AuditLogEntry]:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT payload FROM audit_logs
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            return [AuditLogEntry.model_validate_json(row["payload"]) for row in rows]
+
+    def append_audit_log(
+        self,
+        action: str,
+        target_type: str,
+        summary_zh: str,
+        actor_session: DeviceSession | None = None,
+        target_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AuditLogEntry:
+        with self._lock:
+            entry = self._append_audit_log(
+                actor_session=actor_session,
+                action=action,
+                target_type=target_type,
+                target_id=target_id,
+                summary_zh=summary_zh,
+                metadata=metadata or {},
+            )
+            self._connection.commit()
+            return entry
 
     def device_session_by_access_token(self, access_token: str) -> DeviceSession | None:
         token = access_token.strip()
@@ -439,7 +593,8 @@ class SQLiteStore:
             if row is None:
                 return None
             session = DeviceSession.model_validate_json(row["payload"])
-            return session.model_copy(update={"access_token": token})
+            user = self._user_by_id(session.user_id)
+            return session.model_copy(update={"access_token": token, "role": user.role})
 
     def revoke_device_session(self, session: DeviceSession) -> DeviceRevocation:
         with self._lock:
@@ -451,6 +606,14 @@ class SQLiteStore:
                 WHERE id = ? AND revoked_at IS NULL
                 """,
                 (revocation.revoked_at.isoformat(), session.device_id),
+            )
+            self._append_audit_log(
+                actor_session=session,
+                action="auth.device_revoked",
+                target_type="device",
+                target_id=session.device_id,
+                summary_zh="当前设备访问令牌已撤销。",
+                metadata={"user_id": session.user_id},
             )
             self._connection.commit()
             return revocation
@@ -615,11 +778,23 @@ class SQLiteStore:
                     payload TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    actor_user_id TEXT,
+                    action TEXT NOT NULL,
+                    target_type TEXT NOT NULL,
+                    target_id TEXT,
+                    payload TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
                 CREATE INDEX IF NOT EXISTS idx_workspaces_owner_user_id ON workspaces(owner_user_id);
                 CREATE INDEX IF NOT EXISTS idx_watchlist_workspace ON watchlist_items(workspace_id);
                 CREATE INDEX IF NOT EXISTS idx_sync_events_workspace_sequence
                     ON sync_events(workspace_id, sequence);
+                CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+                CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_user_id ON audit_logs(actor_user_id);
                 """
             )
             self._ensure_column("watchlist_items", "added_at", "TEXT NOT NULL DEFAULT ''")
@@ -755,6 +930,53 @@ class SQLiteStore:
                 user.model_dump_json(),
             ),
         )
+
+    def _user_summary(self, user: UserAccount) -> UserSummary:
+        return UserSummary(
+            id=user.id,
+            account_key=user.account_key,
+            display_name=user.display_name,
+            role=user.role,
+            mfa_enabled=user.mfa_enabled,
+            created_at=user.created_at,
+        )
+
+    def _append_audit_log(
+        self,
+        actor_session: DeviceSession | None,
+        action: str,
+        target_type: str,
+        summary_zh: str,
+        target_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AuditLogEntry:
+        entry = AuditLogEntry(
+            actor_user_id=actor_session.user_id if actor_session else None,
+            actor_device_id=actor_session.device_id if actor_session else None,
+            actor_role=actor_session.role if actor_session else None,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            summary_zh=summary_zh,
+            metadata=metadata or {},
+        )
+        self._connection.execute(
+            """
+            INSERT INTO audit_logs
+                (id, created_at, actor_user_id, action, target_type, target_id, payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry.id,
+                entry.created_at.isoformat(),
+                entry.actor_user_id,
+                entry.action,
+                entry.target_type,
+                entry.target_id,
+                entry.model_dump_json(),
+            ),
+        )
+        return entry
 
     def _create_device_session(
         self,
@@ -932,9 +1154,22 @@ class SQLiteStore:
             return None
         return UserAccount.model_validate_json(row["payload"])
 
+    def _user_by_id(self, user_id: str) -> UserAccount:
+        row = self._connection.execute(
+            "SELECT payload FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(user_id)
+        return UserAccount.model_validate_json(row["payload"])
+
     def _user_count(self) -> int:
         row = self._connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()
         return int(row["count"])
+
+    def _admin_count(self) -> int:
+        rows = self._connection.execute("SELECT payload FROM users").fetchall()
+        return sum(1 for row in rows if UserAccount.model_validate_json(row["payload"]).role == UserRole.ADMIN)
 
     def _workspace_by_user_id(self, user_id: str) -> Workspace:
         row = self._connection.execute(
