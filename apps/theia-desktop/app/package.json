@@ -36,11 +36,11 @@
     "dist:mac": "yarn bundle && electron-builder --mac dmg zip",
     "dist:mac:arm64": "yarn bundle && electron-builder --mac dmg zip --arm64",
     "dist:mac:x64": "yarn bundle && electron-builder --mac dmg zip --x64",
-    "dist:windows": "yarn bundle && electron-builder --win nsis portable",
+    "dist:windows": "yarn bundle && electron-builder --win nsis portable --config.electronDist=../node_modules/electron/dist",
     "rebuild": "theia rebuild:electron --cacheRoot ../.theia-cache",
     "start": "theia start --plugins=local-dir:plugins",
     "watch": "yarn rebuild && theia build --watch --mode development",
-    "package:electron": "yarn bundle && electron-builder --dir"
+    "package:electron": "yarn bundle && electron-builder --dir --config.electronDist=../node_modules/electron/dist"
   },
   "theia": {
     "target": "electron"

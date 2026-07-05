@@ -414,7 +414,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             build_channel_zh="本机 electron-builder",
             ready_zh="可直接在 Windows 上安装；当前未签名，首次运行可能出现系统提示。",
             missing_zh="尚未生成 Windows setup 安装包。",
-            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win nsis。",
+            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn dist:windows。",
             source_updated_at=desktop_source_updated_at,
         ),
         _install_package(
@@ -425,7 +425,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             build_channel_zh="本机 electron-builder",
             ready_zh="可直接拷贝运行；适合当前阶段给测试用户体验。",
             missing_zh="尚未生成 Windows portable 便携版。",
-            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win portable。",
+            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn dist:windows。",
             source_updated_at=desktop_source_updated_at,
         ),
         _install_package(
@@ -436,7 +436,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             build_channel_zh="electron-builder --dir",
             ready_zh="可直接双击运行；适合安装器构建失败时在本机或交付包里兜底试用。",
             missing_zh="尚未生成 Windows 已解包桌面程序。",
-            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app package:electron。",
+            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn package:electron。",
             source_updated_at=desktop_source_updated_at,
         ),
         _install_package(

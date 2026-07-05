@@ -57,7 +57,7 @@ Windows 图标资源位于 `app/resources/`，如需重新生成图标：
 yarn package:electron
 ```
 
-该命令会先执行 Theia build，再通过 `electron-builder --dir` 生成未签名目录包。Windows 本地验证产物位于 `app/dist/win-unpacked/Dubhe.exe`。
+该命令会先执行 Theia build，再通过 `electron-builder --dir` 生成未签名目录包，并默认复用 `node_modules/electron/dist` 里的本地 Electron，减少 GitHub 下载超时风险。Windows 本地验证产物位于 `app/dist/win-unpacked/Dubhe.exe`。
 
 Windows 安装器目标：
 
@@ -65,7 +65,7 @@ Windows 安装器目标：
 yarn dist:windows
 ```
 
-该命令当前会生成：
+该命令会复用 `node_modules/electron/dist` 里的本地 Electron，并生成：
 
 - `app/dist/Dubhe-0.1.0-win-x64-setup.exe`
 - `app/dist/Dubhe-0.1.0-win-x64-portable.exe`

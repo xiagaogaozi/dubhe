@@ -280,13 +280,13 @@ if ($packagedDesktopReady) {
 if ($windowsSetup) {
     Add-Check (New-Check "安装包" "Windows setup" "ok" $windowsSetup)
 } else {
-    Add-Check (New-Check "安装包" "Windows setup" "warn" "尚未生成 Windows setup；可在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win nsis。")
+    Add-Check (New-Check "安装包" "Windows setup" "warn" "尚未生成 Windows setup；可在 apps/theia-desktop 执行 yarn dist:windows。")
 }
 
 if ($windowsPortable) {
     Add-Check (New-Check "安装包" "Windows portable" "ok" $windowsPortable)
 } else {
-    Add-Check (New-Check "安装包" "Windows portable" "warn" "尚未生成 Windows portable；可在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win portable。")
+    Add-Check (New-Check "安装包" "Windows portable" "warn" "尚未生成 Windows portable；可在 apps/theia-desktop 执行 yarn dist:windows。")
 }
 
 if (Test-Path (Join-Path $theiaRoot "node_modules")) {
