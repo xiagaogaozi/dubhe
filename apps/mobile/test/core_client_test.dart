@@ -312,6 +312,39 @@ void main() {
     httpsClient.close();
   });
 
+  test('news feed can request global market without a symbol', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'device-token',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/news/feed');
+        expect(request.url.queryParameters['market'], 'GLOBAL');
+        expect(request.url.queryParameters['live'], 'true');
+        expect(request.url.queryParameters.containsKey('symbol'), isFalse);
+        return http.Response(
+          '''
+          {
+            "events": [],
+            "provider_status": [],
+            "generated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final feed = await client.fetchNewsFeed(
+      market: 'GLOBAL',
+      symbol: ' ',
+      live: true,
+    );
+
+    expect(feed.events, isEmpty);
+  });
+
   test(
     'sync event parser accepts websocket messages and ignores malformed data',
     () {

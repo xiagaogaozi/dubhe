@@ -72,18 +72,22 @@ class CoreClient {
 
   Future<NewsFeed> fetchNewsFeed({
     String market = 'US',
-    String symbol = 'NVDA',
+    String? symbol = 'NVDA',
     int limit = 8,
     bool live = false,
   }) async {
+    final normalizedSymbol = symbol?.trim().toUpperCase();
+    final queryParameters = {
+      'market': market,
+      'limit': '$limit',
+      'live': '$live',
+    };
+    if (normalizedSymbol != null && normalizedSymbol.isNotEmpty) {
+      queryParameters['symbol'] = normalizedSymbol;
+    }
     final json = await _getJson(
       '/v1/news/feed',
-      queryParameters: {
-        'market': market,
-        'symbol': symbol,
-        'limit': '$limit',
-        'live': '$live',
-      },
+      queryParameters: queryParameters,
     );
     return NewsFeed.fromJson(_map(json));
   }

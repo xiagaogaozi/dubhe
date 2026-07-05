@@ -417,6 +417,8 @@ class _CompanionHomeState extends State<CompanionHome> {
   List<ApprovalRequest> _approvals = const [];
   bool _configBusy = false;
   bool _assistantBusy = false;
+  String _newsMarket = 'US';
+  final _newsSymbolController = TextEditingController(text: 'NVDA');
   String _assistantQuestion = '这条新闻会影响哪些股票？';
   List<_AssistantChatMessage> _assistantMessages = _assistantWelcomeMessages;
 
@@ -429,6 +431,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   @override
   void dispose() {
     _syncConnectGeneration += 1;
+    _newsSymbolController.dispose();
     _closeWorkspaceSync();
     widget.client.close();
     super.dispose();
@@ -622,7 +625,11 @@ class _CompanionHomeState extends State<CompanionHome> {
     try {
       final coreResponses = await Future.wait<dynamic>([
         widget.client.fetchSystemStatus(),
-        widget.client.fetchNewsFeed(live: false),
+        widget.client.fetchNewsFeed(
+          market: _newsMarket,
+          symbol: _selectedNewsSymbolOrNull(),
+          live: false,
+        ),
         widget.client.fetchPaperPortfolio(defaultPaperAccountId),
         widget.client.fetchOnboardingChecklist(),
         widget.client.fetchSmokeWorkflowReport(),
@@ -744,6 +751,53 @@ class _CompanionHomeState extends State<CompanionHome> {
         });
       }
     }
+  }
+
+  Future<void> _refreshNewsTarget() async {
+    setState(() {
+      _analysis = null;
+      _strategyDraft = null;
+      _backtestResult = null;
+      _paperOrder = null;
+      _message = '正在刷新 $_newsTargetLabel 新闻。';
+    });
+    await _refresh();
+  }
+
+  void _setNewsMarket(String market) {
+    if (_newsMarket == market) return;
+    setState(() {
+      _newsMarket = market;
+      _analysis = null;
+      _strategyDraft = null;
+      _backtestResult = null;
+      _paperOrder = null;
+    });
+  }
+
+  void _setNewsSymbol(String symbol) {
+    setState(() {
+      if (_newsSymbolController.text != symbol) {
+        _newsSymbolController.text = symbol;
+      }
+      _analysis = null;
+      _strategyDraft = null;
+      _backtestResult = null;
+      _paperOrder = null;
+    });
+  }
+
+  void _useNewsTarget(_NewsTarget target) {
+    setState(() {
+      _newsMarket = target.market;
+      _newsSymbolController.text = target.symbol;
+      _analysis = null;
+      _strategyDraft = null;
+      _backtestResult = null;
+      _paperOrder = null;
+      _message = '已选择 ${target.label}。';
+    });
+    unawaited(_refreshNewsTarget());
   }
 
   Future<void> _draftStrategy() async {
@@ -1321,7 +1375,16 @@ class _CompanionHomeState extends State<CompanionHome> {
         onUseStrategyDraft: _useSyncedStrategyDraft,
         onRunOnboardingAction: _runOnboardingAction,
       ),
-      _NewsPage(newsFeed: _newsFeed),
+      _NewsPage(
+        newsFeed: _newsFeed,
+        market: _newsMarket,
+        symbolController: _newsSymbolController,
+        loading: _loading,
+        onMarketChanged: _setNewsMarket,
+        onSymbolChanged: _setNewsSymbol,
+        onUseTarget: _useNewsTarget,
+        onRefresh: _refreshNewsTarget,
+      ),
       _AiPage(
         newsFeed: _newsFeed,
         analysis: _analysis,
@@ -1392,6 +1455,18 @@ class _CompanionHomeState extends State<CompanionHome> {
         ],
       ),
     );
+  }
+
+  String? _selectedNewsSymbolOrNull() {
+    final normalized = _newsSymbolController.text.trim().toUpperCase();
+    if (normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  String get _newsTargetLabel {
+    final symbol = _selectedNewsSymbolOrNull();
+    final market = _marketLabel(_newsMarket);
+    return symbol == null ? market : '$market / $symbol';
   }
 }
 
@@ -1682,43 +1757,179 @@ class _OnboardingChecklistCard extends StatelessWidget {
 }
 
 class _NewsPage extends StatelessWidget {
-  const _NewsPage({required this.newsFeed});
+  const _NewsPage({
+    required this.newsFeed,
+    required this.market,
+    required this.symbolController,
+    required this.loading,
+    required this.onMarketChanged,
+    required this.onSymbolChanged,
+    required this.onUseTarget,
+    required this.onRefresh,
+  });
 
   final NewsFeed? newsFeed;
+  final String market;
+  final TextEditingController symbolController;
+  final bool loading;
+  final ValueChanged<String> onMarketChanged;
+  final ValueChanged<String> onSymbolChanged;
+  final ValueChanged<_NewsTarget> onUseTarget;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final events = newsFeed?.events ?? const <NewsEvent>[];
-    return ListView.separated(
+    final selectedSymbol = symbolController.text.trim().toUpperCase();
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemBuilder: (context, index) {
-        final event = events[index];
-        return _SectionCard(
-          title: event.sourceName,
-          trailing: event.tickers.join(' / '),
+      children: [
+        _SectionCard(
+          title: '新闻筛选',
+          trailing: selectedSymbol.isEmpty
+              ? _marketLabel(market)
+              : '${_marketLabel(market)} / $selectedSymbol',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(event.title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 10),
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'US', label: Text('美股')),
+                  ButtonSegment(value: 'HK', label: Text('港股')),
+                  ButtonSegment(value: 'A_SHARE', label: Text('A股')),
+                  ButtonSegment(value: 'GLOBAL', label: Text('全球')),
+                ],
+                selected: {market},
+                onSelectionChanged: loading
+                    ? null
+                    : (values) => onMarketChanged(values.first),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: symbolController,
+                enabled: !loading,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: '标的代码',
+                  hintText: 'NVDA / 0700.HK / 600519.SH',
+                ),
+                onChanged: onSymbolChanged,
+              ),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: [
-                  Chip(label: Text(event.eventType)),
-                  Chip(
-                    label: Text('权威度 ${(event.authorityScore * 100).round()}'),
-                  ),
-                ],
+                children: _newsTargets
+                    .map(
+                      (target) => ActionChip(
+                        avatar: Icon(target.icon, size: 18),
+                        label: Text(target.label),
+                        onPressed: loading ? null : () => onUseTarget(target),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: loading ? null : onRefresh,
+                icon: loading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+                label: Text(loading ? '刷新中...' : '刷新新闻'),
               ),
             ],
           ),
-        );
-      },
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
-      itemCount: events.length,
+        ),
+        if (events.isEmpty) const _InfoCard(text: '暂无新闻。请检查 Core 连接或切换标的后刷新。'),
+        ...events.map(
+          (event) => _SectionCard(
+            title: event.sourceName,
+            trailing: event.tickers.join(' / '),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Chip(label: Text(event.eventType)),
+                    Chip(
+                      label: Text(
+                        '权威度 ${(event.authorityScore * 100).round()}',
+                      ),
+                    ),
+                    if (event.marketScope.isNotEmpty)
+                      Chip(
+                        label: Text(
+                          event.marketScope.map(_marketLabel).join(' / '),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
+}
+
+class _NewsTarget {
+  const _NewsTarget({
+    required this.label,
+    required this.market,
+    required this.symbol,
+    required this.icon,
+  });
+
+  final String label;
+  final String market;
+  final String symbol;
+  final IconData icon;
+}
+
+const _newsTargets = [
+  _NewsTarget(
+    label: '英伟达 NVDA',
+    market: 'US',
+    symbol: 'NVDA',
+    icon: Icons.memory,
+  ),
+  _NewsTarget(
+    label: '腾讯 0700.HK',
+    market: 'HK',
+    symbol: '0700.HK',
+    icon: Icons.chat_bubble_outline,
+  ),
+  _NewsTarget(
+    label: '茅台 600519.SH',
+    market: 'A_SHARE',
+    symbol: '600519.SH',
+    icon: Icons.storefront_outlined,
+  ),
+  _NewsTarget(label: '全球宏观', market: 'GLOBAL', symbol: '', icon: Icons.public),
+];
+
+String _marketLabel(String market) {
+  return switch (market) {
+    'US' => '美股',
+    'HK' => '港股',
+    'A_SHARE' => 'A股',
+    'GLOBAL' => '全球',
+    _ => market,
+  };
 }
 
 class _AiPage extends StatelessWidget {

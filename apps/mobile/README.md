@@ -8,7 +8,7 @@ Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中
 - 登录页可一键填入 Android 模拟器、本机/iOS 模拟器和最近成功的 Core 地址，也可以从剪贴板填入局域网地址并先检查连接；成功后会保存地址，方便真机、模拟器和局域网环境复用。
 - 查看 `/v1/workspaces/{workspace_id}/snapshot` 工作区快照、服务器同步序号、最近同步事件和已同步策略草案，并可一键使用同步策略进入回测/纸面验证。
 - 订阅 `/v1/workspaces/{workspace_id}/sync-events/ws` WebSocket 实时同步推送；WebSocket 不可用时会降级轮询 `/v1/workspaces/{workspace_id}/sync-events`，收到纸面组合、审批、风控或急停事件后自动刷新对应面板。
-- 拉取 `/v1/news/feed` 新闻源。
+- 拉取 `/v1/news/feed` 新闻源；“雷达”页可切换美股、港股、A 股和全球宏观，并提供 NVDA、0700.HK、600519.SH 等常用标的快捷刷新。
 - 调用 `/v1/news/analyze` 生成中文影响分析。
 - 调用 `/v1/strategy/drafts/from-analysis` 生成策略草案。
 - 调用 `/v1/backtests/replay` 运行 deterministic replay 回测。
