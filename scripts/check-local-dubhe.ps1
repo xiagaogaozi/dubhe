@@ -175,6 +175,7 @@ $installGuideCmd = Join-Path $repoRoot "Open-Dubhe-Install-Guide.cmd"
 $mobileGuideCmd = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
 $checkCmd = Join-Path $repoRoot "Check-Dubhe.cmd"
 $smokeCmd = Join-Path $repoRoot "Smoke-Dubhe.cmd"
+$serviceCheckCmd = Join-Path $repoRoot "Test-Dubhe-Services.cmd"
 $stopCmd = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
 $configureCmd = Join-Path $repoRoot "Configure-Dubhe.cmd"
 $localConfigPath = Join-Path $repoRoot "config\dubhe.local.env"
@@ -206,6 +207,7 @@ Add-Check (New-Check "Windows 入口" "双击四端安装向导" ($(if (Test-Pat
 Add-Check (New-Check "Windows 入口" "双击手机连接向导" ($(if (Test-Path $mobileGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $mobileGuideCmd) { $mobileGuideCmd } else { "缺少 Open-Dubhe-Mobile-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击体检" ($(if (Test-Path $checkCmd) { "ok" } else { "warn" })) ($(if (Test-Path $checkCmd) { $checkCmd } else { "缺少 Check-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击烟测" ($(if (Test-Path $smokeCmd) { "ok" } else { "warn" })) ($(if (Test-Path $smokeCmd) { $smokeCmd } else { "缺少 Smoke-Dubhe.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击外部服务体检" ($(if (Test-Path $serviceCheckCmd) { "ok" } else { "warn" })) ($(if (Test-Path $serviceCheckCmd) { $serviceCheckCmd } else { "缺少 Test-Dubhe-Services.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击停止 Core" ($(if (Test-Path $stopCmd) { "ok" } else { "warn" })) ($(if (Test-Path $stopCmd) { $stopCmd } else { "缺少 Stop-Dubhe-Core.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击配置" ($(if (Test-Path $configureCmd) { "ok" } else { "warn" })) ($(if (Test-Path $configureCmd) { $configureCmd } else { "缺少 Configure-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "快捷方式安装器" ($(if (Test-Path $shortcutInstaller) { "ok" } else { "warn" })) ($(if (Test-Path $shortcutInstaller) { $shortcutInstaller } else { "缺少 scripts/install-windows-shortcuts.ps1。" })))

@@ -123,6 +123,8 @@ GET /v1/system/status
 
 该接口只返回 `configured: true/false`、中文说明、适配器启用状态、市场新闻覆盖矩阵和本机/CI 安装包状态，不会返回任何 API key 或 User-Agent 原始值。桌面端可用它展示“数据源配置 / 系统状态 / 安装包状态”面板。
 
+`GET /v1/system/external-checks?live=false` 只做配置层体检；`live=true` 会对已配置的 AI 模型、Finnhub、Alpha Vantage、SEC EDGAR 和 GDELT 发起最小连接检查，并返回每项的 `ok/skipped/unavailable`、中文原因和下一步建议。该接口不会回传任何密钥；live 模式可能消耗极少量模型调用或新闻供应商请求额度。
+
 主链路烟测报告接口：
 
 ```http

@@ -17,6 +17,7 @@
 - 手机专项向导入口：`{{MOBILE_GUIDE_CMD}}`
 - 本机体检入口：`{{CHECK_CMD}}`
 - 主链路烟测入口：`{{SMOKE_CMD}}`
+- 外部服务体检入口：`{{SERVICE_CHECK_CMD}}`
 - 本机配置入口：`{{CONFIGURE_CMD}}`
 
 ## 怎么选安装方式
@@ -66,9 +67,10 @@ http://10.0.2.2:8000
 1. 双击 `Configure-Dubhe.cmd`，填写 AI 模型和授权新闻源 key。
 2. 双击 `Start-Dubhe.cmd`，启动 Core 和桌面端。
 3. 双击 `Check-Dubhe.cmd`，确认安装包、配置和 Core 状态。
-4. 桌面端登录本地账号，查看 “首次使用清单”。
-5. 如需手机/平板，双击 `Start-Dubhe-LAN.cmd`，再打开 `Open-Dubhe-Mobile-Guide.cmd`。
-6. 双击 `Smoke-Dubhe.cmd` 跑主链路烟测，确认新闻、AI、策略、回测、纸面交易和同步闭环可用。
+4. 填完真实 AI/新闻源 key 后，双击 `Test-Dubhe-Services.cmd` 做 live 外部服务体检。
+5. 桌面端登录本地账号，查看 “首次使用清单”。
+6. 如需手机/平板，双击 `Start-Dubhe-LAN.cmd`，再打开 `Open-Dubhe-Mobile-Guide.cmd`。
+7. 双击 `Smoke-Dubhe.cmd` 跑主链路烟测，确认新闻、AI、策略、回测、纸面交易和同步闭环可用。
 
 ## 跨端数据互通
 
@@ -82,4 +84,3 @@ http://10.0.2.2:8000
 - A 股、港股、美股权威新闻 API 需要签订授权合同并填写对应 key。
 - 未签名安装包适合内部测试，不适合直接面向普通用户分发。
 - 真实资金接入前必须完成券商适配、权限审批、风控限额、审计留痕和紧急停止流程。
-

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .analysis import analyze_news
 from .assistant import answer_research_question
 from .backtest import draft_strategy_from_analysis, run_replay_backtest
+from .external_checks import external_service_checks
 from .models import (
     AccountLoginRequest,
     AccountRegistrationRequest,
@@ -25,6 +26,7 @@ from .models import (
     BacktestResult,
     BrokerOrder,
     DeviceRevocation,
+    ExternalServiceCheckResponse,
     InstallPackageStatus,
     KillSwitchState,
     KillSwitchUpdateRequest,
@@ -473,6 +475,13 @@ def _newest_file(directory: Path, pattern: str) -> Path | None:
 @app.get("/v1/system/smoke-report", response_model=SmokeWorkflowReportResponse)
 def system_smoke_report() -> SmokeWorkflowReportResponse:
     return read_smoke_workflow_report()
+
+
+@app.get("/v1/system/external-checks", response_model=ExternalServiceCheckResponse)
+def system_external_checks(
+    live: bool = Query(default=False),
+) -> ExternalServiceCheckResponse:
+    return external_service_checks(live=live)
 
 
 @app.get("/v1/capabilities")

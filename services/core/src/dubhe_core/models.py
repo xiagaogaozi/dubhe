@@ -221,6 +221,30 @@ class InstallPackageStatus(BaseModel):
     next_step_zh: str
 
 
+class ExternalServiceCheck(BaseModel):
+    service: str
+    label_zh: str
+    configured: bool
+    live_checked: bool
+    status: ProviderStatus
+    duration_ms: int = Field(default=0, ge=0)
+    message_zh: str
+    next_step_zh: str
+    checked_at: datetime = Field(default_factory=utc_now)
+
+
+class ExternalServiceCheckResponse(BaseModel):
+    service: str = "dubhe-core"
+    language: str = "zh-CN"
+    live: bool
+    overall_status: Literal["ready", "partial", "action_required"]
+    ready_count: int = Field(ge=0)
+    total_count: int = Field(ge=0)
+    checks: list[ExternalServiceCheck] = Field(default_factory=list)
+    message_zh: str
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
 class SystemStatusResponse(BaseModel):
     service: str = "dubhe-core"
     version: str = "0.1.0"

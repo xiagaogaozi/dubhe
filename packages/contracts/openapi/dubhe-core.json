@@ -64,6 +64,46 @@
         }
       }
     },
+    "/v1/system/external-checks": {
+      "get": {
+        "summary": "System External Checks",
+        "operationId": "system_external_checks_v1_system_external_checks_get",
+        "parameters": [
+          {
+            "name": "live",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Live"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalServiceCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/capabilities": {
       "get": {
         "summary": "Capabilities",
@@ -2841,6 +2881,121 @@
           "device_name"
         ],
         "title": "DeviceSession"
+      },
+      "ExternalServiceCheck": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "live_checked": {
+            "type": "boolean",
+            "title": "Live Checked"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProviderStatus"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "default": 0
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service",
+          "label_zh",
+          "configured",
+          "live_checked",
+          "status",
+          "message_zh",
+          "next_step_zh"
+        ],
+        "title": "ExternalServiceCheck"
+      },
+      "ExternalServiceCheckResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "default": "dubhe-core"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "zh-CN"
+          },
+          "live": {
+            "type": "boolean",
+            "title": "Live"
+          },
+          "overall_status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "partial",
+              "action_required"
+            ],
+            "title": "Overall Status"
+          },
+          "ready_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Ready Count"
+          },
+          "total_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Count"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalServiceCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "live",
+          "overall_status",
+          "ready_count",
+          "total_count",
+          "message_zh"
+        ],
+        "title": "ExternalServiceCheckResponse"
       },
       "HTTPValidationError": {
         "properties": {

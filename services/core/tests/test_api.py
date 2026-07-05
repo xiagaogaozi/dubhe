@@ -21,6 +21,8 @@ from dubhe_core.news_sources import (
     fetch_finnhub_company_news,
     fetch_news_feed,
 )
+from dubhe_core.external_checks import external_service_checks
+from dubhe_core.models import ProviderStatus
 from dubhe_core import smoke_report
 from dubhe_core.store import SQLiteStore
 
@@ -173,6 +175,120 @@ def test_system_status_reports_configured_keys_without_leaking_values(
     assert "alpha-super-secret-token" not in payload
     assert "status-secret@example.com" not in payload
     assert "llm-super-secret-token" not in payload
+
+
+def test_external_service_checks_skip_missing_configuration(monkeypatch) -> None:
+    for key in [
+        "FINNHUB_API_KEY",
+        "ALPHA_VANTAGE_API_KEY",
+        "DUBHE_SEC_USER_AGENT",
+        "DUBHE_LLM_MODEL",
+        "DUBHE_LLM_BASE_URL",
+        "DUBHE_LLM_API_KEY",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+
+    response = client.get("/v1/system/external-checks")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["live"] is False
+    assert body["overall_status"] == "partial"
+    checks = {item["service"]: item for item in body["checks"]}
+    assert checks["llm_openai_compatible"]["status"] == "skipped"
+    assert checks["finnhub_company_news"]["configured"] is False
+    assert checks["alpha_vantage_news_sentiment"]["configured"] is False
+    assert checks["gdelt_doc"]["configured"] is True
+
+
+def test_external_service_checks_report_configured_without_live_calls(monkeypatch) -> None:
+    monkeypatch.setenv("DUBHE_LLM_MODEL", "gpt-test")
+    monkeypatch.setenv("DUBHE_LLM_BASE_URL", "http://127.0.0.1:11434/v1")
+    monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-secret")
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-secret")
+    monkeypatch.setenv("DUBHE_SEC_USER_AGENT", "Dubhe Test tests@example.com")
+
+    response = client.get("/v1/system/external-checks?live=false")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["live"] is False
+    checks = {item["service"]: item for item in body["checks"]}
+    assert checks["llm_openai_compatible"]["configured"] is True
+    assert checks["llm_openai_compatible"]["live_checked"] is False
+    assert checks["finnhub_company_news"]["configured"] is True
+    assert checks["alpha_vantage_news_sentiment"]["configured"] is True
+    assert checks["sec_edgar"]["configured"] is True
+    assert "finnhub-secret" not in response.text
+    assert "alpha-secret" not in response.text
+
+
+def test_external_service_checks_live_uses_injected_fetchers(monkeypatch) -> None:
+    monkeypatch.setenv("DUBHE_LLM_MODEL", "gpt-test")
+    monkeypatch.setenv("DUBHE_LLM_BASE_URL", "http://127.0.0.1:11434/v1")
+    monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-secret")
+    monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-secret")
+    monkeypatch.setenv("DUBHE_SEC_USER_AGENT", "Dubhe Test tests@example.com")
+
+    def fake_fetcher(url: str, _headers: dict[str, str], _timeout: float) -> Any:
+        if "finnhub.io" in url:
+            return [
+                {
+                    "headline": "NVIDIA announces test news",
+                    "url": "https://example.com/finnhub",
+                    "source": "Finnhub",
+                    "datetime": 1783209600,
+                    "category": "company",
+                }
+            ]
+        if "alphavantage.co" in url:
+            return {
+                "feed": [
+                    {
+                        "title": "NVIDIA sentiment test",
+                        "url": "https://example.com/alpha",
+                        "source": "Alpha Vantage",
+                        "time_published": "20260705T120000",
+                        "ticker_sentiment": [{"ticker": "NVDA"}],
+                    }
+                ]
+            }
+        if "data.sec.gov" in url:
+            return {
+                "filings": {
+                    "recent": {
+                        "accessionNumber": ["0001045810-26-000001"],
+                        "form": ["10-K"],
+                        "filingDate": ["2026-07-05"],
+                        "primaryDocument": ["nvda-20260705.htm"],
+                    }
+                }
+            }
+        if "gdeltproject.org" in url:
+            return {
+                "articles": [
+                    {
+                        "title": "Global markets test",
+                        "url": "https://example.com/gdelt",
+                        "domain": "example.com",
+                        "language": "English",
+                        "seendate": "20260705120000",
+                    }
+                ]
+            }
+        raise AssertionError(f"unexpected URL: {url}")
+
+    response = external_service_checks(
+        live=True,
+        fetcher=fake_fetcher,
+        llm_checker=lambda: (ProviderStatus.OK, "AI 模型 live 检查通过。"),
+    )
+
+    assert response.live is True
+    assert response.overall_status == "ready"
+    assert response.ready_count == response.total_count
+    assert {item.status for item in response.checks} == {ProviderStatus.OK}
+    assert all(item.live_checked for item in response.checks)
 
 
 def test_local_runtime_config_editor_writes_file_without_leaking_secrets(

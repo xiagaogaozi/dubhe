@@ -133,6 +133,7 @@ $tokens = @{
     "{{MOBILE_GUIDE_CMD}}" = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
     "{{CHECK_CMD}}" = Join-Path $repoRoot "Check-Dubhe.cmd"
     "{{SMOKE_CMD}}" = Join-Path $repoRoot "Smoke-Dubhe.cmd"
+    "{{SERVICE_CHECK_CMD}}" = Join-Path $repoRoot "Test-Dubhe-Services.cmd"
     "{{CONFIGURE_CMD}}" = Join-Path $repoRoot "Configure-Dubhe.cmd"
     "{{CI_THEIA_TEMPLATE}}" = Join-Path $repoRoot "docs\ci\theia-desktop.yml"
     "{{CI_MOBILE_TEMPLATE}}" = Join-Path $repoRoot "docs\ci\mobile.yml"
