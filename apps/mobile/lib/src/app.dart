@@ -216,6 +216,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
   KillSwitchState? _killSwitch;
+  List<AuditLogEntry> _auditLogs = const [];
   List<ApprovalRequest> _approvals = const [];
 
   @override
@@ -247,15 +248,18 @@ class _CompanionHomeState extends State<CompanionHome> {
       final portfolio = coreResponses[2] as PaperPortfolio;
       var approvals = <ApprovalRequest>[];
       KillSwitchState? killSwitch;
+      var auditLogs = <AuditLogEntry>[];
       String? approvalMessage;
       if (widget.session.canReviewApprovals) {
         try {
           final riskResponses = await Future.wait<dynamic>([
             widget.client.fetchApprovals(),
             widget.client.fetchKillSwitch(),
+            widget.client.fetchAuditLogs(),
           ]);
           approvals = riskResponses[0] as List<ApprovalRequest>;
           killSwitch = riskResponses[1] as KillSwitchState;
+          auditLogs = riskResponses[2] as List<AuditLogEntry>;
           approvalMessage = approvals.isEmpty
               ? '当前没有待处理审批。'
               : '当前有 ${approvals.length} 个待处理审批。';
@@ -275,6 +279,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         _portfolio = portfolio;
         _approvals = approvals;
         _killSwitch = killSwitch;
+        _auditLogs = auditLogs;
         _approvalMessage = approvalMessage;
       });
     } catch (error) {
@@ -583,6 +588,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       setState(() {
         _approvals = const [];
         _killSwitch = null;
+        _auditLogs = const [];
         _approvalMessage = '当前账号没有审批权限。管理员或风控管理员登录后可管理审批和 kill switch。';
       });
       return;
@@ -598,12 +604,14 @@ class _CompanionHomeState extends State<CompanionHome> {
       final riskResponses = await Future.wait<dynamic>([
         widget.client.fetchApprovals(),
         widget.client.fetchKillSwitch(),
+        widget.client.fetchAuditLogs(),
       ]);
       if (!mounted) return;
       final approvals = riskResponses[0] as List<ApprovalRequest>;
       setState(() {
         _approvals = approvals;
         _killSwitch = riskResponses[1] as KillSwitchState;
+        _auditLogs = riskResponses[2] as List<AuditLogEntry>;
         _approvalMessage = approvals.isEmpty
             ? '当前没有待处理审批。'
             : '当前有 ${approvals.length} 个待处理审批。';
@@ -613,6 +621,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       setState(() {
         _approvals = const [];
         _killSwitch = null;
+        _auditLogs = const [];
         _approvalMessage = error is DubheApiException
             ? error.message
             : '风控中心同步失败。';
@@ -655,6 +664,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       _ApprovalPage(
         approvals: _approvals,
         killSwitch: _killSwitch,
+        auditLogs: _auditLogs,
         message: _approvalMessage,
         canManageRisk: widget.session.canReviewApprovals,
         riskBusy: _riskBusy,
@@ -1025,6 +1035,7 @@ class _ApprovalPage extends StatelessWidget {
   const _ApprovalPage({
     required this.approvals,
     required this.killSwitch,
+    required this.auditLogs,
     required this.message,
     required this.canManageRisk,
     required this.riskBusy,
@@ -1035,6 +1046,7 @@ class _ApprovalPage extends StatelessWidget {
 
   final List<ApprovalRequest> approvals;
   final KillSwitchState? killSwitch;
+  final List<AuditLogEntry> auditLogs;
   final String? message;
   final bool canManageRisk;
   final bool riskBusy;
@@ -1162,6 +1174,25 @@ class _ApprovalPage extends StatelessWidget {
                         .toList(),
                   ),
           ),
+          _SectionCard(
+            title: '最近审计',
+            trailing: '${auditLogs.length} 条',
+            child: auditLogs.isEmpty
+                ? const Text('暂无审计记录。')
+                : Column(
+                    children: auditLogs
+                        .take(5)
+                        .map(
+                          (entry) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(_auditActionZh(entry.action)),
+                            subtitle: Text(entry.summaryZh),
+                            trailing: Text(_shortTimestamp(entry.createdAt)),
+                          ),
+                        )
+                        .toList(),
+                  ),
+          ),
         ] else if (message == null)
           const _InfoCard(text: '当前账号没有审批权限。'),
       ],
@@ -1179,6 +1210,30 @@ String _riskStatusZh(String status) {
   if (status == 'approved') return '已通过';
   if (status == 'rejected') return '已拒绝';
   return '需要审批';
+}
+
+String _auditActionZh(String action) {
+  const labels = {
+    'admin.user_role_updated': '角色更新',
+    'approval.approved': '审批通过',
+    'approval.rejected': '审批拒绝',
+    'auth.account_claimed': '账号认领',
+    'auth.account_registered': '账号注册',
+    'auth.device_registered': '设备注册',
+    'auth.device_revoked': '设备撤销',
+    'auth.login_succeeded': '登录成功',
+    'risk.kill_switch_updated': '急停更新',
+    'risk.order_evaluated': '订单风控评估',
+    'simulation.paper_order_submitted': '纸面订单',
+  };
+  return labels[action] ?? action;
+}
+
+String _shortTimestamp(String value) {
+  if (value.length >= 16) {
+    return value.substring(11, 16);
+  }
+  return value;
 }
 
 class _BrandHeader extends StatelessWidget {

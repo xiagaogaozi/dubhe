@@ -219,6 +219,14 @@ class CoreClient {
     return KillSwitchState.fromJson(_map(json));
   }
 
+  Future<List<AuditLogEntry>> fetchAuditLogs({int limit = 8}) async {
+    final json = await _getJson(
+      '/v1/audit/logs',
+      queryParameters: {'limit': '$limit'},
+    );
+    return _mapList(json).map(AuditLogEntry.fromJson).toList();
+  }
+
   void close() => _client.close();
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
@@ -866,6 +874,38 @@ class KillSwitchState {
       reasonZh: _string(json['reason_zh']),
       updatedBy: _string(json['updated_by']),
       updatedAt: _string(json['updated_at']),
+    );
+  }
+}
+
+class AuditLogEntry {
+  AuditLogEntry({
+    required this.id,
+    required this.actorRole,
+    required this.action,
+    required this.targetType,
+    required this.targetId,
+    required this.summaryZh,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String actorRole;
+  final String action;
+  final String targetType;
+  final String targetId;
+  final String summaryZh;
+  final String createdAt;
+
+  factory AuditLogEntry.fromJson(Map<String, dynamic> json) {
+    return AuditLogEntry(
+      id: _string(json['id']),
+      actorRole: _string(json['actor_role']),
+      action: _string(json['action']),
+      targetType: _string(json['target_type']),
+      targetId: _string(json['target_id']),
+      summaryZh: _string(json['summary_zh']),
+      createdAt: _string(json['created_at']),
     );
   }
 }

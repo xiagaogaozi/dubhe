@@ -425,4 +425,43 @@ void main() {
     expect(enabled.reasonZh, '移动端手动启用 kill switch。');
     expect(callCount, 2);
   });
+
+  test('audit logs endpoint parses recent risk audit records', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'dubhe_dev_token',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/audit/logs');
+        expect(request.url.queryParameters['limit'], '8');
+        expect(request.headers['authorization'], 'Bearer dubhe_dev_token');
+        return http.Response(
+          '''
+          [
+            {
+              "id": "audit_1",
+              "actor_user_id": "user_1",
+              "actor_device_id": "device_1",
+              "actor_role": "risk_manager",
+              "action": "risk.kill_switch_updated",
+              "target_type": "kill_switch",
+              "target_id": "global",
+              "summary_zh": "Kill switch 状态已更新。",
+              "metadata": {"enabled": true},
+              "created_at": "2026-07-05T00:01:00Z"
+            }
+          ]
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final logs = await client.fetchAuditLogs();
+
+    expect(logs.single.action, 'risk.kill_switch_updated');
+    expect(logs.single.actorRole, 'risk_manager');
+    expect(logs.single.summaryZh, 'Kill switch 状态已更新。');
+  });
 }
