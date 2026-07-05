@@ -959,10 +959,13 @@ function DubheWorkbench(): React.ReactElement {
       appendLog('warning', '请先登录账号，再提交纸面交易。');
       return;
     }
-    if (!analysis) {
-      appendLog('warning', '请先完成新闻分析，纸面订单需要来源引用。');
+    if (!analysis && !strategyDraft) {
+      appendLog('warning', '请先完成新闻分析或加载同步策略，纸面订单需要来源引用。');
       return;
     }
+    const orderSymbol = paperTradeSymbol(symbol, strategyDraft);
+    const orderMarket = paperTradeMarket(market, orderSymbol, strategyDraft);
+    const sourceRef = paperTradeSourceRef(analysis, strategyDraft, selectedNews);
     await withBusy(async () => {
       const order = await postJson<PaperOrder>(
         coreUrl,
@@ -970,17 +973,17 @@ function DubheWorkbench(): React.ReactElement {
         {
           account_id: DEFAULT_PAPER_ACCOUNT_ID,
           strategy_version_id: strategyDraft?.strategy_version_id ?? 'manual_theia_strategy',
-          market,
-          symbol: symbol.trim().toUpperCase(),
+          market: orderMarket,
+          symbol: orderSymbol,
           side: 'buy',
           order_type: 'market',
           quantity: 1,
-          estimated_price: estimatePrice(symbol),
-          currency: market === 'HK' ? 'HKD' : market === 'A_SHARE' ? 'CNY' : 'USD',
+          estimated_price: estimatePrice(orderSymbol),
+          currency: currencyForMarket(orderMarket),
           created_by: 'user',
           destination: 'paper',
           rationale_zh: 'Theia 工作台根据新闻分析提交纸面交易验证。',
-          source_refs: [analysis.id],
+          source_refs: [sourceRef],
         },
         session.access_token,
       );
@@ -1824,7 +1827,7 @@ function DubheWorkbench(): React.ReactElement {
           </SidePanel>
 
           <SidePanel title="纸面交易" meta={paperOrder?.status ?? '待提交'}>
-            <p style={styles.bodyText}>{paperOrder?.message_zh ?? '登录并完成分析后，可提交 1 股纸面买入验证账本链路。'}</p>
+            <p style={styles.bodyText}>{paperOrder?.message_zh ?? '登录并完成分析或加载同步策略后，可提交 1 股纸面买入验证账本链路。'}</p>
             <button style={styles.fullWidthButton} type="button" onClick={() => void submitPaperOrder()} disabled={isBusy}>
               提交纸面买入
             </button>
@@ -2035,6 +2038,39 @@ function marketFromSymbol(value: string): Market {
   if (value.endsWith('.HK')) return 'HK';
   if (value.endsWith('.SH') || value.endsWith('.SZ')) return 'A_SHARE';
   return 'US';
+}
+
+function currencyForMarket(market: Market): 'HKD' | 'CNY' | 'USD' {
+  if (market === 'HK') return 'HKD';
+  if (market === 'A_SHARE') return 'CNY';
+  return 'USD';
+}
+
+function firstNonEmpty(values: Array<string | null | undefined>): string {
+  return values.map((value) => value?.trim()).find((value): value is string => Boolean(value)) ?? 'manual_paper_trade';
+}
+
+function paperTradeSourceRef(analysis: NewsAnalysis | null, draft: StrategyDraft | null, event: NewsEvent): string {
+  return firstNonEmpty([
+    analysis?.id,
+    draft?.source_analysis_id,
+    draft?.id,
+    draft?.strategy_version_id,
+    event.id,
+  ]);
+}
+
+function paperTradeSymbol(currentSymbol: string, draft: StrategyDraft | null): string {
+  const draftSymbol = draft?.spec.asset_universe.find((asset) => asset.trim().length > 0)?.trim().toUpperCase();
+  const selectedSymbol = currentSymbol.trim().toUpperCase();
+  return draftSymbol ?? (selectedSymbol || 'NVDA');
+}
+
+function paperTradeMarket(currentMarket: Market, orderSymbol: string, draft: StrategyDraft | null): Market {
+  const draftMarket = draft?.spec.market_scope.find((candidate) => candidate !== 'GLOBAL');
+  if (draftMarket) return draftMarket;
+  if (currentMarket !== 'GLOBAL') return currentMarket;
+  return marketFromSymbol(orderSymbol);
 }
 
 function marketLabel(market: Market): string {

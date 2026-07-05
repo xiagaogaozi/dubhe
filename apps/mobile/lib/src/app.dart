@@ -601,9 +601,10 @@ class _CompanionHomeState extends State<CompanionHome> {
 
   Future<void> _submitPaperBuy() async {
     final analysis = _analysis;
+    final draft = _strategyDraft;
     final event = _firstNewsEvent;
-    if (analysis == null || event == null) {
-      setState(() => _message = '请先完成新闻分析。');
+    if (!canSubmitPaperTrade(analysis: analysis, strategyDraft: draft)) {
+      setState(() => _message = '请先完成新闻分析或加载同步策略。');
       return;
     }
 
@@ -612,18 +613,27 @@ class _CompanionHomeState extends State<CompanionHome> {
       _message = null;
     });
     try {
-      final market = _primaryMarket(event);
-      final symbol = _primarySymbol(event);
+      final symbol = paperTradeSymbol(strategyDraft: draft, event: event);
+      final market = paperTradeMarket(
+        strategyDraft: draft,
+        event: event,
+        symbol: symbol,
+      );
       final order = await widget.client.submitPaperBuy(
         accountId: defaultPaperAccountId,
-        strategyVersionId:
-            _strategyDraft?.strategyVersionId ?? 'mobile_manual_strategy',
+        strategyVersionId: draft?.strategyVersionId ?? 'mobile_manual_strategy',
         market: market,
         symbol: symbol,
         quantity: 1,
         estimatedPrice: _estimatedPrice(symbol),
         currency: _currencyForMarket(market),
-        sourceRefs: [analysis.id],
+        sourceRefs: [
+          paperTradeSourceRef(
+            analysis: analysis,
+            strategyDraft: draft,
+            event: event,
+          ),
+        ],
       );
       final portfolio = await widget.client.fetchPaperPortfolio(
         defaultPaperAccountId,
@@ -1241,7 +1251,14 @@ class _AiPage extends StatelessWidget {
                 subtitle: paperOrder?.messageZh ?? '只进入纸面账户，不连接真实券商。',
                 done: paperOrder != null,
                 buttonLabel: '纸面买入 1 股',
-                onPressed: analysis == null || busy ? null : onSubmitPaperBuy,
+                onPressed:
+                    (!canSubmitPaperTrade(
+                          analysis: analysis,
+                          strategyDraft: strategyDraft,
+                        ) ||
+                        busy)
+                    ? null
+                    : onSubmitPaperBuy,
               ),
             ],
           ),
@@ -1951,6 +1968,71 @@ String _primaryMarket(NewsEvent event) {
   final symbol = _primarySymbol(event);
   if (symbol.endsWith('.HK')) return 'HK';
   if (symbol.endsWith('.SH') || symbol.endsWith('.SZ')) return 'A_SHARE';
+  return 'US';
+}
+
+@visibleForTesting
+bool canSubmitPaperTrade({
+  required NewsAnalysis? analysis,
+  required StrategyDraft? strategyDraft,
+}) {
+  return analysis != null || strategyDraft != null;
+}
+
+@visibleForTesting
+String paperTradeSourceRef({
+  required NewsAnalysis? analysis,
+  required StrategyDraft? strategyDraft,
+  required NewsEvent? event,
+}) {
+  final candidates = [
+    analysis?.id,
+    strategyDraft?.sourceAnalysisId,
+    strategyDraft?.id,
+    strategyDraft?.strategyVersionId,
+    event?.id,
+  ];
+  for (final value in candidates) {
+    final normalized = value?.trim();
+    if (normalized != null && normalized.isNotEmpty) return normalized;
+  }
+  return 'mobile_paper_trade';
+}
+
+@visibleForTesting
+String paperTradeSymbol({
+  required StrategyDraft? strategyDraft,
+  required NewsEvent? event,
+}) {
+  final assets = strategyDraft?.spec.assetUniverse ?? const <String>[];
+  for (final asset in assets) {
+    final normalized = asset.trim().toUpperCase();
+    if (normalized.isNotEmpty) return normalized;
+  }
+  if (event != null) return _primarySymbol(event).trim().toUpperCase();
+  return 'NVDA';
+}
+
+@visibleForTesting
+String paperTradeMarket({
+  required StrategyDraft? strategyDraft,
+  required NewsEvent? event,
+  required String symbol,
+}) {
+  final markets = strategyDraft?.spec.marketScope ?? const <String>[];
+  for (final market in markets) {
+    final normalized = market.trim().toUpperCase();
+    if (normalized.isNotEmpty && normalized != 'GLOBAL') return normalized;
+  }
+  if (event != null) {
+    final eventMarket = _primaryMarket(event).trim().toUpperCase();
+    if (eventMarket.isNotEmpty && eventMarket != 'GLOBAL') return eventMarket;
+  }
+  final normalizedSymbol = symbol.trim().toUpperCase();
+  if (normalizedSymbol.endsWith('.HK')) return 'HK';
+  if (normalizedSymbol.endsWith('.SH') || normalizedSymbol.endsWith('.SZ')) {
+    return 'A_SHARE';
+  }
   return 'US';
 }
 
