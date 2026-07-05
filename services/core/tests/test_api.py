@@ -1022,6 +1022,58 @@ def test_strategy_draft_and_replay_backtest_from_news_analysis() -> None:
     assert any(item["id"] == backtest["id"] for item in list_response.json())
 
 
+def test_strategy_templates_generate_safe_paper_draft() -> None:
+    templates_response = client.get("/v1/strategy/templates")
+
+    assert templates_response.status_code == 200
+    templates = templates_response.json()
+    assert len(templates) >= 3
+    template_by_id = {item["id"]: item for item in templates}
+    assert "news_sentiment_replay" in template_by_id
+    assert template_by_id["news_sentiment_replay"]["source_projects_zh"]
+    assert any(
+        "Qlib" in item
+        for item in template_by_id["news_sentiment_replay"]["source_projects_zh"]
+    )
+
+    draft_response = client.post(
+        "/v1/strategy/drafts/from-template",
+        json={
+            "template_id": "news_sentiment_replay",
+            "symbol": "nvda",
+            "market": "US",
+            "max_order_notional": 5000,
+            "source_analysis_id": "analysis_template_fixture",
+        },
+    )
+
+    assert draft_response.status_code == 200
+    draft = draft_response.json()
+    assert draft["name"].startswith("NVDA")
+    assert draft["source_analysis_id"] == "analysis_template_fixture"
+    assert draft["spec"]["asset_universe"] == ["NVDA"]
+    assert draft["spec"]["broker_permissions"] == ["paper"]
+    assert draft["spec"]["risk_limits"]["max_order_notional"] == 5000
+    assert "Dubhe template: news_sentiment_replay" in draft["generated_code"]
+
+    backtest_response = client.post(
+        "/v1/backtests/replay",
+        json={"strategy": draft, "initial_cash": 100000},
+    )
+    assert backtest_response.status_code == 200
+    assert backtest_response.json()["symbol"] == "NVDA"
+
+    missing_response = client.post(
+        "/v1/strategy/drafts/from-template",
+        json={
+            "template_id": "missing_template",
+            "symbol": "NVDA",
+            "market": "US",
+        },
+    )
+    assert missing_response.status_code == 404
+
+
 def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
     account_key = f"assistant-chat-{uuid4().hex[:8]}"
     session = register_test_device(

@@ -392,6 +392,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   NewsFeed? _newsFeed;
   NewsAnalysis? _analysis;
   StrategyDraft? _strategyDraft;
+  List<StrategyTemplate> _strategyTemplates = const [];
   BacktestResult? _backtestResult;
   PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
@@ -640,6 +641,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         widget.client.fetchWorkspaceSnapshot(
           workspaceId: widget.session.workspaceId,
         ),
+        widget.client.fetchStrategyTemplates(),
       ]);
       final systemStatus = coreResponses[0] as SystemStatus;
       final externalChecks = coreResponses[1] as ExternalServiceChecks;
@@ -649,6 +651,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       final onboardingChecklist = coreResponses[5] as OnboardingChecklist;
       final smokeReport = coreResponses[6] as SmokeWorkflowReport;
       final workspaceSnapshot = coreResponses[7] as WorkspaceSnapshot;
+      final strategyTemplates = coreResponses[8] as List<StrategyTemplate>;
       var approvals = <ApprovalRequest>[];
       KillSwitchState? killSwitch;
       var auditLogs = <AuditLogEntry>[];
@@ -704,6 +707,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         _newsFeed = newsFeed;
         _portfolio = portfolio;
         _workspaceSnapshot = workspaceSnapshot;
+        _strategyTemplates = strategyTemplates;
         _assistantMessages = _assistantMessagesFromTurns(
           workspaceSnapshot.assistantTurns,
         );
@@ -835,6 +839,49 @@ class _CompanionHomeState extends State<CompanionHome> {
     } catch (error) {
       setState(() {
         _message = error is DubheApiException ? error.message : '策略草案生成失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _draftStrategyFromTemplate(StrategyTemplate template) async {
+    final event = _firstNewsEvent;
+    final symbol = event == null
+        ? (_selectedNewsSymbolOrNull() ?? 'NVDA')
+        : _primarySymbol(event);
+    final market = event == null ? _newsMarket : _primaryMarket(event);
+
+    setState(() {
+      _loading = true;
+      _message = null;
+    });
+    try {
+      final draft = await widget.client.draftStrategyFromTemplate(
+        templateId: template.id,
+        symbol: symbol,
+        market: market,
+        maxOrderNotional:
+            template.defaultRiskLimits['max_order_notional'] ?? 10000,
+        sourceAnalysisId: _analysis?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _strategyDraft = draft;
+        _backtestResult = null;
+        _paperOrder = null;
+        _message = '已从模板生成策略草案：${draft.name}。';
+      });
+      await _refreshWorkspaceSnapshotFromSync();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message =
+            error is DubheApiException ? error.message : '模板策略生成失败。';
       });
     } finally {
       if (mounted) {
@@ -1433,6 +1480,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         newsFeed: _newsFeed,
         analysis: _analysis,
         strategyDraft: _strategyDraft,
+        strategyTemplates: _strategyTemplates,
         backtestResult: _backtestResult,
         paperOrder: _paperOrder,
         assistantMessages: _assistantMessages,
@@ -1442,6 +1490,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         busy: _loading,
         onAnalyze: _analyzeTopNews,
         onDraftStrategy: _draftStrategy,
+        onDraftStrategyFromTemplate: _draftStrategyFromTemplate,
         onRunBacktest: _runBacktest,
         onSubmitPaperBuy: _submitPaperBuy,
         onAskAssistant: _askAssistant,
@@ -2055,6 +2104,7 @@ class _AiPage extends StatelessWidget {
     required this.newsFeed,
     required this.analysis,
     required this.strategyDraft,
+    required this.strategyTemplates,
     required this.backtestResult,
     required this.paperOrder,
     required this.assistantMessages,
@@ -2064,6 +2114,7 @@ class _AiPage extends StatelessWidget {
     required this.busy,
     required this.onAnalyze,
     required this.onDraftStrategy,
+    required this.onDraftStrategyFromTemplate,
     required this.onRunBacktest,
     required this.onSubmitPaperBuy,
     required this.onAskAssistant,
@@ -2074,6 +2125,7 @@ class _AiPage extends StatelessWidget {
   final NewsFeed? newsFeed;
   final NewsAnalysis? analysis;
   final StrategyDraft? strategyDraft;
+  final List<StrategyTemplate> strategyTemplates;
   final BacktestResult? backtestResult;
   final PaperOrder? paperOrder;
   final List<_AssistantChatMessage> assistantMessages;
@@ -2083,6 +2135,7 @@ class _AiPage extends StatelessWidget {
   final bool busy;
   final VoidCallback onAnalyze;
   final VoidCallback onDraftStrategy;
+  final ValueChanged<StrategyTemplate> onDraftStrategyFromTemplate;
   final VoidCallback onRunBacktest;
   final VoidCallback onSubmitPaperBuy;
   final VoidCallback onAskAssistant;
@@ -2141,6 +2194,32 @@ class _AiPage extends StatelessWidget {
               ],
             ),
           ),
+        _SectionCard(
+          title: '成熟策略模板',
+          child: strategyTemplates.isEmpty
+              ? const _InfoCard(text: '连接 Core 后读取策略模板。')
+              : Column(
+                  children: strategyTemplates
+                      .take(3)
+                      .map(
+                        (template) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.schema_outlined),
+                          title: Text(template.labelZh),
+                          subtitle: Text(
+                            '${template.summaryZh}\n护栏：${template.guardrailsZh.take(2).join('；')}',
+                          ),
+                          trailing: FilledButton(
+                            onPressed: busy
+                                ? null
+                                : () => onDraftStrategyFromTemplate(template),
+                            child: const Text('生成'),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+        ),
         _SectionCard(
           title: '策略 / 回测 / 纸面交易',
           child: Column(

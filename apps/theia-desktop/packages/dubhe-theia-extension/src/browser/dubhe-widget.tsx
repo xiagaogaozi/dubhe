@@ -331,6 +331,22 @@ type StrategyValidationResult = {
   reasons_zh: string[];
 };
 
+type StrategyTemplate = {
+  id: string;
+  label_zh: string;
+  summary_zh: string;
+  suitable_markets: Market[];
+  default_timeframe: string;
+  default_rebalance_rule: string;
+  default_risk_limits: Record<string, number>;
+  data_dependencies: string[];
+  entry_rules_zh: string[];
+  exit_rules_zh: string[];
+  guardrails_zh: string[];
+  source_projects_zh: string[];
+  next_step_zh: string;
+};
+
 type StrategyWorkshopForm = {
   strategyName: string;
   timeframe: string;
@@ -722,6 +738,8 @@ function DubheWorkbench(): React.ReactElement {
   const [localConfigBusy, setLocalConfigBusy] = React.useState(false);
   const [analysis, setAnalysis] = React.useState<NewsAnalysis | null>(null);
   const [strategyDraft, setStrategyDraft] = React.useState<StrategyDraft | null>(null);
+  const [strategyTemplates, setStrategyTemplates] = React.useState<StrategyTemplate[]>([]);
+  const [selectedStrategyTemplateId, setSelectedStrategyTemplateId] = React.useState('news_sentiment_replay');
   const [strategyWorkshopForm, setStrategyWorkshopForm] = React.useState<StrategyWorkshopForm>(() => readStoredStrategyWorkshop()?.form ?? defaultStrategyWorkshopForm);
   const [strategyWorkshopSpec, setStrategyWorkshopSpec] = React.useState<StrategySpec | null>(null);
   const [strategyValidation, setStrategyValidation] = React.useState<StrategyValidationResult | null>(null);
@@ -922,6 +940,10 @@ function DubheWorkbench(): React.ReactElement {
     }));
   }, [workspaceSnapshot]);
 
+  const selectedStrategyTemplate = React.useMemo<StrategyTemplate | null>(() => {
+    return strategyTemplates.find((item) => item.id === selectedStrategyTemplateId) ?? strategyTemplates[0] ?? null;
+  }, [selectedStrategyTemplateId, strategyTemplates]);
+
   function appendLog(tone: Tone, text: string): void {
     setLogs((current) => [createLog(tone, text), ...current].slice(0, 5));
   }
@@ -984,6 +1006,7 @@ function DubheWorkbench(): React.ReactElement {
         nextSmokeReport,
         nextExternalChecks,
         nextProductionReadiness,
+        nextStrategyTemplates,
       ] = await Promise.all([
         getJson<Record<string, string>>(coreUrl, '/health'),
         getJson<SystemStatusResponse>(coreUrl, '/v1/system/status'),
@@ -991,12 +1014,15 @@ function DubheWorkbench(): React.ReactElement {
         getJson<SmokeWorkflowReportResponse>(coreUrl, '/v1/system/smoke-report'),
         getJson<ExternalServiceCheckResponse>(coreUrl, '/v1/system/external-checks'),
         getJson<ProductionReadinessResponse>(coreUrl, '/v1/system/production-readiness'),
+        getJson<StrategyTemplate[]>(coreUrl, '/v1/strategy/templates'),
       ]);
       setSystemStatus(nextSystemStatus);
       setOnboardingChecklist(nextChecklist);
       setSmokeReport(nextSmokeReport);
       setExternalChecks(nextExternalChecks);
       setProductionReadiness(nextProductionReadiness);
+      setStrategyTemplates(nextStrategyTemplates);
+      setSelectedStrategyTemplateId((current) => nextStrategyTemplates.some((item) => item.id === current) ? current : nextStrategyTemplates[0]?.id ?? 'news_sentiment_replay');
       setApiStatus('已连接');
       appendLog('positive', 'Dubhe Core 健康检查和系统状态读取通过。');
     } catch (error) {
@@ -1005,6 +1031,7 @@ function DubheWorkbench(): React.ReactElement {
       setSmokeReport(null);
       setExternalChecks(null);
       setProductionReadiness(null);
+      setStrategyTemplates([]);
       setApiStatus('离线');
       appendLog('warning', `Core 暂不可用：${errorMessage(error)}。`);
     }
@@ -1124,6 +1151,52 @@ function DubheWorkbench(): React.ReactElement {
       appendLog('positive', `策略草案已生成：${draft.name}。`);
     }).catch((error: unknown) => {
       appendLog('negative', `生成策略草案失败：${errorMessage(error)}。`);
+    });
+  }
+
+  function applyStrategyTemplateToWorkshop(template: StrategyTemplate | null = selectedStrategyTemplate): void {
+    if (!template) {
+      appendLog('warning', '策略模板目录尚未读取，请先连接 Core。');
+      return;
+    }
+    const spec = strategySpecFromTemplate(template, market, symbol.trim().toUpperCase());
+    const workspace = blocklyWorkspaceRef.current;
+    setStrategyWorkshopForm(strategySpecToWorkshopForm(spec));
+    setStrategyWorkshopSpec(spec);
+    setStrategyValidation(null);
+    if (workspace) {
+      workspace.clear();
+      Blockly.serialization.workspaces.load(strategySpecToBlocklyState(spec), workspace);
+    }
+    appendLog('positive', `已套用策略模板：${template.label_zh}。`);
+  }
+
+  async function draftStrategyFromTemplate(): Promise<void> {
+    const template = selectedStrategyTemplate;
+    if (!template) {
+      appendLog('warning', '策略模板目录尚未读取，请先连接 Core。');
+      return;
+    }
+    await withBusy(async () => {
+      const draft = await postJson<StrategyDraft>(coreUrl, '/v1/strategy/drafts/from-template', {
+        template_id: template.id,
+        symbol: symbol.trim().toUpperCase(),
+        market,
+        max_order_notional: strategyWorkshopForm.maxOrderNotional || template.default_risk_limits.max_order_notional || 10000,
+        source_analysis_id: analysis?.id ?? null,
+      });
+      setStrategyDraft(draft);
+      setStrategyWorkshopForm(strategySpecToWorkshopForm(draft.spec));
+      setStrategyWorkshopSpec(draft.spec);
+      setStrategyValidation({ valid: true, reasons_zh: [] });
+      setBacktestResult(null);
+      setPaperOrder(null);
+      if (session) {
+        await loadWorkspaceSnapshot(session);
+      }
+      appendLog('positive', `模板策略草案已生成：${draft.name}。`);
+    }).catch((error: unknown) => {
+      appendLog('negative', `模板策略生成失败：${errorMessage(error)}。`);
     });
   }
 
@@ -2015,6 +2088,59 @@ function DubheWorkbench(): React.ReactElement {
               <div style={styles.strategyWorkshopGrid}>
                 <div ref={blocklyContainerRef} style={styles.blocklySurface} aria-label="Blockly 策略积木画布" />
                 <div style={styles.strategyFormPanel}>
+                  <div style={styles.validationBox}>
+                    <div style={styles.auditHeaderLine}>
+                      <strong style={styles.statusName}>成熟策略模板</strong>
+                      <span style={styles.smallMeta}>{strategyTemplates.length > 0 ? `${strategyTemplates.length} 个` : '待读取'}</span>
+                    </div>
+                    <label style={styles.stackField}>
+                      模板
+                      <select
+                        style={styles.selectInput}
+                        value={selectedStrategyTemplateId}
+                        onChange={(event) => setSelectedStrategyTemplateId(event.target.value)}
+                      >
+                        {strategyTemplates.length === 0 ? (
+                          <option value="news_sentiment_replay">连接 Core 后读取模板</option>
+                        ) : (
+                          strategyTemplates.map((template) => (
+                            <option key={template.id} value={template.id}>{template.label_zh}</option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                    <p style={styles.statusMessage}>
+                      {selectedStrategyTemplate?.summary_zh ?? '模板目录来自 Core，用于把成熟开源量化项目的常见范式变成可校验草案。'}
+                    </p>
+                    {selectedStrategyTemplate && (
+                      <>
+                        <div style={styles.ruleList}>
+                          {selectedStrategyTemplate.source_projects_zh.slice(0, 3).map((source) => (
+                            <span key={source} style={styles.rulePill}>{source}</span>
+                          ))}
+                        </div>
+                        <p style={styles.statusMessage}>护栏：{selectedStrategyTemplate.guardrails_zh.slice(0, 2).join('；')}</p>
+                      </>
+                    )}
+                    <div style={styles.strategyActions}>
+                      <button
+                        style={styles.secondaryButton}
+                        type="button"
+                        disabled={!selectedStrategyTemplate}
+                        onClick={() => applyStrategyTemplateToWorkshop()}
+                      >
+                        套用到积木
+                      </button>
+                      <button
+                        style={styles.primaryButton}
+                        type="button"
+                        disabled={!selectedStrategyTemplate || isBusy}
+                        onClick={() => void draftStrategyFromTemplate()}
+                      >
+                        生成模板草案
+                      </button>
+                    </div>
+                  </div>
                   <label style={styles.stackField}>
                     策略名称
                     <input
@@ -2985,6 +3111,22 @@ function createStrategySpecFromBlockly(
     rebalance_rule: form.rebalanceRule || defaultStrategyWorkshopForm.rebalanceRule,
     data_dependencies: dataDependencies,
     broker_permissions: form.paperOnly ? ['paper'] : [],
+  };
+}
+
+function strategySpecFromTemplate(template: StrategyTemplate, market: Market, symbol: string): StrategySpec {
+  const assetSymbol = symbol || 'NVDA';
+  return {
+    strategy_name: `${assetSymbol} ${template.label_zh}`,
+    market_scope: [market],
+    asset_universe: [assetSymbol],
+    entry_rules: template.entry_rules_zh,
+    exit_rules: template.exit_rules_zh,
+    risk_limits: template.default_risk_limits,
+    timeframe: template.default_timeframe,
+    rebalance_rule: template.default_rebalance_rule,
+    data_dependencies: template.data_dependencies,
+    broker_permissions: ['paper'],
   };
 }
 

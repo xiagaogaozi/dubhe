@@ -407,11 +407,40 @@ class StrategyValidationResult(BaseModel):
     reasons_zh: list[str] = Field(default_factory=list)
 
 
+class StrategyTemplate(BaseModel):
+    id: str
+    label_zh: str
+    summary_zh: str
+    suitable_markets: list[Market] = Field(default_factory=list)
+    default_timeframe: str
+    default_rebalance_rule: str
+    default_risk_limits: dict[str, float] = Field(default_factory=dict)
+    data_dependencies: list[str] = Field(default_factory=list)
+    entry_rules_zh: list[str] = Field(default_factory=list)
+    exit_rules_zh: list[str] = Field(default_factory=list)
+    guardrails_zh: list[str] = Field(default_factory=list)
+    source_projects_zh: list[str] = Field(default_factory=list)
+    next_step_zh: str
+
+
 class StrategyDraftRequest(BaseModel):
     analysis: NewsAnalysis
     symbol: str = Field(min_length=1)
     market: Market
     max_order_notional: float = Field(default=10_000, gt=0)
+
+    @field_validator("symbol")
+    @classmethod
+    def normalize_symbol(cls, symbol: str) -> str:
+        return symbol.strip().upper()
+
+
+class StrategyTemplateDraftRequest(BaseModel):
+    template_id: str = Field(min_length=1)
+    symbol: str = Field(min_length=1)
+    market: Market
+    max_order_notional: float = Field(default=10_000, gt=0)
+    source_analysis_id: str | None = None
 
     @field_validator("symbol")
     @classmethod

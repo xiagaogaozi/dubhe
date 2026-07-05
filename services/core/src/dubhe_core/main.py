@@ -58,6 +58,8 @@ from .models import (
     StrategySpec,
     StrategyDraft,
     StrategyDraftRequest,
+    StrategyTemplate,
+    StrategyTemplateDraftRequest,
     StrategyValidationResult,
     StorageRuntimeStatus,
     SyncEvent,
@@ -78,7 +80,11 @@ from .runtime_config import local_runtime_config_response, repo_root, update_loc
 from .simulation import submit_paper_order
 from .smoke_report import read_smoke_workflow_report
 from .store import store
-from .strategy import validate_strategy_spec
+from .strategy import (
+    draft_strategy_from_template,
+    list_strategy_templates,
+    validate_strategy_spec,
+)
 
 SYNC_WEBSOCKET_POLL_SECONDS = 0.25
 CORE_VERSION = "0.1.0"
@@ -1081,9 +1087,25 @@ def validate_strategy_endpoint(spec: StrategySpec) -> StrategyValidationResult:
     return validate_strategy_spec(spec)
 
 
+@app.get("/v1/strategy/templates", response_model=list[StrategyTemplate])
+def list_strategy_templates_endpoint() -> list[StrategyTemplate]:
+    return list_strategy_templates()
+
+
 @app.post("/v1/strategy/drafts/from-analysis", response_model=StrategyDraft)
 def draft_strategy_from_analysis_endpoint(request: StrategyDraftRequest) -> StrategyDraft:
     return store.add_strategy_draft(draft_strategy_from_analysis(request))
+
+
+@app.post("/v1/strategy/drafts/from-template", response_model=StrategyDraft)
+def draft_strategy_from_template_endpoint(
+    request: StrategyTemplateDraftRequest,
+) -> StrategyDraft:
+    try:
+        draft = draft_strategy_from_template(request)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return store.add_strategy_draft(draft)
 
 
 @app.post("/v1/strategy/drafts", response_model=StrategyDraft)

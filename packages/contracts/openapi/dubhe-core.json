@@ -1033,6 +1033,28 @@
         }
       }
     },
+    "/v1/strategy/templates": {
+      "get": {
+        "summary": "List Strategy Templates Endpoint",
+        "operationId": "list_strategy_templates_endpoint_v1_strategy_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StrategyTemplate"
+                  },
+                  "type": "array",
+                  "title": "Response List Strategy Templates Endpoint V1 Strategy Templates Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/strategy/drafts/from-analysis": {
       "post": {
         "summary": "Draft Strategy From Analysis Endpoint",
@@ -1042,6 +1064,44 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/StrategyDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyDraft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/strategy/drafts/from-template": {
+      "post": {
+        "summary": "Draft Strategy From Template Endpoint",
+        "operationId": "draft_strategy_from_template_endpoint_v1_strategy_drafts_from_template_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StrategyTemplateDraftRequest"
               }
             }
           },
@@ -4676,6 +4736,134 @@
           "rebalance_rule"
         ],
         "title": "StrategySpec"
+      },
+      "StrategyTemplate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "summary_zh": {
+            "type": "string",
+            "title": "Summary Zh"
+          },
+          "suitable_markets": {
+            "items": {
+              "$ref": "#/components/schemas/Market"
+            },
+            "type": "array",
+            "title": "Suitable Markets"
+          },
+          "default_timeframe": {
+            "type": "string",
+            "title": "Default Timeframe"
+          },
+          "default_rebalance_rule": {
+            "type": "string",
+            "title": "Default Rebalance Rule"
+          },
+          "default_risk_limits": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Default Risk Limits"
+          },
+          "data_dependencies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Data Dependencies"
+          },
+          "entry_rules_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Entry Rules Zh"
+          },
+          "exit_rules_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exit Rules Zh"
+          },
+          "guardrails_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Guardrails Zh"
+          },
+          "source_projects_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Projects Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label_zh",
+          "summary_zh",
+          "default_timeframe",
+          "default_rebalance_rule",
+          "next_step_zh"
+        ],
+        "title": "StrategyTemplate"
+      },
+      "StrategyTemplateDraftRequest": {
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Template Id"
+          },
+          "symbol": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Symbol"
+          },
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "max_order_notional": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Max Order Notional",
+            "default": 10000
+          },
+          "source_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Analysis Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "template_id",
+          "symbol",
+          "market"
+        ],
+        "title": "StrategyTemplateDraftRequest"
       },
       "StrategyValidationResult": {
         "properties": {

@@ -1152,6 +1152,96 @@ void main() {
     },
   );
 
+  test('strategy templates parse and generate a draft', () async {
+    final requests = <http.Request>[];
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8000',
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path == '/v1/strategy/templates') {
+          return http.Response(
+            '''
+            [
+              {
+                "id": "news_sentiment_replay",
+                "label_zh": "新闻情绪事件驱动",
+                "summary_zh": "把新闻变成纸面买入候选。",
+                "suitable_markets": ["US", "HK", "A_SHARE"],
+                "default_timeframe": "1d",
+                "default_rebalance_rule": "event_driven",
+                "default_risk_limits": {"max_order_notional": 10000, "max_drawdown_stop": 0.06},
+                "data_dependencies": ["news", "market_bars"],
+                "entry_rules_zh": ["新闻情绪为正面"],
+                "exit_rules_zh": ["触发止损"],
+                "guardrails_zh": ["只允许纸面验证"],
+                "source_projects_zh": ["QuantConnect LEAN", "Qlib", "Blockly"],
+                "next_step_zh": "先运行回测。"
+              }
+            ]
+            ''',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        if (request.url.path == '/v1/strategy/drafts/from-template') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['template_id'], 'news_sentiment_replay');
+          expect(body['symbol'], 'NVDA');
+          expect(body['market'], 'US');
+          expect(body['source_analysis_id'], 'analysis_1');
+          return http.Response(
+            '''
+            {
+              "id": "draft_template_1",
+              "strategy_version_id": "strategy_template_v1",
+              "name": "NVDA 新闻情绪事件驱动",
+              "spec": {
+                "strategy_name": "NVDA 新闻情绪事件驱动",
+                "market_scope": ["US"],
+                "asset_universe": ["NVDA"],
+                "entry_rules": ["新闻情绪为正面"],
+                "exit_rules": ["触发止损"],
+                "risk_limits": {"max_order_notional": 10000},
+                "timeframe": "1d",
+                "rebalance_rule": "event_driven",
+                "data_dependencies": ["news", "market_bars"],
+                "broker_permissions": ["paper"]
+              },
+              "explanation_zh": "由模板生成。",
+              "generated_code": "# Dubhe template",
+              "source_analysis_id": "analysis_1",
+              "created_at": "2026-07-05T00:00:00Z"
+            }
+            ''',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        return http.Response('not found', 404);
+      }),
+    );
+
+    final templates = await client.fetchStrategyTemplates();
+    final draft = await client.draftStrategyFromTemplate(
+      templateId: templates.single.id,
+      symbol: 'NVDA',
+      market: 'US',
+      sourceAnalysisId: 'analysis_1',
+    );
+
+    expect(templates.single.labelZh, '新闻情绪事件驱动');
+    expect(templates.single.defaultRiskLimits['max_order_notional'], 10000);
+    expect(templates.single.sourceProjectsZh, contains('Qlib'));
+    expect(draft.strategyVersionId, 'strategy_template_v1');
+    expect(draft.spec.brokerPermissions, ['paper']);
+    expect(requests.map((request) => request.url.path), [
+      '/v1/strategy/templates',
+      '/v1/strategy/drafts/from-template',
+    ]);
+  });
+
   test('live approval demo creates a live risk evaluation only', () async {
     final client = CoreClient(
       baseUrl: 'http://127.0.0.1:8019',

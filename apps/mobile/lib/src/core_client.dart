@@ -192,6 +192,11 @@ class CoreClient {
     return NewsAnalysis.fromJson(_map(json));
   }
 
+  Future<List<StrategyTemplate>> fetchStrategyTemplates() async {
+    final json = await _getJson('/v1/strategy/templates');
+    return _mapList(json).map(StrategyTemplate.fromJson).toList();
+  }
+
   Future<StrategyDraft> draftStrategyFromAnalysis({
     required NewsAnalysis analysis,
     required String symbol,
@@ -203,6 +208,23 @@ class CoreClient {
       'symbol': symbol,
       'market': market,
       'max_order_notional': maxOrderNotional,
+    });
+    return StrategyDraft.fromJson(_map(json));
+  }
+
+  Future<StrategyDraft> draftStrategyFromTemplate({
+    required String templateId,
+    required String symbol,
+    required String market,
+    double maxOrderNotional = 10000,
+    String? sourceAnalysisId,
+  }) async {
+    final json = await _postJson('/v1/strategy/drafts/from-template', {
+      'template_id': templateId,
+      'symbol': symbol,
+      'market': market,
+      'max_order_notional': maxOrderNotional,
+      'source_analysis_id': sourceAnalysisId,
     });
     return StrategyDraft.fromJson(_map(json));
   }
@@ -1339,6 +1361,62 @@ class NewsAnalysis {
       sourceRefs: _stringList(json['source_refs']),
       confidence: _double(json['confidence']),
       generatedAt: _string(json['generated_at']),
+    );
+  }
+}
+
+class StrategyTemplate {
+  StrategyTemplate({
+    required this.id,
+    required this.labelZh,
+    required this.summaryZh,
+    required this.suitableMarkets,
+    required this.defaultTimeframe,
+    required this.defaultRebalanceRule,
+    required this.defaultRiskLimits,
+    required this.dataDependencies,
+    required this.entryRulesZh,
+    required this.exitRulesZh,
+    required this.guardrailsZh,
+    required this.sourceProjectsZh,
+    required this.nextStepZh,
+  });
+
+  final String id;
+  final String labelZh;
+  final String summaryZh;
+  final List<String> suitableMarkets;
+  final String defaultTimeframe;
+  final String defaultRebalanceRule;
+  final Map<String, double> defaultRiskLimits;
+  final List<String> dataDependencies;
+  final List<String> entryRulesZh;
+  final List<String> exitRulesZh;
+  final List<String> guardrailsZh;
+  final List<String> sourceProjectsZh;
+  final String nextStepZh;
+
+  factory StrategyTemplate.fromJson(Map<String, dynamic> json) {
+    final riskLimits = <String, double>{};
+    _map(json['default_risk_limits']).forEach((key, value) {
+      if (value is num) {
+        riskLimits[key] = value.toDouble();
+      }
+    });
+    return StrategyTemplate(
+      id: _string(json['id']),
+      labelZh: _string(json['label_zh']),
+      summaryZh: _string(json['summary_zh']),
+      suitableMarkets: _stringList(json['suitable_markets']),
+      defaultTimeframe: _string(json['default_timeframe']),
+      defaultRebalanceRule: _string(json['default_rebalance_rule']),
+      defaultRiskLimits: riskLimits,
+      dataDependencies: _stringList(json['data_dependencies']),
+      entryRulesZh: _stringList(json['entry_rules_zh']),
+      exitRulesZh: _stringList(json['exit_rules_zh']),
+      guardrailsZh: _stringList(json['guardrails_zh']),
+      sourceProjectsZh: _stringList(json['source_projects_zh']),
+      nextStepZh: _string(json['next_step_zh']),
     );
   }
 }
