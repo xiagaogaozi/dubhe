@@ -138,7 +138,7 @@ Authorization: Bearer dubhe_dev_xxx
 - `events`
 - `server_sequence`
 
-`assistant_turns` 是当前工作区最近的 AI 分析师问答；每次 `POST /v1/assistant/chat` 成功后会生成 `assistant_turn` 同步事件，并写入审计日志。客户端可通过快照或 `GET /v1/assistant/turns` 恢复最近对话。
+`assistant_turns` 是当前工作区最近的 AI 分析师问答；每次 `POST /v1/assistant/chat` 成功后会生成 `assistant_turn` 同步事件，并写入审计日志。记录中包含 `model_provider`、`model_name` 和 `fallback_used`，客户端可通过快照或 `GET /v1/assistant/turns` 恢复最近对话并展示真实模型/本地兜底来源。
 
 ### 纸面组合
 

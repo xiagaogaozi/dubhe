@@ -208,14 +208,28 @@ class _AssistantChatMessage {
     required this.text,
     this.citations = const [],
     this.suggestedActions = const [],
+    this.modelProvider = '',
+    this.modelName = '',
+    this.fallbackUsed = true,
   });
 
   final String role;
   final String text;
   final List<AssistantCitation> citations;
   final List<String> suggestedActions;
+  final String modelProvider;
+  final String modelName;
+  final bool fallbackUsed;
 
   bool get isUser => role == 'user';
+
+  String get modelLabel {
+    if (isUser) return '';
+    if (fallbackUsed) return '本地兜底';
+    if (modelName.isNotEmpty) return modelName;
+    if (modelProvider.isNotEmpty) return modelProvider;
+    return '';
+  }
 }
 
 const _assistantWelcomeMessages = [
@@ -245,6 +259,9 @@ List<_AssistantChatMessage> _assistantMessagesFromTurns(
         text: turn.answerZh,
         citations: turn.citations,
         suggestedActions: turn.suggestedActionsZh,
+        modelProvider: turn.modelProvider,
+        modelName: turn.modelName,
+        fallbackUsed: turn.fallbackUsed,
       ),
     );
   }
@@ -699,6 +716,9 @@ class _CompanionHomeState extends State<CompanionHome> {
             text: response.answerZh,
             citations: response.citations,
             suggestedActions: response.suggestedActionsZh,
+            modelProvider: response.modelProvider,
+            modelName: response.modelName,
+            fallbackUsed: response.fallbackUsed,
           ),
         ].takeLast(8);
       });
@@ -1576,6 +1596,13 @@ class _AssistantBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(message.text),
+            if (message.modelLabel.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                message.modelLabel,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
             if (message.citations.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
@@ -2183,6 +2210,7 @@ class _SystemStatusPanel extends StatelessWidget {
             metrics: [
               _Metric('纸面交易', current.paperBrokerEnabled ? '可用' : '关闭'),
               _Metric('实盘交易', current.liveTradingEnabled ? '开启' : '关闭'),
+              _Metric('AI 模型', current.llm.displayName),
               _Metric('待配置', '${current.missingConfigCount} 项'),
               _Metric(
                 '新闻适配器',
@@ -2192,6 +2220,8 @@ class _SystemStatusPanel extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(current.tradingMessageZh),
+          const SizedBox(height: 8),
+          Text(current.llm.messageZh),
           const SizedBox(height: 8),
           Text(current.storageMessageZh),
           if (current.storagePath.isNotEmpty)

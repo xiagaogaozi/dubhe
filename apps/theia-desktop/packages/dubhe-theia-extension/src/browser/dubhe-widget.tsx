@@ -114,6 +114,15 @@ type TradingRuntimeStatus = {
   message_zh: string;
 };
 
+type LLMRuntimeStatus = {
+  provider: string;
+  model?: string | null;
+  configured: boolean;
+  enabled: boolean;
+  fallback_available: boolean;
+  message_zh: string;
+};
+
 type SystemStatusResponse = {
   service: string;
   version: string;
@@ -122,6 +131,7 @@ type SystemStatusResponse = {
   auth: AuthRuntimeStatus;
   config_items: RuntimeConfigStatus[];
   news_adapters: NewsAdapterRuntimeStatus[];
+  llm?: LLMRuntimeStatus;
   trading: TradingRuntimeStatus;
   generated_at: string;
 };
@@ -211,6 +221,9 @@ type AssistantChatResponse = {
   citations: AssistantCitation[];
   suggested_actions_zh: string[];
   safety_notes_zh: string[];
+  model_provider: string;
+  model_name?: string | null;
+  fallback_used: boolean;
   generated_at: string;
 };
 
@@ -220,6 +233,9 @@ type AssistantChatMessage = {
   text: string;
   citations?: AssistantCitation[];
   suggestedActions?: string[];
+  modelProvider?: string;
+  modelName?: string | null;
+  fallbackUsed?: boolean;
 };
 
 type AssistantConversationTurn = {
@@ -230,6 +246,9 @@ type AssistantConversationTurn = {
   citations: AssistantCitation[];
   suggested_actions_zh: string[];
   safety_notes_zh: string[];
+  model_provider: string;
+  model_name?: string | null;
+  fallback_used: boolean;
   context_refs: string[];
   created_by_user_id?: string | null;
   created_by_device_id?: string | null;
@@ -1043,6 +1062,9 @@ function DubheWorkbench(): React.ReactElement {
         text: response.answer_zh,
         citations: response.citations,
         suggestedActions: response.suggested_actions_zh,
+        modelProvider: response.model_provider,
+        modelName: response.model_name,
+        fallbackUsed: response.fallback_used,
       };
       setAssistantMessages((current) => [...current, assistantMessage].slice(-8));
       appendLog('positive', 'AI 分析师已生成中文研究答复。');
@@ -1765,6 +1787,11 @@ function DubheWorkbench(): React.ReactElement {
                 style={message.role === 'user' ? styles.chatUser : styles.chatAssistant}
               >
                 <div>{message.text}</div>
+                {assistantModelLabel(message) && (
+                  <div style={styles.chatCitations}>
+                    <span style={styles.chatCitation}>{assistantModelLabel(message)}</span>
+                  </div>
+                )}
                 {message.citations && message.citations.length > 0 && (
                   <div style={styles.chatCitations}>
                     {message.citations.slice(0, 3).map((citation) => (
@@ -1830,6 +1857,12 @@ function DubheWorkbench(): React.ReactElement {
                   value={systemStatus.trading.live_trading_enabled ? '实盘开启' : '实盘关闭'}
                   tone={systemStatus.trading.live_trading_enabled ? 'negative' : 'positive'}
                   message={systemStatus.trading.message_zh}
+                />
+                <StatusRow
+                  label="AI 模型"
+                  value={systemStatus.llm?.enabled ? (systemStatus.llm.model ?? systemStatus.llm.provider) : '本地兜底'}
+                  tone={systemStatus.llm?.enabled ? 'positive' : 'warning'}
+                  message={systemStatus.llm?.message_zh ?? '未读取到模型状态；默认按本地安全兜底处理。'}
                 />
               </div>
             ) : (
@@ -2255,9 +2288,18 @@ function assistantMessagesFromTurns(turns: AssistantConversationTurn[]): Assista
       text: turn.answer_zh,
       citations: turn.citations,
       suggestedActions: turn.suggested_actions_zh,
+      modelProvider: turn.model_provider,
+      modelName: turn.model_name,
+      fallbackUsed: turn.fallback_used,
     });
   }
   return messages.slice(-8);
+}
+
+function assistantModelLabel(message: AssistantChatMessage): string {
+  if (message.role === 'user') return '';
+  if (message.fallbackUsed) return '本地兜底';
+  return message.modelName || message.modelProvider || '';
 }
 
 function marketLabel(market: Market): string {

@@ -9,7 +9,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 - 本地 SQLite 持久化存储，服务重启后保留账号、设备、工作区、自选股、分析、风控、纸面订单、模拟券商回报和纸面组合账户。
 - SEC EDGAR / GDELT / Finnhub / Alpha Vantage / Fixture 新闻源聚合接口。
 - 新闻事件中文分析占位链路。
-- AI 分析师中文对话接口，可读取当前新闻、分析、策略草案和回测上下文，返回中文答复、来源引用、下一步动作和安全提示，并把问答写入工作区快照和同步事件。
+- AI 分析师中文对话接口，可读取当前新闻、分析、策略草案和回测上下文；未配置模型时使用本地确定性安全兜底，配置 OpenAI-compatible 模型后优先调用真实模型，失败时自动回退，并把问答写入工作区快照和同步事件。
 - 新闻分析生成策略草案与 deterministic replay 回测。
 - 策略规格校验，以及保存 Blockly / 客户端生成的工作区策略草案并触发同步事件。
 - 订单意图风控门禁。
@@ -77,6 +77,17 @@ AI 分析师接口：
 
 - `POST /v1/assistant/chat`：需要设备 Bearer token；只生成中文研究答复和安全提示，不创建订单、不连接真实券商。
 - `GET /v1/assistant/turns`：需要设备 Bearer token；读取当前工作区最近 AI 分析师问答，供桌面端和移动端恢复对话。
+
+可选模型路由环境变量：
+
+```powershell
+$env:DUBHE_LLM_MODEL="gpt-4.1-mini"
+$env:DUBHE_LLM_API_KEY="..."
+# 可选：本地 Ollama、vLLM、LiteLLM、OpenAI-compatible 代理网关等。
+$env:DUBHE_LLM_BASE_URL="https://api.openai.com/v1"
+```
+
+未配置 `DUBHE_LLM_MODEL` 时，Core 会继续使用本地确定性安全兜底。配置官方 OpenAI `/v1` 地址时必须提供 `DUBHE_LLM_API_KEY`；本地无鉴权兼容服务可以只配置 `DUBHE_LLM_MODEL` 和 `DUBHE_LLM_BASE_URL`。模型输出会被限定为中文研究答复、下一步动作和安全提示，不会获得下单能力。
 
 纸面卖出会先校验当前持仓；空仓或超持仓卖出会被拦截，不会生成模拟券商回报，也不会写出负持仓。
 

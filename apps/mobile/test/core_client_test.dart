@@ -175,6 +175,9 @@ void main() {
                 "citations": [{"label_zh": "回测", "ref": "backtest_1"}],
                 "suggested_actions_zh": ["提交纸面买入"],
                 "safety_notes_zh": ["不会连接真实券商。"],
+                "model_provider": "deterministic",
+                "model_name": null,
+                "fallback_used": true,
                 "context_refs": ["analysis_1", "strategy_v_1", "backtest_1"],
                 "created_by_user_id": "user_1",
                 "created_by_device_id": "device_1",
@@ -390,6 +393,14 @@ void main() {
               "live_trading_enabled": false,
               "message_zh": "纸面交易已启用；实盘交易保持关闭。"
             },
+            "llm": {
+              "provider": "openai_compatible",
+              "model": null,
+              "configured": false,
+              "enabled": false,
+              "fallback_available": true,
+              "message_zh": "未配置外部模型，当前使用本地确定性安全兜底。"
+            },
             "generated_at": "2026-07-05T00:00:00Z"
           }
           ''',
@@ -405,6 +416,8 @@ void main() {
     expect(status.storagePath, 'D:/dubhe-data/dubhe-core.sqlite');
     expect(status.paperBrokerEnabled, isTrue);
     expect(status.liveTradingEnabled, isFalse);
+    expect(status.llm.enabled, isFalse);
+    expect(status.llm.displayName, '本地兜底');
     expect(status.missingConfigCount, 1);
     expect(status.enabledAdapterCount, 1);
     expect(status.configItems.first.key, 'FINNHUB_API_KEY');
@@ -442,6 +455,9 @@ void main() {
             ],
             "suggested_actions_zh": ["复查最大回撤", "提交纸面买入"],
             "safety_notes_zh": ["不会连接真实券商。"],
+            "model_provider": "openai_compatible",
+            "model_name": "gpt-test",
+            "fallback_used": false,
             "generated_at": "2026-07-05T00:00:00Z"
           }
           ''',
@@ -524,6 +540,8 @@ void main() {
       expect(response.citations.last.ref, 'backtest_1');
       expect(response.suggestedActionsZh, ['复查最大回撤', '提交纸面买入']);
       expect(response.safetyNotesZh.single, '不会连接真实券商。');
+      expect(response.modelName, 'gpt-test');
+      expect(response.fallbackUsed, isFalse);
     },
   );
 

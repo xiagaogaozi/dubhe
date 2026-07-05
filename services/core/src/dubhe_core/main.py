@@ -57,6 +57,7 @@ from .models import (
     WatchlistUpsertRequest,
     WorkspaceSnapshot,
 )
+from .llm import llm_runtime_status
 from .news_sources import fetch_news_feed
 from .risk import evaluate_order_intent
 from .simulation import submit_paper_order
@@ -97,6 +98,10 @@ def system_status() -> SystemStatusResponse:
     finnhub_configured = env_is_configured("FINNHUB_API_KEY")
     alpha_configured = env_is_configured("ALPHA_VANTAGE_API_KEY")
     sec_user_agent_configured = env_is_configured("DUBHE_SEC_USER_AGENT")
+    llm_model_configured = env_is_configured("DUBHE_LLM_MODEL")
+    llm_base_url_configured = env_is_configured("DUBHE_LLM_BASE_URL")
+    llm_api_key_configured = env_is_configured("DUBHE_LLM_API_KEY")
+    llm_status = llm_runtime_status()
     persistent_storage = store.db_path != ":memory:"
 
     return SystemStatusResponse(
@@ -149,6 +154,39 @@ def system_status() -> SystemStatusResponse:
                     "已配置 SEC EDGAR User-Agent。"
                     if sec_user_agent_configured
                     else "未配置，将使用开发默认 User-Agent；生产版应配置真实联系人。"
+                ),
+            ),
+            RuntimeConfigStatus(
+                key="DUBHE_LLM_MODEL",
+                label_zh="AI 模型名称",
+                configured=llm_model_configured,
+                required_for="OpenAI-compatible AI 分析师模型路由",
+                message_zh=(
+                    f"已配置模型：{llm_status.model}。"
+                    if llm_model_configured
+                    else "未配置，将使用本地确定性安全兜底。"
+                ),
+            ),
+            RuntimeConfigStatus(
+                key="DUBHE_LLM_BASE_URL",
+                label_zh="AI 模型 OpenAI-compatible 地址",
+                configured=llm_base_url_configured,
+                required_for="本地模型、代理网关或非 OpenAI 官方端点",
+                message_zh=(
+                    "已配置自定义模型地址。"
+                    if llm_base_url_configured
+                    else "未配置；填写模型名时默认使用 OpenAI 官方 /v1 地址。"
+                ),
+            ),
+            RuntimeConfigStatus(
+                key="DUBHE_LLM_API_KEY",
+                label_zh="AI 模型 API Key",
+                configured=llm_api_key_configured,
+                required_for="OpenAI 官方或需要鉴权的兼容模型服务",
+                message_zh=(
+                    "已配置；体检不会泄露 Key 内容。"
+                    if llm_api_key_configured
+                    else "未配置；本地无鉴权模型可不填，OpenAI 官方端点必须填写。"
                 ),
             ),
         ],
@@ -211,6 +249,7 @@ def system_status() -> SystemStatusResponse:
                 message_zh="可用：真实来源为空或故障时兜底，保证分析、回测和纸面交易链路可测试。",
             ),
         ],
+        llm=llm_status,
         trading=TradingRuntimeStatus(
             paper_broker_enabled=True,
             live_trading_enabled=False,
@@ -249,6 +288,7 @@ def capabilities() -> dict[str, object]:
             "admin_user_role_management",
             "audit_log",
             "workspace_sync_websocket",
+            "openai_compatible_llm_router",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
@@ -547,6 +587,9 @@ def assistant_chat_endpoint(
             citations=response.citations,
             suggested_actions_zh=response.suggested_actions_zh,
             safety_notes_zh=response.safety_notes_zh,
+            model_provider=response.model_provider,
+            model_name=response.model_name,
+            fallback_used=response.fallback_used,
             context_refs=assistant_context_refs(request.context),
             created_by_user_id=session.user_id,
             created_by_device_id=session.device_id,
@@ -565,6 +608,9 @@ def assistant_chat_endpoint(
             "has_analysis": request.context.analysis is not None,
             "has_strategy": request.context.strategy is not None,
             "has_backtest": request.context.backtest is not None,
+            "model_provider": response.model_provider,
+            "model_name": response.model_name,
+            "fallback_used": response.fallback_used,
         },
     )
     return response

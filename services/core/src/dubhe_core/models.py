@@ -188,6 +188,15 @@ class TradingRuntimeStatus(BaseModel):
     message_zh: str
 
 
+class LLMRuntimeStatus(BaseModel):
+    provider: str
+    model: str | None = None
+    configured: bool
+    enabled: bool
+    fallback_available: bool = True
+    message_zh: str
+
+
 class SystemStatusResponse(BaseModel):
     service: str = "dubhe-core"
     version: str = "0.1.0"
@@ -196,6 +205,7 @@ class SystemStatusResponse(BaseModel):
     auth: AuthRuntimeStatus
     config_items: list[RuntimeConfigStatus] = Field(default_factory=list)
     news_adapters: list[NewsAdapterRuntimeStatus] = Field(default_factory=list)
+    llm: LLMRuntimeStatus
     trading: TradingRuntimeStatus
     generated_at: datetime = Field(default_factory=utc_now)
 
@@ -294,6 +304,9 @@ class AssistantChatResponse(BaseModel):
     citations: list[AssistantCitation] = Field(default_factory=list)
     suggested_actions_zh: list[str] = Field(default_factory=list)
     safety_notes_zh: list[str] = Field(default_factory=list)
+    model_provider: str = "deterministic"
+    model_name: str | None = None
+    fallback_used: bool = True
     generated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -305,6 +318,9 @@ class AssistantConversationTurn(BaseModel):
     citations: list[AssistantCitation] = Field(default_factory=list)
     suggested_actions_zh: list[str] = Field(default_factory=list)
     safety_notes_zh: list[str] = Field(default_factory=list)
+    model_provider: str = "deterministic"
+    model_name: str | None = None
+    fallback_used: bool = True
     context_refs: list[str] = Field(default_factory=list)
     created_by_user_id: str | None = None
     created_by_device_id: str | None = None

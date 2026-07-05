@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,9 @@ def test_system_status_reports_missing_provider_config(monkeypatch) -> None:
     monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
     monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
     monkeypatch.delenv("DUBHE_SEC_USER_AGENT", raising=False)
+    monkeypatch.delenv("DUBHE_LLM_MODEL", raising=False)
+    monkeypatch.delenv("DUBHE_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("DUBHE_LLM_API_KEY", raising=False)
 
     response = client.get("/v1/system/status")
 
@@ -67,6 +71,8 @@ def test_system_status_reports_missing_provider_config(monkeypatch) -> None:
     assert body["service"] == "dubhe-core"
     assert body["language"] == "zh-CN"
     assert body["storage"]["backend"] == "sqlite"
+    assert body["llm"]["enabled"] is False
+    assert body["llm"]["fallback_available"] is True
     assert body["trading"]["paper_broker_enabled"] is True
     assert body["trading"]["live_trading_enabled"] is False
 
@@ -74,6 +80,8 @@ def test_system_status_reports_missing_provider_config(monkeypatch) -> None:
     assert config_by_key["FINNHUB_API_KEY"]["configured"] is False
     assert config_by_key["ALPHA_VANTAGE_API_KEY"]["configured"] is False
     assert config_by_key["DUBHE_SEC_USER_AGENT"]["configured"] is False
+    assert config_by_key["DUBHE_LLM_MODEL"]["configured"] is False
+    assert config_by_key["DUBHE_LLM_API_KEY"]["configured"] is False
 
     adapters = {item["provider"]: item for item in body["news_adapters"]}
     assert adapters["finnhub_company_news"]["enabled"] is False
@@ -86,6 +94,9 @@ def test_system_status_reports_configured_keys_without_leaking_values(monkeypatc
     monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-super-secret-token")
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-super-secret-token")
     monkeypatch.setenv("DUBHE_SEC_USER_AGENT", "Dubhe Test status-secret@example.com")
+    monkeypatch.setenv("DUBHE_LLM_MODEL", "gpt-test")
+    monkeypatch.setenv("DUBHE_LLM_BASE_URL", "https://llm.example.com/v1")
+    monkeypatch.setenv("DUBHE_LLM_API_KEY", "llm-super-secret-token")
 
     response = client.get("/v1/system/status")
 
@@ -95,6 +106,11 @@ def test_system_status_reports_configured_keys_without_leaking_values(monkeypatc
     assert config_by_key["FINNHUB_API_KEY"]["configured"] is True
     assert config_by_key["ALPHA_VANTAGE_API_KEY"]["configured"] is True
     assert config_by_key["DUBHE_SEC_USER_AGENT"]["configured"] is True
+    assert config_by_key["DUBHE_LLM_MODEL"]["configured"] is True
+    assert config_by_key["DUBHE_LLM_BASE_URL"]["configured"] is True
+    assert config_by_key["DUBHE_LLM_API_KEY"]["configured"] is True
+    assert body["llm"]["enabled"] is True
+    assert body["llm"]["model"] == "gpt-test"
 
     adapters = {item["provider"]: item for item in body["news_adapters"]}
     assert adapters["finnhub_company_news"]["enabled"] is True
@@ -105,6 +121,7 @@ def test_system_status_reports_configured_keys_without_leaking_values(monkeypatc
     assert "finnhub-super-secret-token" not in payload
     assert "alpha-super-secret-token" not in payload
     assert "status-secret@example.com" not in payload
+    assert "llm-super-secret-token" not in payload
 
 
 def test_local_desktop_cors_allows_random_theia_port() -> None:
@@ -698,6 +715,8 @@ def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
     assert any(item["ref"] == "https://example.com/nvda-news" for item in body["citations"])
     assert any("纸面" in item for item in body["suggested_actions_zh"])
     assert any("风控" in item for item in body["safety_notes_zh"])
+    assert body["model_provider"] == "deterministic"
+    assert body["fallback_used"] is True
 
     snapshot_response = client.get(
         f"/v1/workspaces/{session['workspace_id']}/snapshot",
@@ -714,6 +733,8 @@ def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
         draft["strategy_version_id"],
         backtest["id"],
     ]
+    assert turn["model_provider"] == "deterministic"
+    assert turn["fallback_used"] is True
     assert turn["created_by_device_id"] == session["device_id"]
 
     sync_response = client.get(
@@ -750,6 +771,87 @@ def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
     audit_response = client.get("/v1/audit/logs", headers=auth_headers(session))
     assert audit_response.status_code == 200
     assert any(item["action"] == "assistant.chat_requested" for item in audit_response.json())
+
+
+def test_assistant_chat_uses_configured_openai_compatible_model(monkeypatch) -> None:
+    class FakeLLMResponse:
+        def __enter__(self) -> "FakeLLMResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": json.dumps(
+                                    {
+                                        "answer_zh": "模型认为应继续纸面验证，不应直接实盘。",
+                                        "suggested_actions_zh": ["复查来源", "运行回测"],
+                                        "safety_notes_zh": ["模型不会发送真实订单。"],
+                                    },
+                                    ensure_ascii=False,
+                                )
+                            }
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ).encode("utf-8")
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_urlopen(request: Any, timeout: float) -> FakeLLMResponse:
+        calls.append(
+            {
+                "url": request.full_url,
+                "timeout": timeout,
+                "headers": dict(request.header_items()),
+                "body": json.loads(request.data.decode("utf-8")),
+            }
+        )
+        return FakeLLMResponse()
+
+    monkeypatch.setenv("DUBHE_LLM_MODEL", "gpt-test")
+    monkeypatch.setenv("DUBHE_LLM_BASE_URL", "https://llm.example.com/v1")
+    monkeypatch.setenv("DUBHE_LLM_API_KEY", "llm-test-token")
+    monkeypatch.setattr("dubhe_core.llm.urllib.request.urlopen", fake_urlopen)
+
+    session = register_test_device(
+        account_key=f"assistant-llm-{uuid4().hex[:8]}",
+        account_name="AI 模型路由测试账户",
+    )
+    response = client.post(
+        "/v1/assistant/chat",
+        headers=auth_headers(session),
+        json={
+            "question_zh": "请用真实模型分析这条新闻下一步怎么验证？",
+            "context": {},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer_zh"] == "模型认为应继续纸面验证，不应直接实盘。"
+    assert body["model_provider"] == "openai_compatible"
+    assert body["model_name"] == "gpt-test"
+    assert body["fallback_used"] is False
+    assert any("真实订单" in item for item in body["safety_notes_zh"])
+    assert calls[0]["url"] == "https://llm.example.com/v1/chat/completions"
+    assert calls[0]["headers"]["Authorization"] == "Bearer llm-test-token"
+    assert calls[0]["body"]["model"] == "gpt-test"
+    assert "llm-test-token" not in response.text
+
+    turns_response = client.get("/v1/assistant/turns", headers=auth_headers(session))
+    assert turns_response.status_code == 200
+    turn = turns_response.json()[-1]
+    assert turn["id"] == body["id"]
+    assert turn["model_provider"] == "openai_compatible"
+    assert turn["model_name"] == "gpt-test"
+    assert turn["fallback_used"] is False
 
 
 def test_theia_workbench_user_flow_reaches_paper_portfolio() -> None:

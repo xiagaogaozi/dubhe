@@ -1939,6 +1939,27 @@
             "type": "array",
             "title": "Safety Notes Zh"
           },
+          "model_provider": {
+            "type": "string",
+            "title": "Model Provider",
+            "default": "deterministic"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "fallback_used": {
+            "type": "boolean",
+            "title": "Fallback Used",
+            "default": true
+          },
           "generated_at": {
             "type": "string",
             "format": "date-time",
@@ -2058,6 +2079,27 @@
             },
             "type": "array",
             "title": "Safety Notes Zh"
+          },
+          "model_provider": {
+            "type": "string",
+            "title": "Model Provider",
+            "default": "deterministic"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "fallback_used": {
+            "type": "boolean",
+            "title": "Fallback Used",
+            "default": true
           },
           "context_refs": {
             "items": {
@@ -2699,6 +2741,50 @@
           "reason_zh"
         ],
         "title": "KillSwitchUpdateRequest"
+      },
+      "LLMRuntimeStatus": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "fallback_available": {
+            "type": "boolean",
+            "title": "Fallback Available",
+            "default": true
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "configured",
+          "enabled",
+          "message_zh"
+        ],
+        "title": "LLMRuntimeStatus"
       },
       "Market": {
         "type": "string",
@@ -3726,6 +3812,9 @@
             "type": "array",
             "title": "News Adapters"
           },
+          "llm": {
+            "$ref": "#/components/schemas/LLMRuntimeStatus"
+          },
           "trading": {
             "$ref": "#/components/schemas/TradingRuntimeStatus"
           },
@@ -3739,6 +3828,7 @@
         "required": [
           "storage",
           "auth",
+          "llm",
           "trading"
         ],
         "title": "SystemStatusResponse"

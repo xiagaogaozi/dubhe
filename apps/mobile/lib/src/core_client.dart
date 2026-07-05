@@ -461,6 +461,7 @@ class SystemStatus {
     required this.paperBrokerEnabled,
     required this.liveTradingEnabled,
     required this.tradingMessageZh,
+    required this.llm,
     required this.configItems,
     required this.newsAdapters,
   });
@@ -473,6 +474,7 @@ class SystemStatus {
   final bool paperBrokerEnabled;
   final bool liveTradingEnabled;
   final String tradingMessageZh;
+  final LlmReadiness llm;
   final List<RuntimeConfigItem> configItems;
   final List<NewsAdapterReadiness> newsAdapters;
 
@@ -495,12 +497,47 @@ class SystemStatus {
       paperBrokerEnabled: _bool(trading['paper_broker_enabled']),
       liveTradingEnabled: _bool(trading['live_trading_enabled']),
       tradingMessageZh: _string(trading['message_zh']),
+      llm: LlmReadiness.fromJson(_map(json['llm'])),
       configItems: _mapList(
         json['config_items'],
       ).map(RuntimeConfigItem.fromJson).toList(),
       newsAdapters: _mapList(
         json['news_adapters'],
       ).map(NewsAdapterReadiness.fromJson).toList(),
+    );
+  }
+}
+
+class LlmReadiness {
+  LlmReadiness({
+    required this.provider,
+    required this.model,
+    required this.configured,
+    required this.enabled,
+    required this.fallbackAvailable,
+    required this.messageZh,
+  });
+
+  final String provider;
+  final String model;
+  final bool configured;
+  final bool enabled;
+  final bool fallbackAvailable;
+  final String messageZh;
+
+  String get displayName {
+    if (enabled && model.isNotEmpty) return model;
+    return fallbackAvailable ? '本地兜底' : '未启用';
+  }
+
+  factory LlmReadiness.fromJson(Map<String, dynamic> json) {
+    return LlmReadiness(
+      provider: _string(json['provider']),
+      model: _string(json['model']),
+      configured: _bool(json['configured']),
+      enabled: _bool(json['enabled']),
+      fallbackAvailable: _bool(json['fallback_available'], fallback: true),
+      messageZh: _string(json['message_zh']),
     );
   }
 }
@@ -944,6 +981,9 @@ class AssistantChatResponse {
     required this.citations,
     required this.suggestedActionsZh,
     required this.safetyNotesZh,
+    required this.modelProvider,
+    required this.modelName,
+    required this.fallbackUsed,
     required this.generatedAt,
   });
 
@@ -952,6 +992,9 @@ class AssistantChatResponse {
   final List<AssistantCitation> citations;
   final List<String> suggestedActionsZh;
   final List<String> safetyNotesZh;
+  final String modelProvider;
+  final String modelName;
+  final bool fallbackUsed;
   final String generatedAt;
 
   factory AssistantChatResponse.fromJson(Map<String, dynamic> json) {
@@ -963,6 +1006,9 @@ class AssistantChatResponse {
       ).map(AssistantCitation.fromJson).toList(),
       suggestedActionsZh: _stringList(json['suggested_actions_zh']),
       safetyNotesZh: _stringList(json['safety_notes_zh']),
+      modelProvider: _string(json['model_provider']),
+      modelName: _string(json['model_name']),
+      fallbackUsed: _bool(json['fallback_used'], fallback: true),
       generatedAt: _string(json['generated_at']),
     );
   }
@@ -976,6 +1022,9 @@ class AssistantConversationTurn {
     required this.citations,
     required this.suggestedActionsZh,
     required this.safetyNotesZh,
+    required this.modelProvider,
+    required this.modelName,
+    required this.fallbackUsed,
     required this.generatedAt,
   });
 
@@ -985,6 +1034,9 @@ class AssistantConversationTurn {
   final List<AssistantCitation> citations;
   final List<String> suggestedActionsZh;
   final List<String> safetyNotesZh;
+  final String modelProvider;
+  final String modelName;
+  final bool fallbackUsed;
   final String generatedAt;
 
   factory AssistantConversationTurn.fromJson(Map<String, dynamic> json) {
@@ -997,6 +1049,9 @@ class AssistantConversationTurn {
       ).map(AssistantCitation.fromJson).toList(),
       suggestedActionsZh: _stringList(json['suggested_actions_zh']),
       safetyNotesZh: _stringList(json['safety_notes_zh']),
+      modelProvider: _string(json['model_provider']),
+      modelName: _string(json['model_name']),
+      fallbackUsed: _bool(json['fallback_used'], fallback: true),
       generatedAt: _string(json['generated_at']),
     );
   }
@@ -1232,7 +1287,8 @@ int _int(dynamic value) {
   return int.tryParse('$value') ?? 0;
 }
 
-bool _bool(dynamic value) {
+bool _bool(dynamic value, {bool fallback = false}) {
+  if (value == null) return fallback;
   if (value is bool) return value;
   if (value is num) return value != 0;
   return '$value'.toLowerCase() == 'true';

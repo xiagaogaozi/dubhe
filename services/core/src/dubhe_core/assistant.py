@@ -9,14 +9,22 @@ from .models import (
     NewsEvent,
     StrategyDraft,
 )
+from .llm import answer_with_configured_llm
 
 
 def answer_research_question(request: AssistantChatRequest) -> AssistantChatResponse:
+    fallback = answer_research_question_deterministic(request)
+    return answer_with_configured_llm(request, fallback)
+
+
+def answer_research_question_deterministic(request: AssistantChatRequest) -> AssistantChatResponse:
     """Deterministic Chinese research assistant for the local, auditable MVP."""
     question = request.question_zh.strip()
     context = request.context
     citations = _citations(context.news_event, context.analysis, context.strategy, context.backtest)
-    answer_parts = [_context_summary(context.news_event, context.analysis, context.strategy, context.backtest)]
+    answer_parts = [
+        _context_summary(context.news_event, context.analysis, context.strategy, context.backtest)
+    ]
 
     if _contains_any(question, ["实盘", "真实", "下单", "买入", "卖出", "交易"]):
         answer_parts.append(
@@ -40,7 +48,9 @@ def answer_research_question(request: AssistantChatRequest) -> AssistantChatResp
     return AssistantChatResponse(
         answer_zh="\n\n".join(part for part in answer_parts if part),
         citations=citations,
-        suggested_actions_zh=_suggested_actions(context.analysis, context.strategy, context.backtest),
+        suggested_actions_zh=_suggested_actions(
+            context.analysis, context.strategy, context.backtest
+        ),
         safety_notes_zh=[
             "不提供绕过风控的实盘下单建议。",
             "没有来源引用、策略草案和回测结果时，只能作为研究提示，不能作为交易依据。",
