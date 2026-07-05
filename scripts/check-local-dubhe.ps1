@@ -61,6 +61,54 @@ function Test-CoreHealth {
     }
 }
 
+function Get-LanCoreUrls {
+    param([int]$Port)
+
+    $preferredAddresses = @(
+        Get-NetIPConfiguration -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPv4DefaultGateway -and $_.IPv4Address } |
+            ForEach-Object { $_.IPv4Address.IPAddress } |
+            Where-Object { $_ -and $_ -ne "127.0.0.1" -and $_ -notlike "169.254.*" } |
+            Select-Object -Unique
+    )
+    $privatePreferredAddresses = @(
+        $preferredAddresses |
+            Where-Object { $_ -match '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)' }
+    )
+    if ($privatePreferredAddresses.Count -gt 0) {
+        return @($privatePreferredAddresses | ForEach-Object { "http://$($_):$Port" })
+    }
+    if ($preferredAddresses.Count -gt 0) {
+        return @($preferredAddresses | ForEach-Object { "http://$($_):$Port" })
+    }
+
+    $addresses = @(
+        Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.IPAddress -and
+                $_.IPAddress -ne "127.0.0.1" -and
+                $_.IPAddress -notlike "169.254.*" -and
+                $_.AddressState -eq "Preferred"
+            } |
+            Select-Object -ExpandProperty IPAddress -Unique
+    )
+    return @($addresses | ForEach-Object { "http://$($_):$Port" })
+}
+
+function Test-CoreLanListener {
+    param([int]$Port)
+
+    $listeners = @(
+        Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.LocalAddress -eq "0.0.0.0" -or
+                $_.LocalAddress -eq "::" -or
+                ($_.LocalAddress -ne "127.0.0.1" -and $_.LocalAddress -ne "::1")
+            }
+    )
+    return $listeners.Count -gt 0
+}
+
 function Read-SystemStatus {
     param([string]$Url)
 
@@ -103,6 +151,7 @@ $theiaRoot = Join-Path $repoRoot "apps\theia-desktop"
 $mobileRoot = Join-Path $repoRoot "apps\mobile"
 $runRoot = Join-Path $repoRoot ".dubhe-run"
 $startCmd = Join-Path $repoRoot "Start-Dubhe.cmd"
+$startLanCmd = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
 $checkCmd = Join-Path $repoRoot "Check-Dubhe.cmd"
 $smokeCmd = Join-Path $repoRoot "Smoke-Dubhe.cmd"
 $stopCmd = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
@@ -120,11 +169,14 @@ $yarnCmd = Resolve-ToolCommand "yarn" (Join-Path $env:LOCALAPPDATA "DubheToolcha
 $flutterExe = Resolve-ToolCommand "flutter" (Join-Path $env:LOCALAPPDATA "DubheToolchains\flutter\bin\flutter.bat")
 $jdkHome = Join-Path $env:LOCALAPPDATA "DubheToolchains\jdk-17"
 $androidSdk = Join-Path $env:LOCALAPPDATA "DubheToolchains\android-sdk"
+$corePort = ([System.Uri]$CoreUrl).Port
+$lanCoreUrls = @(Get-LanCoreUrls -Port $corePort)
 
 $checks = [System.Collections.Generic.List[object]]::new()
 
 Add-Check (New-Check "仓库" "根目录" "ok" $repoRoot)
 Add-Check (New-Check "Windows 入口" "双击启动" ($(if (Test-Path $startCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startCmd) { $startCmd } else { "缺少 Start-Dubhe.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击手机局域网启动" ($(if (Test-Path $startLanCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startLanCmd) { $startLanCmd } else { "缺少 Start-Dubhe-LAN.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击体检" ($(if (Test-Path $checkCmd) { "ok" } else { "warn" })) ($(if (Test-Path $checkCmd) { $checkCmd } else { "缺少 Check-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击烟测" ($(if (Test-Path $smokeCmd) { "ok" } else { "warn" })) ($(if (Test-Path $smokeCmd) { $smokeCmd } else { "缺少 Smoke-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击停止 Core" ($(if (Test-Path $stopCmd) { "ok" } else { "warn" })) ($(if (Test-Path $stopCmd) { $stopCmd } else { "缺少 Stop-Dubhe-Core.cmd。" })))
@@ -220,6 +272,14 @@ if (Test-Path $mobileDebugApk) {
     Add-Check (New-Check "移动端" "Android debug APK" "ok" $mobileDebugApk)
 } else {
     Add-Check (New-Check "移动端" "Android debug APK" "warn" "尚未生成 debug APK；可在 apps/mobile 执行 flutter build apk --debug。")
+}
+
+if ($lanCoreUrls.Count -eq 0) {
+    Add-Check (New-Check "移动端" "手机连接地址" "warn" "未检测到可用局域网 IPv4 地址；真机需要电脑和手机在同一 Wi-Fi/局域网。")
+} elseif ($coreReady -and (Test-CoreLanListener -Port $corePort)) {
+    Add-Check (New-Check "移动端" "手机连接地址" "ok" "手机登录页 Core 地址可填：$($lanCoreUrls -join ' 或 ')")
+} else {
+    Add-Check (New-Check "移动端" "手机连接地址" "warn" "候选地址：$($lanCoreUrls -join ' 或 ')；当前 Core 未对局域网开放，真机连接请双击 Start-Dubhe-LAN.cmd。")
 }
 
 Add-Check (New-Check "日志" "本地运行目录" "ok" $runRoot)

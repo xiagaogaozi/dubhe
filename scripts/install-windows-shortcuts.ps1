@@ -44,6 +44,11 @@ $entries = @(
         description = "Start Dubhe Core and open Dubhe Desktop."
     },
     @{
+        name = "Start Dubhe LAN"
+        file = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
+        description = "Start Dubhe Core for phones on the same Wi-Fi and open Dubhe Desktop."
+    },
+    @{
         name = "Configure Dubhe"
         file = Join-Path $repoRoot "Configure-Dubhe.cmd"
         description = "Open Dubhe local runtime configuration."

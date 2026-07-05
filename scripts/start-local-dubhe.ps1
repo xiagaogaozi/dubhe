@@ -4,6 +4,7 @@ param(
     [switch]$RestartCore,
     [switch]$StopCoreOnly,
     [int]$CorePort = 8000,
+    [switch]$AllowLan,
     [switch]$DryRun
 )
 
@@ -24,6 +25,54 @@ function Test-DubheCoreHealth {
     } catch {
         return $false
     }
+}
+
+function Get-DubheLanUrls {
+    param([int]$Port)
+
+    $preferredAddresses = @(
+        Get-NetIPConfiguration -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPv4DefaultGateway -and $_.IPv4Address } |
+            ForEach-Object { $_.IPv4Address.IPAddress } |
+            Where-Object { $_ -and $_ -ne "127.0.0.1" -and $_ -notlike "169.254.*" } |
+            Select-Object -Unique
+    )
+    $privatePreferredAddresses = @(
+        $preferredAddresses |
+            Where-Object { $_ -match '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)' }
+    )
+    if ($privatePreferredAddresses.Count -gt 0) {
+        return @($privatePreferredAddresses | ForEach-Object { "http://$($_):$Port" })
+    }
+    if ($preferredAddresses.Count -gt 0) {
+        return @($preferredAddresses | ForEach-Object { "http://$($_):$Port" })
+    }
+
+    $addresses = @(
+        Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.IPAddress -and
+                $_.IPAddress -ne "127.0.0.1" -and
+                $_.IPAddress -notlike "169.254.*" -and
+                $_.AddressState -eq "Preferred"
+            } |
+            Select-Object -ExpandProperty IPAddress -Unique
+    )
+    return @($addresses | ForEach-Object { "http://$($_):$Port" })
+}
+
+function Test-DubheLanListener {
+    param([int]$Port)
+
+    $listeners = @(
+        Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.LocalAddress -eq "0.0.0.0" -or
+                $_.LocalAddress -eq "::" -or
+                ($_.LocalAddress -ne "127.0.0.1" -and $_.LocalAddress -ne "::1")
+            }
+    )
+    return $listeners.Count -gt 0
 }
 
 function Stop-ProcessTreeById {
@@ -145,7 +194,9 @@ $runRoot = Join-Path $repoRoot ".dubhe-run"
 $coreLog = Join-Path $runRoot "core.log"
 $coreErrorLog = Join-Path $runRoot "core.err.log"
 $desktopLog = Join-Path $runRoot "theia.log"
+$coreHost = $(if ($AllowLan) { "0.0.0.0" } else { "127.0.0.1" })
 $coreUrl = "http://127.0.0.1:$CorePort"
+$lanUrls = @(Get-DubheLanUrls -Port $CorePort)
 
 if (Test-Path $configLoader) {
     . $configLoader
@@ -164,12 +215,24 @@ if (-not (Test-Path $coreSetupScript)) {
 Write-Host "Dubhe local launcher"
 Write-Host "Repository: $repoRoot"
 Write-Host "Core: $coreUrl"
+Write-Host "Core bind: $coreHost"
+if ($AllowLan -and $lanUrls.Count -gt 0) {
+    Write-Host "Mobile Core URL candidates: $($lanUrls -join ', ')"
+}
 Write-Host "Logs: $runRoot"
 
 if ($DryRun) {
     Write-Host "DryRun: paths checked, no process will be started."
     if ($RestartCore) {
         Write-Host "RestartCore: would stop Python/uvicorn listener on port $CorePort before starting Core."
+    }
+    if ($AllowLan) {
+        Write-Host "AllowLan: would bind Core to 0.0.0.0 so phones on the same LAN can connect."
+        if ($lanUrls.Count -gt 0) {
+            Write-Host "LAN URLs: $($lanUrls -join ', ')"
+        } else {
+            Write-Host "LAN URLs: no preferred IPv4 LAN address detected."
+        }
     }
     if ($StopCoreOnly) {
         Write-Host "StopCoreOnly: would stop Dubhe Core on port $CorePort and exit."
@@ -195,6 +258,11 @@ if ($RestartCore) {
     Stop-DubheCorePort -Port $CorePort
 }
 
+if ($AllowLan -and (Test-DubheCoreHealth -Url $coreUrl) -and -not (Test-DubheLanListener -Port $CorePort)) {
+    Write-Host "Dubhe Core is running in local-only mode; restarting for LAN access..."
+    Stop-DubheCorePort -Port $CorePort
+}
+
 if (Test-DubheCoreHealth -Url $coreUrl) {
     Write-Host "Dubhe Core is already running."
 } else {
@@ -211,7 +279,7 @@ if (Test-DubheCoreHealth -Url $coreUrl) {
     $env:PYTHONUTF8 = "1"
     Start-Process `
         -FilePath $corePython `
-        -ArgumentList @("-m", "uvicorn", "dubhe_core.main:app", "--reload", "--host", "127.0.0.1", "--port", "$CorePort") `
+        -ArgumentList @("-m", "uvicorn", "dubhe_core.main:app", "--reload", "--host", "$coreHost", "--port", "$CorePort") `
         -WorkingDirectory $coreRoot `
         -RedirectStandardOutput $coreLog `
         -RedirectStandardError $coreErrorLog `
@@ -232,6 +300,20 @@ if (Test-DubheCoreHealth -Url $coreUrl) {
     }
 
     Write-Host "Dubhe Core is ready."
+}
+
+if ($AllowLan) {
+    $lanUrls = @(Get-DubheLanUrls -Port $CorePort)
+    if ($lanUrls.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Mobile devices on the same Wi-Fi can use one of these Core addresses:"
+        foreach ($lanUrl in $lanUrls) {
+            Write-Host "  $lanUrl"
+        }
+        Write-Host "If the phone cannot connect, allow Python/Dubhe Core through Windows Firewall for private networks."
+    } else {
+        Write-Host "No LAN IPv4 address was detected. Connect this PC to Wi-Fi/Ethernet and run Start-Dubhe-LAN.cmd again."
+    }
 }
 
 if ($RunCheck) {
