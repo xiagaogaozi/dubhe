@@ -95,6 +95,10 @@ $coreRoot = Join-Path $repoRoot "services\core"
 $theiaRoot = Join-Path $repoRoot "apps\theia-desktop"
 $mobileRoot = Join-Path $repoRoot "apps\mobile"
 $runRoot = Join-Path $repoRoot ".dubhe-run"
+$startCmd = Join-Path $repoRoot "Start-Dubhe.cmd"
+$checkCmd = Join-Path $repoRoot "Check-Dubhe.cmd"
+$stopCmd = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
+$shortcutInstaller = Join-Path $repoRoot "scripts\install-windows-shortcuts.ps1"
 $coreRunScript = Join-Path $coreRoot "scripts\run.ps1"
 $coreTestScript = Join-Path $coreRoot "scripts\test.ps1"
 $desktopExe = Join-Path $theiaRoot "app\dist\win-unpacked\Dubhe.exe"
@@ -108,6 +112,10 @@ $androidSdk = Join-Path $env:LOCALAPPDATA "DubheToolchains\android-sdk"
 $checks = [System.Collections.Generic.List[object]]::new()
 
 Add-Check (New-Check "仓库" "根目录" "ok" $repoRoot)
+Add-Check (New-Check "Windows 入口" "双击启动" ($(if (Test-Path $startCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startCmd) { $startCmd } else { "缺少 Start-Dubhe.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击体检" ($(if (Test-Path $checkCmd) { "ok" } else { "warn" })) ($(if (Test-Path $checkCmd) { $checkCmd } else { "缺少 Check-Dubhe.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击停止 Core" ($(if (Test-Path $stopCmd) { "ok" } else { "warn" })) ($(if (Test-Path $stopCmd) { $stopCmd } else { "缺少 Stop-Dubhe-Core.cmd。" })))
+Add-Check (New-Check "Windows 入口" "快捷方式安装器" ($(if (Test-Path $shortcutInstaller) { "ok" } else { "warn" })) ($(if (Test-Path $shortcutInstaller) { $shortcutInstaller } else { "缺少 scripts/install-windows-shortcuts.ps1。" })))
 Add-Check (New-Check "Core" "运行脚本" ($(if (Test-Path $coreRunScript) { "ok" } else { "fail" })) ($(if (Test-Path $coreRunScript) { $coreRunScript } else { "缺少 services/core/scripts/run.ps1。" })) (-not (Test-Path $coreRunScript)))
 Add-Check (New-Check "Core" "测试脚本" ($(if (Test-Path $coreTestScript) { "ok" } else { "warn" })) ($(if (Test-Path $coreTestScript) { $coreTestScript } else { "缺少测试脚本，后续无法一键验证 Core。" })))
 
