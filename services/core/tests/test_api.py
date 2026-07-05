@@ -78,6 +78,18 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     )
     windows_setup.parent.mkdir(parents=True, exist_ok=True)
     windows_setup.write_bytes(b"setup")
+    desktop_source = (
+        tmp_path
+        / "apps"
+        / "theia-desktop"
+        / "packages"
+        / "dubhe-theia-extension"
+        / "src"
+        / "browser"
+        / "dubhe-widget.tsx"
+    )
+    desktop_source.parent.mkdir(parents=True, exist_ok=True)
+    desktop_source.write_text("source", encoding="utf-8")
     android_apk = (
         tmp_path
         / "apps"
@@ -90,6 +102,15 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     )
     android_apk.parent.mkdir(parents=True, exist_ok=True)
     android_apk.write_bytes(b"apk")
+    mobile_source = tmp_path / "apps" / "mobile" / "lib" / "src" / "app.dart"
+    mobile_source.parent.mkdir(parents=True, exist_ok=True)
+    mobile_source.write_text("source", encoding="utf-8")
+    stale_artifact_time = 1_700_000_000
+    fresh_source_time = 1_700_100_000
+    os.utime(windows_setup, (stale_artifact_time, stale_artifact_time))
+    os.utime(android_apk, (stale_artifact_time, stale_artifact_time))
+    os.utime(desktop_source, (fresh_source_time, fresh_source_time))
+    os.utime(mobile_source, (fresh_source_time, fresh_source_time))
     (tmp_path / "Build-Dubhe-User-Kit.cmd").write_bytes(b"echo user kit")
     (tmp_path / "Start-Dubhe.cmd").write_bytes(b"echo start")
 
@@ -129,8 +150,11 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     packages = {(item["platform"], item["artifact_type"]): item for item in body["install_packages"]}
     assert packages[("windows", "nsis-setup")]["available"] is True
     assert packages[("windows", "nsis-setup")]["size_bytes"] == 5
+    assert packages[("windows", "nsis-setup")]["needs_rebuild"] is True
+    assert "需要重建" in packages[("windows", "nsis-setup")]["freshness_message_zh"]
     assert packages[("android", "debug-apk")]["available"] is True
     assert packages[("android", "debug-apk")]["size_bytes"] == 3
+    assert packages[("android", "debug-apk")]["needs_rebuild"] is True
     assert packages[("macos", "dmg-or-zip")]["available"] is False
     assert packages[("ios", "runner-app")]["available"] is False
 

@@ -472,6 +472,10 @@ void main() {
                 "available": true,
                 "local_path": "D:/github/dubhe-main/apps/theia-desktop/app/dist/Dubhe-0.1.0-win-x64-portable.exe",
                 "size_bytes": 115711072,
+                "artifact_updated_at": "2026-07-05T09:08:29Z",
+                "source_updated_at": "2026-07-05T10:27:01Z",
+                "needs_rebuild": true,
+                "freshness_message_zh": "需要重建：源码更新时间晚于产物时间。",
                 "build_channel_zh": "本机 electron-builder",
                 "message_zh": "可直接拷贝运行。",
                 "next_step_zh": "需要重新生成时执行 electron-builder。"
@@ -483,6 +487,10 @@ void main() {
                 "available": false,
                 "local_path": "",
                 "size_bytes": 0,
+                "artifact_updated_at": null,
+                "source_updated_at": "2026-07-05T10:27:01Z",
+                "needs_rebuild": false,
+                "freshness_message_zh": "尚未生成安装产物。",
                 "build_channel_zh": "macOS CI / Xcode",
                 "message_zh": "当前 Windows 本机不能生成 iOS 安装包。",
                 "next_step_zh": "在 macOS + Xcode 中构建。"
@@ -554,6 +562,8 @@ void main() {
     expect(status.installPackages, hasLength(2));
     expect(status.installPackages.first.available, isTrue);
     expect(status.installPackages.first.sizeBytes, 115711072);
+    expect(status.installPackages.first.needsRebuild, isTrue);
+    expect(status.installPackages.first.freshnessMessageZh, contains('需要重建'));
     expect(status.installPackages.last.platform, 'ios');
     expect(status.installPackages.last.available, isFalse);
     expect(status.localLaunchers, hasLength(2));

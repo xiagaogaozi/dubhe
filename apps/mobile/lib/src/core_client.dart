@@ -1107,6 +1107,10 @@ class InstallPackageReadiness {
     required this.available,
     required this.localPath,
     required this.sizeBytes,
+    required this.artifactUpdatedAt,
+    required this.sourceUpdatedAt,
+    required this.needsRebuild,
+    required this.freshnessMessageZh,
     required this.buildChannelZh,
     required this.messageZh,
     required this.nextStepZh,
@@ -1118,6 +1122,10 @@ class InstallPackageReadiness {
   final bool available;
   final String localPath;
   final int sizeBytes;
+  final String artifactUpdatedAt;
+  final String sourceUpdatedAt;
+  final bool needsRebuild;
+  final String freshnessMessageZh;
   final String buildChannelZh;
   final String messageZh;
   final String nextStepZh;
@@ -1130,6 +1138,10 @@ class InstallPackageReadiness {
       available: _bool(json['available']),
       localPath: _string(json['local_path']),
       sizeBytes: _int(json['size_bytes']),
+      artifactUpdatedAt: _string(json['artifact_updated_at']),
+      sourceUpdatedAt: _string(json['source_updated_at']),
+      needsRebuild: _bool(json['needs_rebuild']),
+      freshnessMessageZh: _string(json['freshness_message_zh']),
       buildChannelZh: _string(json['build_channel_zh']),
       messageZh: _string(json['message_zh']),
       nextStepZh: _string(json['next_step_zh']),

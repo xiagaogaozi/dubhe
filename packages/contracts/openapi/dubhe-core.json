@@ -3128,6 +3128,40 @@
             "title": "Size Bytes",
             "default": 0
           },
+          "artifact_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Updated At"
+          },
+          "source_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Updated At"
+          },
+          "needs_rebuild": {
+            "type": "boolean",
+            "title": "Needs Rebuild",
+            "default": false
+          },
+          "freshness_message_zh": {
+            "type": "string",
+            "title": "Freshness Message Zh",
+            "default": ""
+          },
           "build_channel_zh": {
             "type": "string",
             "title": "Build Channel Zh"

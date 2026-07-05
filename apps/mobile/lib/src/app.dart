@@ -3509,7 +3509,9 @@ class _InstallPackagePanel extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             dense: true,
             leading: Icon(
-              item.available
+              item.needsRebuild
+                  ? Icons.update_outlined
+                  : item.available
                   ? Icons.download_done_outlined
                   : Icons.pending_actions_outlined,
             ),
@@ -3517,7 +3519,9 @@ class _InstallPackagePanel extends StatelessWidget {
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${item.messageZh}\n${item.nextStepZh}'),
+                Text(
+                  '${item.messageZh}\n${item.freshnessMessageZh}\n${item.nextStepZh}',
+                ),
                 if (item.localPath.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(
@@ -3540,7 +3544,9 @@ class _InstallPackagePanel extends StatelessWidget {
               ],
             ),
             trailing: Text(
-              item.available
+              item.needsRebuild
+                  ? '需重建'
+                  : item.available
                   ? _packageSize(item.sizeBytes)
                   : item.buildChannelZh,
             ),

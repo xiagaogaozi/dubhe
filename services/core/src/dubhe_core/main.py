@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -370,6 +371,26 @@ def build_news_coverage(
 def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
     desktop_dist = root / "apps" / "theia-desktop" / "app" / "dist"
     mobile_build = root / "apps" / "mobile" / "build"
+    desktop_source_updated_at = _newest_source_timestamp(
+        [
+            root / "apps" / "theia-desktop" / "package.json",
+            root / "apps" / "theia-desktop" / "yarn.lock",
+            root / "apps" / "theia-desktop" / "app" / "package.json",
+            root / "apps" / "theia-desktop" / "app" / "electron-builder.yml",
+            root / "apps" / "theia-desktop" / "app" / "resources",
+            root / "apps" / "theia-desktop" / "packages" / "dubhe-theia-extension" / "package.json",
+            root / "apps" / "theia-desktop" / "packages" / "dubhe-theia-extension" / "src",
+        ]
+    )
+    mobile_source_updated_at = _newest_source_timestamp(
+        [
+            root / "apps" / "mobile" / "pubspec.yaml",
+            root / "apps" / "mobile" / "analysis_options.yaml",
+            root / "apps" / "mobile" / "lib",
+            root / "apps" / "mobile" / "android",
+            root / "apps" / "mobile" / "ios",
+        ]
+    )
     windows_setup = _newest_file(desktop_dist, "Dubhe-*-win-x64-setup.exe")
     windows_portable = _newest_file(desktop_dist, "Dubhe-*-win-x64-portable.exe")
     android_debug_apk = (
@@ -393,6 +414,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             ready_zh="可直接在 Windows 上安装；当前未签名，首次运行可能出现系统提示。",
             missing_zh="尚未生成 Windows setup 安装包。",
             next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win nsis。",
+            source_updated_at=desktop_source_updated_at,
         ),
         _install_package(
             platform="windows",
@@ -403,6 +425,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             ready_zh="可直接拷贝运行；适合当前阶段给测试用户体验。",
             missing_zh="尚未生成 Windows portable 便携版。",
             next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win portable。",
+            source_updated_at=desktop_source_updated_at,
         ),
         _install_package(
             platform="android",
@@ -413,6 +436,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             ready_zh="可安装到 Android 真机或模拟器，用于本地体验和烟测。",
             missing_zh="尚未生成 Android debug APK。",
             next_step_zh="在 apps/mobile 执行 flutter build apk --debug --dart-define=DUBHE_CORE_URL=http://10.0.2.2:8000。",
+            source_updated_at=mobile_source_updated_at,
         ),
         _install_package(
             platform="android",
@@ -423,6 +447,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             ready_zh="已生成 Android app bundle；正式上架前仍需正式签名、图标和商店元数据。",
             missing_zh="尚未生成 Android release appbundle。",
             next_step_zh="配置正式签名后，在 apps/mobile 执行 flutter build appbundle --release。",
+            source_updated_at=mobile_source_updated_at,
         ),
         _install_package(
             platform="macos",
@@ -433,6 +458,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             ready_zh="已找到 macOS 未签名桌面包；正式分发仍需 Apple 签名和公证。",
             missing_zh="当前 Windows 本机不能生成 macOS 安装包。",
             next_step_zh="在 macOS runner 启用 docs/ci/theia-desktop.yml，生成 dmg/zip 后再做签名和公证。",
+            source_updated_at=desktop_source_updated_at,
         ),
         _install_package(
             platform="ios",
@@ -443,6 +469,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             ready_zh="已找到 iOS no-codesign app bundle；真机/TestFlight 仍需 Apple Developer 签名。",
             missing_zh="当前 Windows 本机不能生成 iOS 安装包。",
             next_step_zh="在 macOS + Xcode 或 docs/ci/mobile.yml 的 iOS job 中构建，并补齐 Bundle ID、证书和描述文件。",
+            source_updated_at=mobile_source_updated_at,
         ),
     ]
 
@@ -593,9 +620,27 @@ def _install_package(
     ready_zh: str,
     missing_zh: str,
     next_step_zh: str,
+    source_updated_at: datetime | None,
 ) -> InstallPackageStatus:
     available = bool(path and path.exists())
     size_bytes = path.stat().st_size if available and path else 0
+    artifact_updated_at = (
+        datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        if available and path
+        else None
+    )
+    needs_rebuild = bool(
+        available
+        and artifact_updated_at
+        and source_updated_at
+        and source_updated_at.timestamp() > artifact_updated_at.timestamp() + 1
+    )
+    freshness_message_zh = _package_freshness_message(
+        available=available,
+        needs_rebuild=needs_rebuild,
+        artifact_updated_at=artifact_updated_at,
+        source_updated_at=source_updated_at,
+    )
     return InstallPackageStatus(
         platform=platform,
         label_zh=label_zh,
@@ -603,10 +648,80 @@ def _install_package(
         available=available,
         local_path=str(path) if path else None,
         size_bytes=size_bytes,
+        artifact_updated_at=artifact_updated_at,
+        source_updated_at=source_updated_at,
+        needs_rebuild=needs_rebuild,
+        freshness_message_zh=freshness_message_zh,
         build_channel_zh=build_channel_zh,
-        message_zh=ready_zh if available else missing_zh,
+        message_zh=(
+            f"{ready_zh} 但源码已更新，建议重新构建后再分发。"
+            if needs_rebuild
+            else ready_zh if available else missing_zh
+        ),
         next_step_zh=next_step_zh,
     )
+
+
+def _package_freshness_message(
+    *,
+    available: bool,
+    needs_rebuild: bool,
+    artifact_updated_at: datetime | None,
+    source_updated_at: datetime | None,
+) -> str:
+    if not available:
+        return "尚未生成安装产物。"
+    if not artifact_updated_at:
+        return "未读取到安装产物时间。"
+    if not source_updated_at:
+        return "未读取到对应源码时间。"
+    artifact_time = artifact_updated_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    source_time = source_updated_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    if needs_rebuild:
+        return f"需要重建：源码更新时间 {source_time} 晚于产物时间 {artifact_time}。"
+    return f"产物较新：产物时间 {artifact_time}，源码时间 {source_time}。"
+
+
+def _newest_source_timestamp(paths: list[Path]) -> datetime | None:
+    mtimes: list[float] = []
+    for path in paths:
+        if path.is_file():
+            mtimes.append(path.stat().st_mtime)
+        elif path.is_dir():
+            mtimes.extend(_source_file_mtimes(path))
+    if not mtimes:
+        return None
+    return datetime.fromtimestamp(max(mtimes), tz=timezone.utc)
+
+
+def _source_file_mtimes(root: Path) -> list[float]:
+    excluded_dirs = {
+        ".dart_tool",
+        ".gradle",
+        ".kotlin",
+        ".theia-cache",
+        "build",
+        "dist",
+        "ephemeral",
+        "node_modules",
+    }
+    excluded_files = {
+        "Generated.xcconfig",
+        "GeneratedPluginRegistrant.h",
+        "GeneratedPluginRegistrant.java",
+        "GeneratedPluginRegistrant.m",
+        "flutter_export_environment.sh",
+        "local.properties",
+    }
+    mtimes: list[float] = []
+    for path in root.rglob("*"):
+        if any(part in excluded_dirs for part in path.parts):
+            continue
+        if path.name in excluded_files:
+            continue
+        if path.is_file():
+            mtimes.append(path.stat().st_mtime)
+    return mtimes
 
 
 def _newest_file(directory: Path, pattern: str) -> Path | None:

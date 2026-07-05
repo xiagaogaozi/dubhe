@@ -216,6 +216,10 @@ class InstallPackageStatus(BaseModel):
     available: bool
     local_path: str | None = None
     size_bytes: int = 0
+    artifact_updated_at: datetime | None = None
+    source_updated_at: datetime | None = None
+    needs_rebuild: bool = False
+    freshness_message_zh: str = ""
     build_channel_zh: str
     message_zh: str
     next_step_zh: str

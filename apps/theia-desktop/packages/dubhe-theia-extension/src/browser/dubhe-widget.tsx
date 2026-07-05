@@ -144,6 +144,10 @@ type InstallPackageStatus = {
   available: boolean;
   local_path?: string | null;
   size_bytes: number;
+  artifact_updated_at?: string | null;
+  source_updated_at?: string | null;
+  needs_rebuild?: boolean;
+  freshness_message_zh?: string;
   build_channel_zh: string;
   message_zh: string;
   next_step_zh: string;
@@ -3338,12 +3342,13 @@ function InstallPackageRow(props: {
 }): React.ReactElement {
   const item = props.item;
   const localPath = item.local_path?.trim() ?? '';
+  const tone: Tone = item.needs_rebuild ? 'warning' : item.available ? 'positive' : 'warning';
   return (
     <div style={styles.statusRow}>
       <div style={styles.statusRowHeader}>
         <strong style={styles.statusName}>{item.label_zh}</strong>
-        <span style={{ ...styles.miniPill, ...tonePillStyle(item.available ? 'positive' : 'warning') }}>
-          {item.available ? packageSize(item.size_bytes) : '待构建'}
+        <span style={{ ...styles.miniPill, ...tonePillStyle(tone) }}>
+          {item.needs_rebuild ? '需重建' : item.available ? packageSize(item.size_bytes) : '待构建'}
         </span>
       </div>
       <p style={styles.statusMessage}>{packageMessage(item)}</p>
@@ -3605,6 +3610,7 @@ function packageSize(bytes: number): string {
 function packageMessage(item: InstallPackageStatus): string {
   return [
     item.message_zh,
+    item.freshness_message_zh,
     `构建方式：${item.build_channel_zh}`,
     `下一步：${item.next_step_zh}`,
   ].filter(Boolean).join(' ');

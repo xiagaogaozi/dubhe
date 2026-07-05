@@ -185,13 +185,20 @@ def _package_item(
     next_step_zh: str,
 ) -> ProductionReadinessItem:
     available = bool(package and package.available)
+    stale = bool(package and package.needs_rebuild)
+    status = "fail" if stale or not available else "warn"
+    evidence = (
+        f"{package.message_zh} {package.freshness_message_zh}".strip()
+        if package
+        else "未找到安装包状态。"
+    )
     return _item(
         item_id=f"package_{platform}",
         category_zh="四端安装包",
         requirement_zh=f"{label_zh} 必须能构建、签名并交付给目标用户。",
-        status="warn" if available else "fail",
-        blocking=blocking and not available,
-        evidence_zh=package.message_zh if package else "未找到安装包状态。",
+        status=status,
+        blocking=stale or (blocking and not available),
+        evidence_zh=evidence,
         next_step_zh=next_step_zh,
     )
 
