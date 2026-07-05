@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import hashlib
+import json
 import os
 import secrets
 import sqlite3
@@ -16,6 +17,7 @@ from .models import (
     AccountLoginRequest,
     AccountRegistrationRequest,
     AssistantConversationTurn,
+    AuditChainVerification,
     AuditLogEntry,
     ApprovalActionRequest,
     ApprovalRequest,
@@ -174,7 +176,9 @@ class SQLiteStore:
 
     @property
     def audit_logs(self) -> list[AuditLogEntry]:
-        return self._load_payloads("audit_logs", AuditLogEntry, "created_at DESC, id DESC")
+        return self._load_payloads(
+            "audit_logs", AuditLogEntry, "COALESCE(sequence, 0) DESC, created_at DESC, id DESC"
+        )
 
     def close(self) -> None:
         with self._lock:
@@ -643,12 +647,82 @@ class SQLiteStore:
             rows = self._connection.execute(
                 """
                 SELECT payload FROM audit_logs
-                ORDER BY created_at DESC, id DESC
+                ORDER BY COALESCE(sequence, 0) DESC, created_at DESC, id DESC
                 LIMIT ?
                 """,
                 (limit,),
             ).fetchall()
             return [AuditLogEntry.model_validate_json(row["payload"]) for row in rows]
+
+    def verify_audit_chain(self) -> AuditChainVerification:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT id, sequence, previous_hash, entry_hash, payload
+                FROM audit_logs
+                WHERE sequence IS NOT NULL
+                ORDER BY sequence ASC, created_at ASC, id ASC
+                """
+            ).fetchall()
+
+            previous_hash: str | None = None
+            latest_sequence: int | None = None
+            latest_hash: str | None = None
+            expected_sequence = 1
+
+            for row in rows:
+                row_sequence = int(row["sequence"])
+                try:
+                    entry = AuditLogEntry.model_validate_json(row["payload"])
+                except Exception:
+                    return AuditChainVerification(
+                        ok=False,
+                        checked_count=expected_sequence - 1,
+                        latest_sequence=latest_sequence,
+                        latest_hash=latest_hash,
+                        first_broken_sequence=row_sequence,
+                        message_zh=f"审计链在第 {row_sequence} 条记录处无法解析，请导出数据库并排查是否被修改。",
+                    )
+                row_previous_hash = row["previous_hash"]
+                row_entry_hash = row["entry_hash"]
+
+                broken = (
+                    entry.sequence != row_sequence
+                    or entry.sequence != expected_sequence
+                    or entry.previous_hash != row_previous_hash
+                    or entry.previous_hash != previous_hash
+                    or entry.entry_hash != row_entry_hash
+                    or entry.entry_hash != self._audit_entry_hash(entry)
+                )
+                if broken:
+                    return AuditChainVerification(
+                        ok=False,
+                        checked_count=expected_sequence - 1,
+                        latest_sequence=latest_sequence,
+                        latest_hash=latest_hash,
+                        first_broken_sequence=row_sequence,
+                        message_zh=f"审计链在第 {row_sequence} 条记录处校验失败，请导出数据库并排查是否被修改。",
+                    )
+
+                previous_hash = entry.entry_hash
+                latest_sequence = entry.sequence
+                latest_hash = entry.entry_hash
+                expected_sequence += 1
+
+            if not rows:
+                return AuditChainVerification(
+                    ok=True,
+                    checked_count=0,
+                    message_zh="尚无带哈希链的审计记录；新审计记录写入后会自动加入本地防篡改链。",
+                )
+
+            return AuditChainVerification(
+                ok=True,
+                checked_count=len(rows),
+                latest_sequence=latest_sequence,
+                latest_hash=latest_hash,
+                message_zh=f"审计链校验通过，已检查 {len(rows)} 条记录。",
+            )
 
     def append_audit_log(
         self,
@@ -889,10 +963,13 @@ class SQLiteStore:
                 CREATE TABLE IF NOT EXISTS audit_logs (
                     id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
+                    sequence INTEGER,
                     actor_user_id TEXT,
                     action TEXT NOT NULL,
                     target_type TEXT NOT NULL,
                     target_id TEXT,
+                    previous_hash TEXT,
+                    entry_hash TEXT,
                     payload TEXT NOT NULL
                 );
 
@@ -911,6 +988,12 @@ class SQLiteStore:
             self._ensure_column("watchlist_items", "added_at", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column("devices", "token_hash", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column("devices", "revoked_at", "TEXT")
+            self._ensure_column("audit_logs", "sequence", "INTEGER")
+            self._ensure_column("audit_logs", "previous_hash", "TEXT")
+            self._ensure_column("audit_logs", "entry_hash", "TEXT")
+            self._connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_logs_sequence ON audit_logs(sequence)"
+            )
             self._connection.commit()
 
     def _load_payloads(
@@ -1188,7 +1271,10 @@ class SQLiteStore:
         target_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AuditLogEntry:
+        sequence = self._next_audit_sequence()
+        previous_hash = self._latest_audit_hash()
         entry = AuditLogEntry(
+            sequence=sequence,
             actor_user_id=actor_session.user_id if actor_session else None,
             actor_device_id=actor_session.device_id if actor_session else None,
             actor_role=actor_session.role if actor_session else None,
@@ -1197,24 +1283,69 @@ class SQLiteStore:
             target_id=target_id,
             summary_zh=summary_zh,
             metadata=metadata or {},
+            previous_hash=previous_hash,
         )
+        entry = entry.model_copy(update={"entry_hash": self._audit_entry_hash(entry)})
         self._connection.execute(
             """
             INSERT INTO audit_logs
-                (id, created_at, actor_user_id, action, target_type, target_id, payload)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (
+                    id,
+                    created_at,
+                    sequence,
+                    actor_user_id,
+                    action,
+                    target_type,
+                    target_id,
+                    previous_hash,
+                    entry_hash,
+                    payload
+                )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 entry.id,
                 entry.created_at.isoformat(),
+                entry.sequence,
                 entry.actor_user_id,
                 entry.action,
                 entry.target_type,
                 entry.target_id,
+                entry.previous_hash,
+                entry.entry_hash,
                 entry.model_dump_json(),
             ),
         )
         return entry
+
+    def _next_audit_sequence(self) -> int:
+        row = self._connection.execute(
+            "SELECT COALESCE(MAX(sequence), 0) AS sequence FROM audit_logs",
+        ).fetchone()
+        return int(row["sequence"]) + 1
+
+    def _latest_audit_hash(self) -> str | None:
+        row = self._connection.execute(
+            """
+            SELECT entry_hash FROM audit_logs
+            WHERE sequence IS NOT NULL AND entry_hash IS NOT NULL
+            ORDER BY sequence DESC
+            LIMIT 1
+            """,
+        ).fetchone()
+        if row is None:
+            return None
+        return row["entry_hash"]
+
+    def _audit_entry_hash(self, entry: AuditLogEntry) -> str:
+        payload = entry.model_dump(mode="json", exclude={"entry_hash"})
+        canonical = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _create_device_session(
         self,

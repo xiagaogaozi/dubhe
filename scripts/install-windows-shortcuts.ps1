@@ -79,6 +79,11 @@ $entries = @(
         description = "Run local acceptance: readiness check, smoke workflow, and external service status."
     },
     @{
+        name = "Verify Dubhe Audit"
+        file = Join-Path $repoRoot "Verify-Dubhe-Audit.cmd"
+        description = "Verify the local audit log hash chain."
+    },
+    @{
         name = "Check Dubhe"
         file = Join-Path $repoRoot "Check-Dubhe.cmd"
         description = "Check local Dubhe Core, desktop, mobile toolchain, and package readiness."

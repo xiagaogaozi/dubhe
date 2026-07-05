@@ -11,11 +11,12 @@
 3. 双击 `02-Accept-Dubhe-This-PC.cmd` 做本机完整验收。
 4. 需要手机连接时，双击 `03-Connect-Dubhe-Mobile-This-PC.cmd`，扫码或填写连接卡里的 Core 地址。
 5. 如需单独定位环境问题，双击 `04-Check-Dubhe-This-PC.cmd` 做本机体检。
-6. 只需要局域网启动日志时，双击 `05-Start-Dubhe-LAN-This-PC.cmd`。
-7. 填完 key 后，双击 `06-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。
-8. 真正准备商业发布前，双击 `07-Check-Production-This-PC.cmd` 查看生产门禁。
-9. 需要把生产阻断项交给团队补齐时，双击 `08-Export-Production-Pack-This-PC.cmd`。
-10. 需要单独重跑主链路时，双击 `09-Smoke-Dubhe-This-PC.cmd`。
+6. 需要检查本地审计日志是否被改写时，双击 `05-Verify-Dubhe-Audit-This-PC.cmd`。
+7. 只需要局域网启动日志时，双击 `06-Start-Dubhe-LAN-This-PC.cmd`。
+8. 填完 key 后，双击 `07-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。
+9. 真正准备商业发布前，双击 `08-Check-Production-This-PC.cmd` 查看生产门禁。
+10. 需要把生产阻断项交给团队补齐时，双击 `09-Export-Production-Pack-This-PC.cmd`。
+11. 需要单独重跑主链路时，双击 `10-Smoke-Dubhe-This-PC.cmd`。
 
 ## 这个包里的内容
 
@@ -33,6 +34,7 @@
 - 这个交付包里的双击入口会调用上面的仓库路径。不要删除或移动该仓库，否则这些入口会失效。
 - Windows 和 Android 当前可以本机体验；macOS / iOS 仍需要 macOS runner、Apple 签名、公证和商店发布资料。
 - 真实生产上线前必须让 `Check-Dubhe-Production.cmd` 通过。当前本地演示能力不等于商业生产可用。
+- 本地审计链验证只能证明当前 SQLite 审计记录的哈希链没有断裂，不等同于生产级 WORM、对象锁或外部不可变审计存储。
 
 ## 已检测到的安装产物
 

@@ -19,6 +19,7 @@ from .models import (
     AssistantChatResponse,
     AssistantContext,
     AssistantConversationTurn,
+    AuditChainVerification,
     AuditLogEntry,
     ApprovalActionRequest,
     ApprovalRequest,
@@ -1106,6 +1107,13 @@ def list_audit_logs_endpoint(
     _session: DeviceSession = Depends(require_risk_manager_session),
 ) -> list[AuditLogEntry]:
     return store.list_audit_logs(limit=limit)
+
+
+@app.get("/v1/audit/chain/verify", response_model=AuditChainVerification)
+def verify_audit_chain_endpoint(
+    _session: DeviceSession = Depends(require_risk_manager_session),
+) -> AuditChainVerification:
+    return store.verify_audit_chain()
 
 
 @app.get("/v1/workspaces/{workspace_id}/snapshot", response_model=WorkspaceSnapshot)

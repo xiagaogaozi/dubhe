@@ -758,6 +758,7 @@ class DeviceRevocation(BaseModel):
 
 class AuditLogEntry(BaseModel):
     id: str = Field(default_factory=lambda: f"audit_{uuid4().hex}")
+    sequence: int | None = None
     actor_user_id: str | None = None
     actor_device_id: str | None = None
     actor_role: UserRole | None = None
@@ -766,7 +767,19 @@ class AuditLogEntry(BaseModel):
     target_id: str | None = None
     summary_zh: str = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    previous_hash: str | None = None
+    entry_hash: str | None = None
+    chain_algorithm: Literal["sha256"] = "sha256"
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class AuditChainVerification(BaseModel):
+    ok: bool
+    checked_count: int
+    latest_sequence: int | None = None
+    latest_hash: str | None = None
+    first_broken_sequence: int | None = None
+    message_zh: str
 
 
 class Workspace(BaseModel):

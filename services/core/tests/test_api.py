@@ -744,6 +744,17 @@ def test_account_login_mfa_and_role_boundaries() -> None:
     audit_logs = audit_response.json()
     assert any(log["action"] == "admin.user_role_updated" for log in audit_logs)
     assert any(log["action"] == "auth.login_succeeded" for log in audit_logs)
+    latest_audit_log = audit_logs[0]
+    assert latest_audit_log["sequence"] >= 1
+    assert latest_audit_log["chain_algorithm"] == "sha256"
+    assert len(latest_audit_log["entry_hash"]) == 64
+
+    verify_response = client.get("/v1/audit/chain/verify", headers=auth_headers(user_session))
+    assert verify_response.status_code == 200
+    verify_body = verify_response.json()
+    assert verify_body["ok"] is True
+    assert verify_body["checked_count"] >= 1
+    assert verify_body["latest_sequence"] >= latest_audit_log["sequence"]
 
 
 def test_workspace_sync_websocket_streams_new_events() -> None:
@@ -979,6 +990,48 @@ def test_sqlite_store_persists_workspace_and_watchlist_across_restarts(tmp_path:
     assert any(
         event.entity_id for event in snapshot.events if event.entity_type == "watchlist_item"
     )
+
+
+def test_sqlite_store_audit_hash_chain_detects_tampering(tmp_path: Path) -> None:
+    db_path = tmp_path / "dubhe-audit.sqlite"
+    audit_store = SQLiteStore(db_path)
+    audit_store.register_device(
+        DeviceRegistrationRequest(
+            account_key="audit-chain-fixture",
+            account_name="审计链测试账号",
+            device_name="Windows 测试机",
+            platform="windows",
+        ),
+    )
+
+    initial = audit_store.verify_audit_chain()
+    assert initial.ok is True
+    assert initial.checked_count >= 1
+    assert initial.latest_sequence is not None
+    assert initial.latest_hash is not None
+
+    row = audit_store._connection.execute(
+        """
+        SELECT id, sequence, payload
+        FROM audit_logs
+        ORDER BY sequence DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    payload = json.loads(row["payload"])
+    payload["summary_zh"] = "这条审计记录已被测试直接改写。"
+    audit_store._connection.execute(
+        "UPDATE audit_logs SET payload = ? WHERE id = ?",
+        (json.dumps(payload, ensure_ascii=False), row["id"]),
+    )
+    audit_store._connection.commit()
+
+    broken = audit_store.verify_audit_chain()
+    audit_store.close()
+
+    assert broken.ok is False
+    assert broken.first_broken_sequence == row["sequence"]
+    assert broken.checked_count == row["sequence"] - 1
 
 
 def test_news_analysis_returns_chinese_summary_and_sources() -> None:

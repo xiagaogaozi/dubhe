@@ -169,6 +169,33 @@ function Read-SystemStatus {
     }
 }
 
+function Read-AuditChainVerification {
+    param(
+        [string]$Url,
+        [string]$ScriptPath
+    )
+
+    try {
+        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath -CoreUrl $Url -Json 2>&1
+        $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { $LASTEXITCODE }
+        $text = (@($output | ForEach-Object { "$_" }) -join [Environment]::NewLine).Trim()
+        if ([string]::IsNullOrWhiteSpace($text)) {
+            throw "审计链验证未返回 JSON。"
+        }
+        $report = $text | ConvertFrom-Json
+        return [pscustomobject]@{
+            exit_code = $exitCode
+            report = $report
+        }
+    } catch {
+        return [pscustomobject]@{
+            exit_code = 1
+            report = $null
+            error = $_.Exception.Message
+        }
+    }
+}
+
 function Write-CheckLine {
     param([pscustomobject]$Check)
 
@@ -199,6 +226,7 @@ $userKitCmd = Join-Path $repoRoot "Build-Dubhe-User-Kit.cmd"
 $installGuideCmd = Join-Path $repoRoot "Open-Dubhe-Install-Guide.cmd"
 $mobileGuideCmd = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
 $acceptCmd = Join-Path $repoRoot "Accept-Dubhe.cmd"
+$auditVerifyCmd = Join-Path $repoRoot "Verify-Dubhe-Audit.cmd"
 $checkCmd = Join-Path $repoRoot "Check-Dubhe.cmd"
 $smokeCmd = Join-Path $repoRoot "Smoke-Dubhe.cmd"
 $serviceCheckCmd = Join-Path $repoRoot "Test-Dubhe-Services.cmd"
@@ -213,6 +241,7 @@ $coreRunScript = Join-Path $coreRoot "scripts\run.ps1"
 $coreTestScript = Join-Path $coreRoot "scripts\test.ps1"
 $coreSmokeScript = Join-Path $repoRoot "scripts\smoke-core-workflow.ps1"
 $localAcceptanceScript = Join-Path $repoRoot "scripts\run-local-acceptance.ps1"
+$auditVerifyScript = Join-Path $repoRoot "scripts\verify-audit-chain.ps1"
 $mobileConnectScript = Join-Path $repoRoot "scripts\show-mobile-connect.ps1"
 $qrGeneratorScript = Join-Path $repoRoot "scripts\generate-qr-svg.py"
 $productionPackScript = Join-Path $repoRoot "scripts\export-production-pack.ps1"
@@ -241,6 +270,7 @@ Add-Check (New-Check "Windows 入口" "双击生成用户交付包" ($(if (Test-
 Add-Check (New-Check "Windows 入口" "双击四端安装向导" ($(if (Test-Path $installGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $installGuideCmd) { $installGuideCmd } else { "缺少 Open-Dubhe-Install-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机连接向导" ($(if (Test-Path $mobileGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $mobileGuideCmd) { $mobileGuideCmd } else { "缺少 Open-Dubhe-Mobile-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击本机完整验收" ($(if (Test-Path $acceptCmd) { "ok" } else { "warn" })) ($(if (Test-Path $acceptCmd) { $acceptCmd } else { "缺少 Accept-Dubhe.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击审计链验证" ($(if (Test-Path $auditVerifyCmd) { "ok" } else { "warn" })) ($(if (Test-Path $auditVerifyCmd) { $auditVerifyCmd } else { "缺少 Verify-Dubhe-Audit.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击体检" ($(if (Test-Path $checkCmd) { "ok" } else { "warn" })) ($(if (Test-Path $checkCmd) { $checkCmd } else { "缺少 Check-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击烟测" ($(if (Test-Path $smokeCmd) { "ok" } else { "warn" })) ($(if (Test-Path $smokeCmd) { $smokeCmd } else { "缺少 Smoke-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击外部服务体检" ($(if (Test-Path $serviceCheckCmd) { "ok" } else { "warn" })) ($(if (Test-Path $serviceCheckCmd) { $serviceCheckCmd } else { "缺少 Test-Dubhe-Services.cmd。" })))
@@ -255,6 +285,7 @@ Add-Check (New-Check "Core" "运行脚本" ($(if (Test-Path $coreRunScript) { "o
 Add-Check (New-Check "Core" "测试脚本" ($(if (Test-Path $coreTestScript) { "ok" } else { "warn" })) ($(if (Test-Path $coreTestScript) { $coreTestScript } else { "缺少测试脚本，后续无法一键验证 Core。" })))
 Add-Check (New-Check "Core" "主链路烟测" ($(if (Test-Path $coreSmokeScript) { "ok" } else { "warn" })) ($(if (Test-Path $coreSmokeScript) { $coreSmokeScript } else { "缺少 scripts/smoke-core-workflow.ps1。" })))
 Add-Check (New-Check "Core" "本机完整验收" ($(if (Test-Path $localAcceptanceScript) { "ok" } else { "warn" })) ($(if (Test-Path $localAcceptanceScript) { $localAcceptanceScript } else { "缺少 scripts/run-local-acceptance.ps1。" })))
+Add-Check (New-Check "Core" "审计链验证脚本" ($(if (Test-Path $auditVerifyScript) { "ok" } else { "warn" })) ($(if (Test-Path $auditVerifyScript) { $auditVerifyScript } else { "缺少 scripts/verify-audit-chain.ps1。" })))
 Add-Check (New-Check "移动端" "手机连接卡脚本" ($(if (Test-Path $mobileConnectScript) { "ok" } else { "warn" })) ($(if (Test-Path $mobileConnectScript) { $mobileConnectScript } else { "缺少 scripts/show-mobile-connect.ps1。" })))
 Add-Check (New-Check "移动端" "二维码生成脚本" ($(if (Test-Path $qrGeneratorScript) { "ok" } else { "warn" })) ($(if (Test-Path $qrGeneratorScript) { $qrGeneratorScript } else { "缺少 scripts/generate-qr-svg.py。" })))
 Add-Check (New-Check "生产门禁" "生产补齐包脚本" ($(if (Test-Path $productionPackScript) { "ok" } else { "warn" })) ($(if (Test-Path $productionPackScript) { $productionPackScript } else { "缺少 scripts/export-production-pack.ps1。" })))
@@ -289,6 +320,18 @@ if ($coreReady) {
         Add-Check (New-Check "交易" "实盘开关" ($(if ($systemStatus.trading.live_trading_enabled) { "fail" } else { "ok" })) ($(if ($systemStatus.trading.live_trading_enabled) { "实盘交易已开启，请确认风控和审批已完成。" } else { "实盘交易关闭，纸面交易可用。" })) ([bool]$systemStatus.trading.live_trading_enabled))
         foreach ($item in $systemStatus.config_items) {
             Add-Check (New-Check "数据源配置" $item.label_zh ($(if ($item.configured) { "ok" } else { "warn" })) $item.message_zh)
+        }
+        if (Test-Path $auditVerifyScript) {
+            $auditVerification = Read-AuditChainVerification -Url $CoreUrl -ScriptPath $auditVerifyScript
+            if ($auditVerification.report -and $auditVerification.report.verification -and $auditVerification.report.verification.ok) {
+                Add-Check (New-Check "审计" "本地哈希链" "ok" $auditVerification.report.verification.message_zh)
+            } elseif ($auditVerification.report -and $auditVerification.report.verification -and -not $auditVerification.report.verification.ok) {
+                Add-Check (New-Check "审计" "本地哈希链" "fail" $auditVerification.report.verification.message_zh $true)
+            } elseif ($auditVerification.report) {
+                Add-Check (New-Check "审计" "本地哈希链" "warn" $auditVerification.report.message)
+            } else {
+                Add-Check (New-Check "审计" "本地哈希链" "warn" "暂未完成验证：$($auditVerification.error)")
+            }
         }
     } else {
         Add-Check (New-Check "Core" "系统体检接口" "warn" "Core 可用，但 /v1/system/status 暂未返回；如果刚更新代码，请重启 Core。")

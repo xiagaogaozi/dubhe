@@ -625,6 +625,52 @@
         }
       }
     },
+    "/v1/audit/chain/verify": {
+      "get": {
+        "summary": "Verify Audit Chain Endpoint",
+        "operationId": "verify_audit_chain_endpoint_v1_audit_chain_verify_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditChainVerification"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/snapshot": {
       "get": {
         "summary": "Workspace Snapshot Endpoint",
@@ -2426,11 +2472,78 @@
         ],
         "title": "AssistantConversationTurn"
       },
+      "AuditChainVerification": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "checked_count": {
+            "type": "integer",
+            "title": "Checked Count"
+          },
+          "latest_sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Sequence"
+          },
+          "latest_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Hash"
+          },
+          "first_broken_sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Broken Sequence"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "checked_count",
+          "message_zh"
+        ],
+        "title": "AuditChainVerification"
+      },
       "AuditLogEntry": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence"
           },
           "actor_user_id": {
             "anyOf": [
@@ -2494,6 +2607,34 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Metadata"
+          },
+          "previous_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Hash"
+          },
+          "entry_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Hash"
+          },
+          "chain_algorithm": {
+            "type": "string",
+            "const": "sha256",
+            "title": "Chain Algorithm",
+            "default": "sha256"
           },
           "created_at": {
             "type": "string",

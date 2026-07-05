@@ -51,8 +51,8 @@ def production_readiness_response() -> ProductionReadinessResponse:
             requirement_zh="生产审计日志必须不可篡改，并覆盖配置变更、AI 决策、风控、审批和订单。",
             status="fail",
             blocking=True,
-            evidence_zh="当前审计日志保存在本地 SQLite，可用于开发验证，但不是不可篡改审计存储。",
-            next_step_zh="接入追加写审计存储、对象锁或外部审计服务，并为关键动作生成签名摘要。",
+            evidence_zh="当前审计日志保存在本地 SQLite，并已提供本地 SHA-256 哈希链校验，可用于开发验证，但不是生产级不可篡改审计存储。",
+            next_step_zh="接入追加写审计存储、对象锁或外部审计服务，并为关键动作生成签名摘要和外部留痕。",
         ),
         _item(
             item_id="live_broker_adapter",

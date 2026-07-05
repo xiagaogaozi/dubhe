@@ -99,6 +99,7 @@ $textReportPath = Join-Path $runRoot "local-acceptance.txt"
 $jsonReportPath = Join-Path $runRoot "local-acceptance.json"
 $startScript = Join-Path $repoRoot "scripts\start-local-dubhe.ps1"
 $localCheckScript = Join-Path $repoRoot "scripts\check-local-dubhe.ps1"
+$auditVerifyScript = Join-Path $repoRoot "scripts\verify-audit-chain.ps1"
 $smokeScript = Join-Path $repoRoot "scripts\smoke-core-workflow.ps1"
 $externalScript = Join-Path $repoRoot "scripts\test-external-services.ps1"
 $corePort = ([System.Uri]$CoreUrl).Port
@@ -109,7 +110,7 @@ $reportLines = [System.Collections.Generic.List[string]]::new()
 $steps = [System.Collections.Generic.List[object]]::new()
 $blockingFailure = $false
 $stepNumber = 1
-$totalSteps = 4
+$totalSteps = 5
 $externalLive = -not $SkipExternalLive
 
 Write-AcceptanceLine "Dubhe 本机完整验收"
@@ -155,6 +156,39 @@ Invoke-RequiredAcceptanceStep `
         param($Data)
         "本机体检通过；提示 $($Data.warning_count) 项，非阻断缺失 $($Data.failure_count) 项。"
     } | Out-Null
+
+Write-AcceptanceLine ""
+Write-AcceptanceLine "[$stepNumber/$totalSteps] 本地审计链验证"
+$stepNumber += 1
+$brokenAuditChain = $false
+try {
+    if (-not (Test-Path $auditVerifyScript)) {
+        throw "缺少审计链验证脚本：$auditVerifyScript"
+    }
+    $result = Invoke-ChildPowerShell -ScriptPath $auditVerifyScript -Arguments @("-CoreUrl", $CoreUrl, "-Json")
+    $report = ConvertFrom-JsonOutput -Result $result -Label "本地审计链验证"
+    if ($report.verification -and -not $report.verification.ok) {
+        $brokenAuditChain = $true
+        throw "本地审计链校验失败：$($report.verification.message_zh)"
+    }
+    if ($result.exit_code -ne 0) {
+        Add-AcceptanceStep -Name "本地审计链验证" -Status "attention" -Required $false -Message $report.message -Data $report
+        Write-AcceptanceLine "[需权限] $($report.message)"
+    } else {
+        Add-AcceptanceStep -Name "本地审计链验证" -Status "passed" -Required $true -Message $report.message -Data $report
+        Write-AcceptanceLine "[OK] $($report.message)"
+    }
+} catch {
+    $message = $_.Exception.Message
+    if ($brokenAuditChain) {
+        Add-AcceptanceStep -Name "本地审计链验证" -Status "failed" -Required $true -Message $message
+        $blockingFailure = $true
+        Write-AcceptanceLine "[失败] $message"
+    } else {
+        Add-AcceptanceStep -Name "本地审计链验证" -Status "attention" -Required $false -Message $message
+        Write-AcceptanceLine "[需处理] $message"
+    }
+}
 
 Invoke-RequiredAcceptanceStep `
     -Name "主链路 smoke" `

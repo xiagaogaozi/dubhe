@@ -251,6 +251,7 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination (Join-Path
 
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\check-local-dubhe.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "local-check.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\run-local-acceptance.ps1") -Arguments @("-CoreUrl", $CoreUrl, "-SkipExternalLive") -Path (Join-Path $checksDir "local-acceptance.txt")
+Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\verify-audit-chain.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "audit-chain-verification.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\test-external-services.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "external-services.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\check-production-readiness.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "production-readiness.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\export-production-pack.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "render-production-pack.txt")
@@ -265,11 +266,12 @@ Write-Launcher -Path (Join-Path $kitRoot "01-Configure-Dubhe-This-PC.cmd") -Titl
 Write-Launcher -Path (Join-Path $kitRoot "02-Accept-Dubhe-This-PC.cmd") -Title "Accept Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Accept-Dubhe.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "03-Connect-Dubhe-Mobile-This-PC.cmd") -Title "Connect Dubhe mobile on this PC" -TargetScript (Join-Path $repoRoot "Connect-Dubhe-Mobile.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "04-Check-Dubhe-This-PC.cmd") -Title "Check Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "05-Start-Dubhe-LAN-This-PC.cmd") -Title "Start Dubhe LAN on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe-LAN.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "06-Test-Services-This-PC.cmd") -Title "Test Dubhe services on this PC" -TargetScript (Join-Path $repoRoot "Test-Dubhe-Services.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "07-Check-Production-This-PC.cmd") -Title "Check Dubhe production readiness on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe-Production.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "08-Export-Production-Pack-This-PC.cmd") -Title "Export Dubhe production pack on this PC" -TargetScript (Join-Path $repoRoot "Export-Dubhe-Production-Pack.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "09-Smoke-Dubhe-This-PC.cmd") -Title "Smoke Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Smoke-Dubhe.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "05-Verify-Dubhe-Audit-This-PC.cmd") -Title "Verify Dubhe audit chain on this PC" -TargetScript (Join-Path $repoRoot "Verify-Dubhe-Audit.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "06-Start-Dubhe-LAN-This-PC.cmd") -Title "Start Dubhe LAN on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe-LAN.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "07-Test-Services-This-PC.cmd") -Title "Test Dubhe services on this PC" -TargetScript (Join-Path $repoRoot "Test-Dubhe-Services.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "08-Check-Production-This-PC.cmd") -Title "Check Dubhe production readiness on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe-Production.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "09-Export-Production-Pack-This-PC.cmd") -Title "Export Dubhe production pack on this PC" -TargetScript (Join-Path $repoRoot "Export-Dubhe-Production-Pack.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "10-Smoke-Dubhe-This-PC.cmd") -Title "Smoke Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Smoke-Dubhe.cmd")
 
 $template = Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "docs\USER_KIT_README.md")
 $readme = $template
