@@ -1128,8 +1128,9 @@ function DubheWorkbench(): React.ReactElement {
       return;
     }
 
-    const nextSymbol = symbol.trim().toUpperCase();
-    const sourceRef = analysis?.id ?? selectedNews.url ?? selectedNews.provider_event_id ?? selectedNews.id;
+    const nextSymbol = paperTradeSymbol(symbol, strategyDraft);
+    const nextMarket = paperTradeMarket(market, nextSymbol, strategyDraft);
+    const sourceRef = paperTradeSourceRef(analysis, strategyDraft, selectedNews);
     setRiskBusy(true);
     try {
       const decision = await postJson<RiskDecision>(
@@ -1138,13 +1139,13 @@ function DubheWorkbench(): React.ReactElement {
         {
           account_id: DEFAULT_PAPER_ACCOUNT_ID,
           strategy_version_id: strategyDraft?.strategy_version_id ?? 'manual_live_approval_demo',
-          market,
+          market: nextMarket,
           symbol: nextSymbol,
           side: 'buy',
           order_type: 'market',
           quantity: 1,
           estimated_price: estimatePrice(nextSymbol),
-          currency: market === 'HK' ? 'HKD' : market === 'A_SHARE' ? 'CNY' : 'USD',
+          currency: currencyForMarket(nextMarket),
           created_by: 'ai',
           destination: 'live',
           rationale_zh: '桌面端风控中心生成的实盘审批演示；仅创建审批请求，不会连接真实券商。',

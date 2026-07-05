@@ -744,9 +744,10 @@ class _CompanionHomeState extends State<CompanionHome> {
     }
 
     final event = _firstNewsEvent;
-    if (event == null) {
+    final draft = _strategyDraft;
+    if (event == null && draft == null) {
       setState(() {
-        _approvalMessage = '请先同步新闻后再生成审批演示。';
+        _approvalMessage = '请先同步新闻或加载同步策略后再生成审批演示。';
       });
       return;
     }
@@ -756,17 +757,21 @@ class _CompanionHomeState extends State<CompanionHome> {
       _approvalMessage = null;
     });
     try {
-      final market = _primaryMarket(event);
-      final symbol = _primarySymbol(event);
-      final sourceRef = _analysis?.id.isNotEmpty == true
-          ? _analysis!.id
-          : event.id.isNotEmpty
-          ? event.id
-          : 'mobile_news_event';
+      final symbol = paperTradeSymbol(strategyDraft: draft, event: event);
+      final market = paperTradeMarket(
+        strategyDraft: draft,
+        event: event,
+        symbol: symbol,
+      );
+      final sourceRef = paperTradeSourceRef(
+        analysis: _analysis,
+        strategyDraft: draft,
+        event: event,
+      );
       final decision = await widget.client.createLiveApprovalDemo(
         accountId: defaultPaperAccountId,
         strategyVersionId:
-            _strategyDraft?.strategyVersionId ?? 'mobile_live_approval_demo',
+            draft?.strategyVersionId ?? 'mobile_live_approval_demo',
         market: market,
         symbol: symbol,
         quantity: 1,
