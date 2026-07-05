@@ -97,6 +97,17 @@ class CoreClient {
     return WorkspaceSnapshot.fromJson(_map(json));
   }
 
+  Future<List<SyncEvent>> fetchWorkspaceSyncEvents({
+    required String workspaceId,
+    int sinceSequence = 0,
+  }) async {
+    final json = await _getJson(
+      '/v1/workspaces/$workspaceId/sync-events',
+      queryParameters: {'since_sequence': '$sinceSequence'},
+    );
+    return _mapList(json).map(SyncEvent.fromJson).toList();
+  }
+
   Future<WorkspaceSyncConnection> connectWorkspaceSyncEvents({
     required String workspaceId,
     int sinceSequence = 0,

@@ -197,6 +197,7 @@ enum _MobileSyncConnectionStatus {
   disconnected,
   connecting,
   live,
+  polling,
   reconnecting,
   offline,
 }
@@ -232,6 +233,8 @@ class _CompanionHomeState extends State<CompanionHome> {
   WorkspaceSyncConnection? _syncConnection;
   StreamSubscription<SyncEvent>? _syncSubscription;
   Timer? _syncReconnectTimer;
+  Timer? _syncPollingTimer;
+  bool _syncPollingBusy = false;
   int _syncCursor = 0;
   int _syncRetryCount = 0;
   int _syncConnectGeneration = 0;
@@ -273,6 +276,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         return;
       }
       _syncConnection = connection;
+      _stopWorkspaceSyncPolling();
       _syncSubscription = connection.events.listen(
         _handleSyncEvent,
         onError: (_) => _scheduleWorkspaceSyncReconnect(generation),
@@ -294,6 +298,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   void _closeWorkspaceSync() {
     _syncReconnectTimer?.cancel();
     _syncReconnectTimer = null;
+    _stopWorkspaceSyncPolling();
     unawaited(_syncSubscription?.cancel());
     _syncSubscription = null;
     unawaited(_syncConnection?.close());
@@ -307,6 +312,7 @@ class _CompanionHomeState extends State<CompanionHome> {
     setState(() {
       _syncStatus = _MobileSyncConnectionStatus.reconnecting;
     });
+    _startWorkspaceSyncPolling(generation);
     final seconds = _syncRetryCount > 15 ? 15 : _syncRetryCount;
     _syncReconnectTimer = Timer(Duration(seconds: seconds), () {
       _syncReconnectTimer = null;
@@ -314,24 +320,79 @@ class _CompanionHomeState extends State<CompanionHome> {
     });
   }
 
+  void _startWorkspaceSyncPolling(int generation) {
+    if (generation != _syncConnectGeneration || _syncPollingTimer != null) {
+      return;
+    }
+    setState(() {
+      _syncStatus = _MobileSyncConnectionStatus.polling;
+    });
+    unawaited(_pollWorkspaceSyncEvents(generation));
+    _syncPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      unawaited(_pollWorkspaceSyncEvents(generation));
+    });
+  }
+
+  void _stopWorkspaceSyncPolling() {
+    _syncPollingTimer?.cancel();
+    _syncPollingTimer = null;
+    _syncPollingBusy = false;
+  }
+
+  Future<void> _pollWorkspaceSyncEvents(int generation) async {
+    if (!mounted || generation != _syncConnectGeneration || _syncPollingBusy) {
+      return;
+    }
+    _syncPollingBusy = true;
+    try {
+      final events = await widget.client.fetchWorkspaceSyncEvents(
+        workspaceId: widget.session.workspaceId,
+        sinceSequence: _syncCursor,
+      );
+      if (!mounted || generation != _syncConnectGeneration) return;
+      if (events.isNotEmpty) {
+        _handleSyncEvents(events);
+      }
+      if (_syncStatus != _MobileSyncConnectionStatus.live) {
+        setState(() {
+          _syncStatus = _MobileSyncConnectionStatus.polling;
+        });
+      }
+    } catch (_) {
+      if (!mounted || generation != _syncConnectGeneration) return;
+      setState(() {
+        _syncStatus = _MobileSyncConnectionStatus.reconnecting;
+      });
+    } finally {
+      _syncPollingBusy = false;
+    }
+  }
+
   void _handleSyncEvent(SyncEvent event) {
-    if (event.sequence > _syncCursor) {
-      _syncCursor = event.sequence;
+    _handleSyncEvents([event]);
+  }
+
+  void _handleSyncEvents(List<SyncEvent> events) {
+    if (events.isEmpty) return;
+    for (final event in events) {
+      if (event.sequence > _syncCursor) {
+        _syncCursor = event.sequence;
+      }
     }
     if (!mounted) return;
     setState(() {
-      _lastPushedSyncEvent = event;
+      _lastPushedSyncEvent = events.last;
     });
-    unawaited(_refreshFromSyncEvent(event));
+    unawaited(_refreshFromSyncEvents(events));
   }
 
-  Future<void> _refreshFromSyncEvent(SyncEvent event) async {
+  Future<void> _refreshFromSyncEvents(List<SyncEvent> events) async {
     try {
       final refreshes = <Future<void>>[_refreshWorkspaceSnapshotFromSync()];
-      if (_syncEventTouchesPortfolio(event)) {
+      if (events.any(_syncEventTouchesPortfolio)) {
         refreshes.add(_refreshPortfolioFromSync());
       }
-      if (_syncEventTouchesRiskCenter(event)) {
+      if (events.any(_syncEventTouchesRiskCenter)) {
         refreshes.add(_refreshRiskControls(markBusy: false));
       }
       await Future.wait(refreshes);
@@ -1498,6 +1559,7 @@ String _syncConnectionStatusZh(_MobileSyncConnectionStatus status) {
     _MobileSyncConnectionStatus.disconnected => '未连接',
     _MobileSyncConnectionStatus.connecting => '连接中',
     _MobileSyncConnectionStatus.live => '实时同步',
+    _MobileSyncConnectionStatus.polling => '轮询同步',
     _MobileSyncConnectionStatus.reconnecting => '重连中',
     _MobileSyncConnectionStatus.offline => '离线',
   };

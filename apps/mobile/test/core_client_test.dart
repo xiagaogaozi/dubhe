@@ -157,6 +157,46 @@ void main() {
     expect(snapshot.events.single.entityType, 'watchlist_item');
   });
 
+  test('workspace sync polling endpoint parses events after cursor', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'dubhe_dev_token',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/workspaces/workspace_1/sync-events');
+        expect(request.url.queryParameters['since_sequence'], '7');
+        expect(request.headers['authorization'], 'Bearer dubhe_dev_token');
+        return http.Response(
+          '''
+          [
+            {
+              "id": "sync_8",
+              "workspace_id": "workspace_1",
+              "sequence": 8,
+              "entity_type": "kill_switch",
+              "entity_id": "global",
+              "action": "updated",
+              "payload": {"enabled": true},
+              "created_at": "2026-07-05T00:03:00Z"
+            }
+          ]
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final events = await client.fetchWorkspaceSyncEvents(
+      workspaceId: 'workspace_1',
+      sinceSequence: 7,
+    );
+
+    expect(events, hasLength(1));
+    expect(events.single.sequence, 8);
+    expect(events.single.entityType, 'kill_switch');
+  });
+
   test('workspace sync websocket uri uses ws scheme and token cursor', () {
     final httpClient = CoreClient(
       baseUrl: 'http://127.0.0.1:8019',
