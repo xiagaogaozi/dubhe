@@ -672,6 +672,49 @@ function DubheWorkbench(): React.ReactElement {
     }
   }
 
+  async function createLiveApprovalDemo(): Promise<void> {
+    if (!session || !canManageRisk) {
+      appendLog('warning', '请使用管理员或风控管理员账号创建审批演示。');
+      return;
+    }
+
+    const nextSymbol = symbol.trim().toUpperCase();
+    const sourceRef = analysis?.id ?? selectedNews.url ?? selectedNews.provider_event_id ?? selectedNews.id;
+    setRiskBusy(true);
+    try {
+      const decision = await postJson<RiskDecision>(
+        coreUrl,
+        '/v1/risk/evaluate',
+        {
+          account_id: DEFAULT_PAPER_ACCOUNT_ID,
+          strategy_version_id: strategyDraft?.strategy_version_id ?? 'manual_live_approval_demo',
+          market,
+          symbol: nextSymbol,
+          side: 'buy',
+          order_type: 'market',
+          quantity: 1,
+          estimated_price: estimatePrice(nextSymbol),
+          currency: market === 'HK' ? 'HKD' : market === 'A_SHARE' ? 'CNY' : 'USD',
+          created_by: 'ai',
+          destination: 'live',
+          rationale_zh: '桌面端风控中心生成的实盘审批演示；仅创建审批请求，不会连接真实券商。',
+          source_refs: [sourceRef],
+        },
+        session.access_token,
+      );
+      if (decision.status === 'requires_approval') {
+        appendLog('warning', `已生成实盘审批演示：${nextSymbol}，名义金额 ${notionalLabel(decision.notional)}。`);
+      } else {
+        appendLog(decision.status === 'approved' ? 'positive' : 'negative', `风控评估完成：${riskStatusLabel(decision.status)}。`);
+      }
+      await loadRiskControls(session);
+    } catch (error) {
+      appendLog('negative', `创建审批演示失败：${errorMessage(error)}。`);
+    } finally {
+      setRiskBusy(false);
+    }
+  }
+
   return (
     <main style={styles.shell}>
       <section style={styles.workbench}>
@@ -1076,6 +1119,15 @@ function DubheWorkbench(): React.ReactElement {
                     解除急停
                   </button>
                 </div>
+                <button
+                  style={styles.fullWidthButton}
+                  type="button"
+                  onClick={() => void createLiveApprovalDemo()}
+                  disabled={riskBusy || !session}
+                >
+                  生成实盘审批演示
+                </button>
+                <p style={styles.statusMessage}>只创建审批请求，不会连接真实券商或发送真实订单。</p>
                 {killSwitch && <p style={styles.bodyText}>原因：{killSwitch.reason_zh}</p>}
                 <div style={styles.approvalList}>
                   {approvals.length === 0 ? (
@@ -1279,6 +1331,12 @@ function approvalStatusLabel(status: ApprovalRequest['status']): string {
   if (status === 'approved') return '已通过';
   if (status === 'rejected') return '已拒绝';
   return '待审批';
+}
+
+function riskStatusLabel(status: RiskDecision['status']): string {
+  if (status === 'approved') return '已通过';
+  if (status === 'rejected') return '已拒绝';
+  return '需要审批';
 }
 
 function sentimentLabel(sentiment: Sentiment): string {
