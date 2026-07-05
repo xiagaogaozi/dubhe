@@ -23,6 +23,13 @@ class CoreClient {
   final http.Client _client;
   String? accessToken;
 
+  Future<bool> checkHealth() async {
+    final json = await _getJson('/health', includeAuth: false);
+    final body = _map(json);
+    return _string(body['status']) == 'ok' &&
+        _string(body['service']) == 'dubhe-core';
+  }
+
   Future<DeviceSession> login({
     required String accountKey,
     required String password,
@@ -344,10 +351,11 @@ class CoreClient {
   Future<dynamic> _getJson(
     String path, {
     Map<String, String>? queryParameters,
+    bool includeAuth = true,
   }) async {
     final response = await _client.get(
       _uri(path, queryParameters: queryParameters),
-      headers: _headers(),
+      headers: _headers(includeAuth: includeAuth),
     );
     return _decodeOrThrow(response);
   }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core_client.dart';
@@ -12,6 +13,8 @@ const defaultCoreUrl = String.fromEnvironment(
   'DUBHE_CORE_URL',
   defaultValue: 'http://127.0.0.1:8000',
 );
+const androidEmulatorCoreUrl = 'http://10.0.2.2:8000';
+const localCoreUrl = 'http://127.0.0.1:8000';
 const _configureCommandLabel = 'Configure-Dubhe.cmd';
 const _localConfigFileLabel = r'config\dubhe.local.env';
 
@@ -59,7 +62,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   _AuthMode _authMode = _AuthMode.register;
   bool _busy = false;
+  bool _checkingCore = false;
   String? _error;
+  String? _savedCoreUrl;
+  String? _coreCheckMessage;
+  bool? _coreCheckPassed;
 
   @override
   void initState() {
@@ -81,7 +88,90 @@ class _LoginScreenState extends State<LoginScreen> {
     final preferences = await SharedPreferences.getInstance();
     final savedUrl = preferences.getString(coreUrlPreferenceKey);
     if (!mounted || savedUrl == null || savedUrl.isEmpty) return;
-    _apiController.text = savedUrl;
+    setState(() {
+      _savedCoreUrl = savedUrl;
+      _apiController.text = savedUrl;
+    });
+  }
+
+  void _useCoreUrl(String url) {
+    setState(() {
+      _apiController.text = url;
+      _error = null;
+      _coreCheckMessage = null;
+      _coreCheckPassed = null;
+    });
+  }
+
+  Future<void> _pasteCoreUrlFromClipboard() async {
+    final data = await Clipboard.getData('text/plain');
+    final text = data?.text?.trim() ?? '';
+    if (!mounted) return;
+    if (text.startsWith('http://') || text.startsWith('https://')) {
+      _useCoreUrl(text);
+      setState(() {
+        _coreCheckMessage = '已从剪贴板填入 Core 地址，请检查连接。';
+        _coreCheckPassed = null;
+      });
+    } else {
+      setState(() {
+        _coreCheckMessage = '剪贴板里没有可用的 http/https 地址。';
+        _coreCheckPassed = false;
+      });
+    }
+  }
+
+  Future<void> _checkCoreConnection() async {
+    final coreUrl = _apiController.text.trim();
+    if (coreUrl.isEmpty) {
+      setState(() {
+        _coreCheckMessage = '请先填写 Core 地址。';
+        _coreCheckPassed = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _checkingCore = true;
+      _error = null;
+      _coreCheckMessage = null;
+      _coreCheckPassed = null;
+    });
+    final client = CoreClient(baseUrl: coreUrl);
+    try {
+      final ok = await client.checkHealth();
+      if (!mounted) return;
+      if (ok) {
+        final preferences = await SharedPreferences.getInstance();
+        await preferences.setString(coreUrlPreferenceKey, coreUrl);
+        if (!mounted) return;
+        setState(() {
+          _savedCoreUrl = coreUrl;
+          _coreCheckPassed = true;
+          _coreCheckMessage = '连接成功。这个地址已保存，下次会自动使用。';
+        });
+      } else {
+        setState(() {
+          _coreCheckPassed = false;
+          _coreCheckMessage = 'Core 有响应，但不是 Dubhe Core。';
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _coreCheckPassed = false;
+        _coreCheckMessage = error is DubheApiException
+            ? error.message
+            : '连接失败。真机请先在电脑双击 Start-Dubhe-LAN.cmd，再填写体检显示的地址。';
+      });
+    } finally {
+      client.close();
+      if (mounted) {
+        setState(() {
+          _checkingCore = false;
+        });
+      }
+    }
   }
 
   Future<void> _enterWorkspace() async {
@@ -93,11 +183,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final client = CoreClient(baseUrl: _apiController.text.trim());
     final platform = _mobilePlatform();
     try {
-      final preferences = await SharedPreferences.getInstance();
-      await preferences.setString(
-        coreUrlPreferenceKey,
-        _apiController.text.trim(),
-      );
       final session = _authMode == _AuthMode.login
           ? await client.login(
               accountKey: _accountController.text.trim(),
@@ -115,6 +200,12 @@ class _LoginScreenState extends State<LoginScreen> {
               platform: platform,
             );
 
+      if (!mounted) return;
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(
+        coreUrlPreferenceKey,
+        _apiController.text.trim(),
+      );
       if (!mounted) return;
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -159,6 +250,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 16),
             _TextInput(controller: _apiController, label: 'Core 地址'),
+            _CoreAddressAssist(
+              currentUrl: _apiController.text,
+              savedUrl: _savedCoreUrl,
+              checking: _checkingCore,
+              message: _coreCheckMessage,
+              ok: _coreCheckPassed,
+              onUseUrl: _useCoreUrl,
+              onPaste: _pasteCoreUrlFromClipboard,
+              onCheck: _checkCoreConnection,
+            ),
+            const SizedBox(height: 8),
             _TextInput(controller: _accountController, label: '账号'),
             if (_authMode == _AuthMode.register)
               _TextInput(controller: _nameController, label: '显示名称'),
@@ -2395,6 +2497,148 @@ class _BrandHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CoreUrlChoice {
+  const _CoreUrlChoice({
+    required this.label,
+    required this.url,
+    required this.icon,
+  });
+
+  final String label;
+  final String url;
+  final IconData icon;
+}
+
+List<_CoreUrlChoice> _coreUrlChoices(String? savedUrl) {
+  final seen = <String>{};
+  final choices = <_CoreUrlChoice>[];
+
+  void add(String label, String url, IconData icon) {
+    final normalized = url.trim();
+    if (normalized.isEmpty || !seen.add(normalized)) return;
+    choices.add(_CoreUrlChoice(label: label, url: normalized, icon: icon));
+  }
+
+  if (savedUrl != null && savedUrl.trim().isNotEmpty) {
+    add('最近成功', savedUrl, Icons.history);
+  }
+  add('Android 模拟器', androidEmulatorCoreUrl, Icons.android);
+  add('本机 / iOS 模拟器', localCoreUrl, Icons.computer);
+  if (defaultCoreUrl != androidEmulatorCoreUrl &&
+      defaultCoreUrl != localCoreUrl) {
+    add('构建默认', defaultCoreUrl, Icons.bookmark_outline);
+  }
+  return choices;
+}
+
+class _CoreAddressAssist extends StatelessWidget {
+  const _CoreAddressAssist({
+    required this.currentUrl,
+    required this.savedUrl,
+    required this.checking,
+    required this.message,
+    required this.ok,
+    required this.onUseUrl,
+    required this.onPaste,
+    required this.onCheck,
+  });
+
+  final String currentUrl;
+  final String? savedUrl;
+  final bool checking;
+  final String? message;
+  final bool? ok;
+  final ValueChanged<String> onUseUrl;
+  final VoidCallback onPaste;
+  final VoidCallback onCheck;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final choices = _coreUrlChoices(savedUrl);
+    final selectedUrl = currentUrl.trim();
+    final borderColor = ok == true
+        ? scheme.primary
+        : ok == false
+        ? scheme.error
+        : scheme.outlineVariant;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('常用地址', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: choices
+                .map(
+                  (choice) => ActionChip(
+                    avatar: Icon(choice.icon, size: 18),
+                    label: Text(choice.label),
+                    side: selectedUrl == choice.url
+                        ? BorderSide(color: scheme.primary)
+                        : null,
+                    onPressed: checking ? null : () => onUseUrl(choice.url),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '真机：先在电脑双击 Start-Dubhe-LAN.cmd，把体检显示的地址填到这里。',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: checking ? null : onPaste,
+                icon: const Icon(Icons.content_paste),
+                label: const Text('从剪贴板填入'),
+              ),
+              FilledButton.icon(
+                onPressed: checking ? null : onCheck,
+                icon: checking
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.wifi_tethering),
+                label: Text(checking ? '检查中...' : '检查连接'),
+              ),
+            ],
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              message!,
+              style: TextStyle(
+                color: ok == true
+                    ? scheme.primary
+                    : ok == false
+                    ? scheme.error
+                    : scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

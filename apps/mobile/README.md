@@ -5,7 +5,7 @@ Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中
 ## 当前能力
 
 - 复用 Dubhe Core 本地账号登录和开发期 MFA。
-- 保存用户最近使用的 Core 地址，方便真机、模拟器和局域网环境复用。
+- 登录页可一键填入 Android 模拟器、本机/iOS 模拟器和最近成功的 Core 地址，也可以从剪贴板填入局域网地址并先检查连接；成功后会保存地址，方便真机、模拟器和局域网环境复用。
 - 查看 `/v1/workspaces/{workspace_id}/snapshot` 工作区快照、服务器同步序号、最近同步事件和已同步策略草案，并可一键使用同步策略进入回测/纸面验证。
 - 订阅 `/v1/workspaces/{workspace_id}/sync-events/ws` WebSocket 实时同步推送；WebSocket 不可用时会降级轮询 `/v1/workspaces/{workspace_id}/sync-events`，收到纸面组合、审批、风控或急停事件后自动刷新对应面板。
 - 拉取 `/v1/news/feed` 新闻源。

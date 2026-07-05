@@ -6,6 +6,25 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('health check verifies Dubhe Core without bearer token', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'device-token',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/health');
+        expect(request.headers.containsKey('authorization'), isFalse);
+        return http.Response(
+          '{"status":"ok","service":"dubhe-core"}',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    expect(await client.checkHealth(), isTrue);
+  });
+
   test('login stores access token from Dubhe Core', () async {
     final client = CoreClient(
       baseUrl: 'http://127.0.0.1:8019',

@@ -28,6 +28,17 @@ void main() {
     expect(find.text('http://10.0.2.2:8000'), findsOneWidget);
   });
 
+  testWidgets('core address shortcuts fill emulator URL', (tester) async {
+    await tester.pumpWidget(const DubheCompanionApp());
+
+    expect(find.text('Android 模拟器'), findsOneWidget);
+    await tester.tap(find.text('Android 模拟器'));
+    await tester.pump();
+
+    expect(find.text('http://10.0.2.2:8000'), findsOneWidget);
+    expect(find.text('检查连接'), findsOneWidget);
+  });
+
   test('paper trade fallback accepts synced strategy drafts', () {
     final draft = StrategyDraft(
       id: 'draft_synced',
