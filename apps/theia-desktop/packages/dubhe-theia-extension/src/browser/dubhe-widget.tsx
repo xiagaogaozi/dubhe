@@ -2,8 +2,13 @@ import React = require('@theia/core/shared/react');
 import { Message } from '@theia/core/shared/@lumino/messaging';
 import { injectable, postConstruct } from '@theia/core/shared/inversify';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
+import * as Blockly from 'blockly/core';
+import 'blockly/blocks';
+import * as ZhHans from 'blockly/msg/zh-hans';
 
 export const DUBHE_WIDGET_ID = 'dubhe.workbench';
+
+Blockly.setLocale(ZhHans);
 
 const DEFAULT_CORE_URL = 'http://127.0.0.1:8000';
 const PROTOTYPE_URL = 'http://127.0.0.1:5173';
@@ -143,6 +148,21 @@ type StrategySpec = {
   rebalance_rule: string;
   data_dependencies: string[];
   broker_permissions: string[];
+};
+
+type StrategyValidationResult = {
+  valid: boolean;
+  reasons_zh: string[];
+};
+
+type StrategyWorkshopForm = {
+  strategyName: string;
+  timeframe: string;
+  rebalanceRule: string;
+  maxOrderNotional: number;
+  includeNews: boolean;
+  includeMarketBars: boolean;
+  paperOnly: boolean;
 };
 
 type StrategyDraft = {
@@ -315,6 +335,79 @@ const navItems = [
   { label: '风控中心', glyph: '控' },
 ];
 
+const defaultStrategyWorkshopForm: StrategyWorkshopForm = {
+  strategyName: '新闻情绪纸面验证策略',
+  timeframe: '1d',
+  rebalanceRule: 'daily',
+  maxOrderNotional: 10000,
+  includeNews: true,
+  includeMarketBars: true,
+  paperOnly: true,
+};
+
+const strategyBlocklyToolbox = {
+  kind: 'categoryToolbox',
+  contents: [
+    {
+      kind: 'category',
+      name: '策略文字',
+      colour: '#2f7d59',
+      contents: [
+        { kind: 'block', type: 'text' },
+        { kind: 'block', type: 'text_join' },
+      ],
+    },
+    {
+      kind: 'category',
+      name: '条件',
+      colour: '#3366aa',
+      contents: [
+        { kind: 'block', type: 'logic_compare' },
+        { kind: 'block', type: 'logic_operation' },
+        { kind: 'block', type: 'logic_boolean' },
+      ],
+    },
+    {
+      kind: 'category',
+      name: '数字',
+      colour: '#8a5aa8',
+      contents: [
+        { kind: 'block', type: 'math_number' },
+        { kind: 'block', type: 'math_arithmetic' },
+      ],
+    },
+  ],
+};
+
+const defaultStrategyBlocklyState = {
+  blocks: {
+    languageVersion: 0,
+    blocks: [
+      {
+        type: 'text',
+        id: 'entry_rule',
+        x: 28,
+        y: 28,
+        fields: { TEXT: '入场：新闻情绪为正面且影响分大于 0.7' },
+      },
+      {
+        type: 'text',
+        id: 'exit_rule',
+        x: 28,
+        y: 102,
+        fields: { TEXT: '出场：新闻影响消退、跌破止损线或收盘前复核' },
+      },
+      {
+        type: 'text',
+        id: 'data_rule',
+        x: 28,
+        y: 176,
+        fields: { TEXT: '数据：news, market_bars' },
+      },
+    ],
+  },
+};
+
 const fallbackWatchlist = [
   { symbol: 'NVDA', name: '英伟达', market: '美股', move: '+2.8%', tone: 'positive' as Tone },
   { symbol: '0700.HK', name: '腾讯控股', market: '港股', move: '-0.4%', tone: 'negative' as Tone },
@@ -384,6 +477,9 @@ function DubheWorkbench(): React.ReactElement {
   const [systemStatus, setSystemStatus] = React.useState<SystemStatusResponse | null>(null);
   const [analysis, setAnalysis] = React.useState<NewsAnalysis | null>(null);
   const [strategyDraft, setStrategyDraft] = React.useState<StrategyDraft | null>(null);
+  const [strategyWorkshopForm, setStrategyWorkshopForm] = React.useState<StrategyWorkshopForm>(defaultStrategyWorkshopForm);
+  const [strategyWorkshopSpec, setStrategyWorkshopSpec] = React.useState<StrategySpec | null>(null);
+  const [strategyValidation, setStrategyValidation] = React.useState<StrategyValidationResult | null>(null);
   const [backtestResult, setBacktestResult] = React.useState<BacktestResult | null>(null);
   const [paperOrder, setPaperOrder] = React.useState<PaperOrder | null>(null);
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
@@ -410,10 +506,52 @@ function DubheWorkbench(): React.ReactElement {
   const adapterStatusMeta = systemStatus ? `${enabledAdapterCount}/${systemStatus.news_adapters.length} 可用` : '待检查';
   const missingConfigCount = systemStatus?.config_items.filter((item) => !item.configured).length ?? 0;
   const syncCursorRef = React.useRef(0);
+  const blocklyContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const blocklyWorkspaceRef = React.useRef<Blockly.WorkspaceSvg | null>(null);
 
   React.useEffect(() => {
     void checkHealth();
   }, [coreUrl]);
+
+  React.useEffect(() => {
+    const container = blocklyContainerRef.current;
+    if (!container) return;
+
+    const workspace = Blockly.inject(container, {
+      toolbox: strategyBlocklyToolbox,
+      renderer: 'zelos',
+      trashcan: true,
+      move: {
+        scrollbars: true,
+        drag: true,
+        wheel: true,
+      },
+      zoom: {
+        controls: true,
+        wheel: true,
+        startScale: 0.82,
+        maxScale: 1.4,
+        minScale: 0.55,
+        scaleSpeed: 1.1,
+      },
+    });
+    blocklyWorkspaceRef.current = workspace;
+    Blockly.serialization.workspaces.load(defaultStrategyBlocklyState, workspace);
+    window.setTimeout(() => Blockly.svgResize(workspace), 0);
+
+    const resetValidation = (event: Blockly.Events.Abstract) => {
+      if (event.isUiEvent) return;
+      setStrategyValidation(null);
+      setStrategyWorkshopSpec(null);
+    };
+    workspace.addChangeListener(resetValidation);
+
+    return () => {
+      workspace.removeChangeListener(resetValidation);
+      workspace.dispose();
+      blocklyWorkspaceRef.current = null;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!workspaceSnapshot) return;
@@ -685,6 +823,51 @@ function DubheWorkbench(): React.ReactElement {
     }).catch((error: unknown) => {
       appendLog('negative', `生成策略草案失败：${errorMessage(error)}。`);
     });
+  }
+
+  function updateStrategyWorkshopField<K extends keyof StrategyWorkshopForm>(field: K, value: StrategyWorkshopForm[K]): void {
+    setStrategyWorkshopForm((current) => ({ ...current, [field]: value }));
+    setStrategyValidation(null);
+    setStrategyWorkshopSpec(null);
+  }
+
+  async function validateWorkshopStrategy(): Promise<void> {
+    const spec = createStrategySpecFromBlockly(
+      strategyWorkshopForm,
+      market,
+      symbol.trim().toUpperCase(),
+      blocklyWorkspaceRef.current,
+    );
+    setStrategyWorkshopSpec(spec);
+    setStrategyValidation(null);
+    await withBusy(async () => {
+      const result = await postJson<StrategyValidationResult>(coreUrl, '/v1/strategy/spec/validate', spec);
+      setStrategyValidation(result);
+      appendLog(result.valid ? 'positive' : 'warning', result.valid ? '策略工坊校验通过，可进入回测。' : `策略工坊需要补充：${result.reasons_zh.join('；')}。`);
+    }).catch((error: unknown) => {
+      appendLog('negative', `策略工坊校验失败：${errorMessage(error)}。`);
+    });
+  }
+
+  function useWorkshopStrategyDraft(): void {
+    if (!strategyWorkshopSpec || !strategyValidation?.valid) {
+      appendLog('warning', '请先通过策略工坊校验，再设为当前草案。');
+      return;
+    }
+    const strategyVersionId = `blockly_${Date.now()}`;
+    setStrategyDraft({
+      id: `strategy_draft_${strategyVersionId}`,
+      strategy_version_id: strategyVersionId,
+      name: strategyWorkshopSpec.strategy_name,
+      spec: strategyWorkshopSpec,
+      explanation_zh: '由 Blockly 策略工坊生成；已通过 Dubhe Core 策略规格校验，仅允许纸面验证。',
+      generated_code: generateStrategyPseudoCode(strategyWorkshopSpec),
+      source_analysis_id: analysis?.id ?? 'blockly_manual',
+      created_at: new Date().toISOString(),
+    });
+    setBacktestResult(null);
+    setPaperOrder(null);
+    appendLog('positive', '策略工坊草案已设为当前策略，可运行 replay 回测。');
   }
 
   async function runBacktest(): Promise<void> {
@@ -1197,14 +1380,126 @@ function DubheWorkbench(): React.ReactElement {
             <section style={styles.workflowPanel}>
               <div>
                 <h3 style={styles.panelHeading}>可执行闭环</h3>
-                <p style={styles.bodyText}>当前 Theia 壳已能调用 Core 完成：新闻源刷新、中文分析、策略草案、回测和纸面订单。</p>
+                <p style={styles.bodyText}>当前 Theia 壳已能调用 Core 完成：新闻源刷新、中文分析、Blockly 策略工坊、回测和纸面订单。</p>
               </div>
               <div style={styles.workflowSteps}>
                 <StepPill label="新闻" done={newsEvents.length > 0} />
                 <StepPill label="AI 分析" done={Boolean(analysis)} />
+                <StepPill label="策略校验" done={Boolean(strategyValidation?.valid)} />
                 <StepPill label="策略草案" done={Boolean(strategyDraft)} />
                 <StepPill label="回测" done={Boolean(backtestResult)} />
                 <StepPill label="纸面交易" done={Boolean(paperOrder)} />
+              </div>
+            </section>
+
+            <section style={styles.strategyWorkshop}>
+              <header style={styles.panelHeader}>
+                <div>
+                  <h3 style={styles.panelHeading}>策略工坊</h3>
+                  <p style={styles.bodyText}>拖动或改写中文积木，Dubhe 会生成可校验的策略规格；通过前不会进入回测或交易。</p>
+                </div>
+                <span style={styles.smallMeta}>Blockly · Core 校验</span>
+              </header>
+              <div style={styles.strategyWorkshopGrid}>
+                <div ref={blocklyContainerRef} style={styles.blocklySurface} aria-label="Blockly 策略积木画布" />
+                <div style={styles.strategyFormPanel}>
+                  <label style={styles.stackField}>
+                    策略名称
+                    <input
+                      style={styles.textInput}
+                      value={strategyWorkshopForm.strategyName}
+                      onChange={(event) => updateStrategyWorkshopField('strategyName', event.target.value)}
+                    />
+                  </label>
+                  <div style={styles.twoColumnControls}>
+                    <label style={styles.stackField}>
+                      周期
+                      <select
+                        style={styles.selectInput}
+                        value={strategyWorkshopForm.timeframe}
+                        onChange={(event) => updateStrategyWorkshopField('timeframe', event.target.value)}
+                      >
+                        <option value="1d">日线</option>
+                        <option value="1h">小时线</option>
+                        <option value="15m">15 分钟</option>
+                      </select>
+                    </label>
+                    <label style={styles.stackField}>
+                      最大名义金额
+                      <input
+                        style={styles.textInput}
+                        type="number"
+                        min={1000}
+                        step={1000}
+                        value={strategyWorkshopForm.maxOrderNotional}
+                        onChange={(event) => updateStrategyWorkshopField('maxOrderNotional', Number(event.target.value) || 0)}
+                      />
+                    </label>
+                  </div>
+                  <label style={styles.stackField}>
+                    调仓方式
+                    <select
+                      style={styles.selectInput}
+                      value={strategyWorkshopForm.rebalanceRule}
+                      onChange={(event) => updateStrategyWorkshopField('rebalanceRule', event.target.value)}
+                    >
+                      <option value="daily">每日复核</option>
+                      <option value="event_driven">新闻事件触发</option>
+                      <option value="manual_review">人工确认后执行</option>
+                    </select>
+                  </label>
+                  <div style={styles.checkboxGrid}>
+                    <label style={styles.inlineToggle}>
+                      <input
+                        type="checkbox"
+                        checked={strategyWorkshopForm.includeNews}
+                        onChange={(event) => updateStrategyWorkshopField('includeNews', event.target.checked)}
+                      />
+                      使用新闻数据
+                    </label>
+                    <label style={styles.inlineToggle}>
+                      <input
+                        type="checkbox"
+                        checked={strategyWorkshopForm.includeMarketBars}
+                        onChange={(event) => updateStrategyWorkshopField('includeMarketBars', event.target.checked)}
+                      />
+                      使用行情数据
+                    </label>
+                    <label style={styles.inlineToggle}>
+                      <input
+                        type="checkbox"
+                        checked={strategyWorkshopForm.paperOnly}
+                        onChange={(event) => updateStrategyWorkshopField('paperOnly', event.target.checked)}
+                      />
+                      仅允许纸面验证
+                    </label>
+                  </div>
+                  <div style={styles.strategyActions}>
+                    <button style={styles.primaryButton} type="button" disabled={isBusy} onClick={() => void validateWorkshopStrategy()}>
+                      校验策略
+                    </button>
+                    <button style={styles.secondaryButton} type="button" disabled={!strategyValidation?.valid} onClick={useWorkshopStrategyDraft}>
+                      设为草案
+                    </button>
+                  </div>
+                  <div style={styles.validationBox}>
+                    <strong style={styles.statusName}>
+                      {strategyValidation ? (strategyValidation.valid ? '校验通过' : '需要补充') : '待校验'}
+                    </strong>
+                    <p style={styles.statusMessage}>
+                      {strategyValidation
+                        ? strategyValidation.valid
+                          ? '策略规格已包含风控限额、数据依赖和纸面权限。'
+                          : strategyValidation.reasons_zh.join('；')
+                        : '校验会调用 Dubhe Core，不通过就不能设为当前草案。'}
+                    </p>
+                    {strategyWorkshopSpec && (
+                      <p style={styles.statusMessage}>
+                        当前标的：{strategyWorkshopSpec.asset_universe.join('、')} · 数据：{strategyWorkshopSpec.data_dependencies.join('、')}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -1693,6 +1988,86 @@ function syncConnectionTone(status: SyncConnectionStatus): Tone {
   return 'neutral';
 }
 
+function createStrategySpecFromBlockly(
+  form: StrategyWorkshopForm,
+  market: Market,
+  symbol: string,
+  workspace: Blockly.WorkspaceSvg | null,
+): StrategySpec {
+  const textBlocks = extractBlocklyTextBlocks(workspace);
+  const entryRules = extractPrefixedRules(textBlocks, '入场');
+  const exitRules = extractPrefixedRules(textBlocks, '出场');
+  const dataDependencies = extractDataDependencies(textBlocks, form);
+  const assetSymbol = symbol || 'NVDA';
+
+  return {
+    strategy_name: form.strategyName.trim() || defaultStrategyWorkshopForm.strategyName,
+    market_scope: [market],
+    asset_universe: [assetSymbol],
+    entry_rules: entryRules.length > 0 ? entryRules : ['新闻情绪为正面且影响分大于 0.7'],
+    exit_rules: exitRules.length > 0 ? exitRules : ['新闻影响消退、跌破止损线或收盘前复核'],
+    risk_limits: {
+      max_order_notional: Math.max(1, Number(form.maxOrderNotional) || defaultStrategyWorkshopForm.maxOrderNotional),
+    },
+    timeframe: form.timeframe || defaultStrategyWorkshopForm.timeframe,
+    rebalance_rule: form.rebalanceRule || defaultStrategyWorkshopForm.rebalanceRule,
+    data_dependencies: dataDependencies,
+    broker_permissions: form.paperOnly ? ['paper'] : [],
+  };
+}
+
+function extractBlocklyTextBlocks(workspace: Blockly.WorkspaceSvg | null): string[] {
+  if (!workspace) {
+    return defaultStrategyBlocklyState.blocks.blocks.map((block) => block.fields.TEXT);
+  }
+  return workspace
+    .getAllBlocks(false)
+    .filter((block) => block.type === 'text')
+    .map((block) => String(block.getFieldValue('TEXT') ?? '').trim())
+    .filter(Boolean);
+}
+
+function extractPrefixedRules(values: string[], prefix: string): string[] {
+  return values
+    .filter((value) => value.startsWith(`${prefix}：`) || value.startsWith(`${prefix}:`))
+    .map((value) => value.replace(new RegExp(`^${prefix}[：:]\\s*`), '').trim())
+    .filter(Boolean);
+}
+
+function extractDataDependencies(values: string[], form: StrategyWorkshopForm): string[] {
+  const dependencies = new Set<string>();
+  if (form.includeNews) dependencies.add('news');
+  if (form.includeMarketBars) dependencies.add('market_bars');
+
+  values
+    .filter((value) => value.startsWith('数据：') || value.startsWith('数据:'))
+    .flatMap((value) => value.replace(/^数据[：:]\s*/, '').split(/[,，、\s]+/))
+    .map(normalizeDataDependency)
+    .filter(Boolean)
+    .forEach((dependency) => dependencies.add(dependency));
+
+  return [...dependencies];
+}
+
+function normalizeDataDependency(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '新闻') return 'news';
+  if (normalized === '行情') return 'market_bars';
+  return normalized;
+}
+
+function generateStrategyPseudoCode(spec: StrategySpec): string {
+  return [
+    `strategy "${spec.strategy_name}"`,
+    `market ${spec.market_scope.join(', ')}`,
+    `assets ${spec.asset_universe.join(', ')}`,
+    `entry ${spec.entry_rules.join('；')}`,
+    `exit ${spec.exit_rules.join('；')}`,
+    `risk max_order_notional=${spec.risk_limits.max_order_notional}`,
+    `permissions ${spec.broker_permissions.join(', ') || 'none'}`,
+  ].join('\n');
+}
+
 function sentimentLabel(sentiment: Sentiment): string {
   if (sentiment === 'positive') return '正面';
   if (sentiment === 'negative') return '负面';
@@ -2115,6 +2490,16 @@ const styles = {
     fontSize: 13,
     fontWeight: 800,
   } as React.CSSProperties,
+  secondaryButton: {
+    padding: '9px 12px',
+    border: '1px solid #cdd8d3',
+    borderRadius: 8,
+    background: '#ffffff',
+    color: '#174a3a',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 800,
+  } as React.CSSProperties,
   queryBar: {
     display: 'flex',
     alignItems: 'center',
@@ -2317,6 +2702,63 @@ const styles = {
     borderColor: '#8acbad',
     color: '#15533b',
     background: '#ecf8f1',
+  } as React.CSSProperties,
+  strategyWorkshop: {
+    marginTop: 14,
+    padding: 14,
+    border: '1px solid #dfe8e3',
+    borderRadius: 8,
+    background: '#ffffff',
+  } as React.CSSProperties,
+  strategyWorkshopGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(340px, 1.4fr) minmax(260px, 0.8fr)',
+    gap: 12,
+    marginTop: 12,
+  } as React.CSSProperties,
+  blocklySurface: {
+    height: 360,
+    minHeight: 320,
+    border: '1px solid #d8e2dc',
+    borderRadius: 8,
+    overflow: 'hidden',
+    background: '#f7faf8',
+  } as React.CSSProperties,
+  strategyFormPanel: {
+    display: 'grid',
+    alignContent: 'start',
+    gap: 10,
+  } as React.CSSProperties,
+  stackField: {
+    display: 'grid',
+    gap: 6,
+    color: '#4f6259',
+    fontSize: 12,
+    fontWeight: 800,
+  } as React.CSSProperties,
+  twoColumnControls: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+    gap: 10,
+  } as React.CSSProperties,
+  checkboxGrid: {
+    display: 'grid',
+    gap: 8,
+    padding: 10,
+    border: '1px solid #e1e8e4',
+    borderRadius: 8,
+    background: '#f8faf9',
+  } as React.CSSProperties,
+  strategyActions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+  } as React.CSSProperties,
+  validationBox: {
+    padding: 10,
+    border: '1px solid #e1e8e4',
+    borderRadius: 8,
+    background: '#fbfcfb',
   } as React.CSSProperties,
   splitPanels: {
     display: 'grid',

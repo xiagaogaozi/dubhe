@@ -14,7 +14,8 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
-    "@theia/core": "1.73.1"
+    "@theia/core": "1.73.1",
+    "blockly": "^13.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

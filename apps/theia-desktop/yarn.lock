@@ -3008,6 +3008,11 @@ bl@^4.0.3:
     inherits "^2.0.4"
     readable-stream "^3.4.0"
 
+blockly@^13.1.0:
+  version "13.1.0"
+  resolved "https://registry.npmmirror.com/blockly/-/blockly-13.1.0.tgz#930ed7f745c654671e9f33050ba58b83ed0e3c98"
+  integrity sha512-5BhV2zw9lVPqcvCdkyTxdoXJkqeJCkfDFiE2OQ9Cy2E7pXTFbk5pZ29IW3tka063b4500f90XlYAipB8MqrTgA==
+
 bluebird@~3.4.1:
   version "3.4.7"
   resolved "https://registry.yarnpkg.com/bluebird/-/bluebird-3.4.7.tgz#f72d760be09b7f76d08ed8fae98b289a8d05fab3"
