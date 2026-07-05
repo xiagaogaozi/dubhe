@@ -5,11 +5,15 @@ on:
     paths:
       - ".github/workflows/core.yml"
       - "services/core/**"
+      - "scripts/dubhe-config.ps1"
+      - "scripts/smoke-core-workflow.ps1"
       - "packages/contracts/openapi/dubhe-core.json"
   pull_request:
     paths:
       - ".github/workflows/core.yml"
       - "services/core/**"
+      - "scripts/dubhe-config.ps1"
+      - "scripts/smoke-core-workflow.ps1"
       - "packages/contracts/openapi/dubhe-core.json"
 
 jobs:
@@ -39,6 +43,50 @@ jobs:
         working-directory: services/core
         run: python -m pytest
 
+      - name: Start Core for smoke
+        shell: pwsh
+        working-directory: services/core
+        run: |
+          New-Item -ItemType Directory -Force -Path ..\..\.dubhe-run | Out-Null
+          $process = Start-Process `
+            -FilePath python `
+            -ArgumentList @("-m", "uvicorn", "dubhe_core.main:app", "--host", "127.0.0.1", "--port", "8000") `
+            -WorkingDirectory . `
+            -RedirectStandardOutput ..\..\.dubhe-run\ci-core.log `
+            -RedirectStandardError ..\..\.dubhe-run\ci-core.err.log `
+            -WindowStyle Hidden `
+            -PassThru
+          $process.Id | Set-Content ..\..\.dubhe-run\ci-core.pid
+          $ready = $false
+          foreach ($attempt in 1..60) {
+            try {
+              $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -TimeoutSec 2
+              if ($health.status -eq "ok" -and $health.service -eq "dubhe-core") {
+                $ready = $true
+                break
+              }
+            } catch {
+              Start-Sleep -Seconds 1
+            }
+          }
+          if (-not $ready) {
+            Get-Content ..\..\.dubhe-run\ci-core.err.log -ErrorAction SilentlyContinue
+            throw "Dubhe Core did not become healthy for smoke test."
+          }
+
+      - name: Core workflow smoke
+        shell: pwsh
+        run: .\scripts\smoke-core-workflow.ps1 -Json
+
+      - name: Stop smoke Core
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path .\.dubhe-run\ci-core.pid) {
+            $processId = [int](Get-Content .\.dubhe-run\ci-core.pid)
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Export OpenAPI
         working-directory: services/core
         run: python scripts/export_openapi.py
@@ -50,4 +98,3 @@ jobs:
             git diff -- packages/contracts/openapi/dubhe-core.json
             throw "OpenAPI contract is out of date. Run services/core/scripts/test.ps1 and commit the result."
           }
-
