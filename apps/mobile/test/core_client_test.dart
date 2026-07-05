@@ -538,6 +538,137 @@ void main() {
     expect(status.installPackages.last.available, isFalse);
   });
 
+  test('external service checks parse readiness and live query', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/system/external-checks');
+        expect(request.url.queryParameters['live'], 'true');
+        return http.Response(
+          '''
+          {
+            "service": "dubhe-core",
+            "language": "zh-CN",
+            "live": true,
+            "overall_status": "partial",
+            "ready_count": 1,
+            "total_count": 2,
+            "checks": [
+              {
+                "service": "llm_openai_compatible",
+                "label_zh": "AI 模型 OpenAI-compatible",
+                "configured": true,
+                "live_checked": true,
+                "status": "ok",
+                "duration_ms": 42,
+                "message_zh": "AI 模型 live 检查通过。",
+                "next_step_zh": "失败时检查模型名和 API Key。",
+                "checked_at": "2026-07-05T00:00:00Z"
+              },
+              {
+                "service": "finnhub_company_news",
+                "label_zh": "Finnhub 公司新闻",
+                "configured": false,
+                "live_checked": false,
+                "status": "skipped",
+                "duration_ms": 0,
+                "message_zh": "未配置 FINNHUB_API_KEY。",
+                "next_step_zh": "生产前确认授权。",
+                "checked_at": "2026-07-05T00:00:00Z"
+              }
+            ],
+            "message_zh": "已配置部分外部服务。",
+            "generated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final checks = await client.fetchExternalServiceChecks(live: true);
+
+    expect(checks.live, isTrue);
+    expect(checks.ready, isFalse);
+    expect(checks.statusZh, '部分可用');
+    expect(checks.readyCount, 1);
+    expect(checks.checks.first.ok, isTrue);
+    expect(checks.checks.first.statusZh, '42ms');
+    expect(checks.checks.last.skipped, isTrue);
+    expect(checks.checks.last.statusZh, '未配置');
+  });
+
+  test('production readiness parses blocking gate items', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/system/production-readiness');
+        return http.Response(
+          '''
+          {
+            "service": "dubhe-core",
+            "language": "zh-CN",
+            "production_ready": false,
+            "overall_status": "not_ready",
+            "pass_count": 1,
+            "warning_count": 1,
+            "blocking_count": 1,
+            "total_count": 3,
+            "message_zh": "生产门禁未通过：还有 1 个阻断项需要补齐。",
+            "items": [
+              {
+                "id": "local_smoke_chain",
+                "category_zh": "本地可用性",
+                "requirement_zh": "主链路烟测可运行。",
+                "status": "pass",
+                "blocking": false,
+                "evidence_zh": "已提供 Smoke-Dubhe.cmd。",
+                "next_step_zh": "发布前运行 smoke。"
+              },
+              {
+                "id": "package_windows",
+                "category_zh": "四端安装包",
+                "requirement_zh": "Windows 安装包必须可交付。",
+                "status": "warn",
+                "blocking": false,
+                "evidence_zh": "可用于内测。",
+                "next_step_zh": "生产前签名。"
+              },
+              {
+                "id": "production_storage",
+                "category_zh": "云同步与存储",
+                "requirement_zh": "生产环境必须使用 PostgreSQL。",
+                "status": "fail",
+                "blocking": true,
+                "evidence_zh": "当前存储后端为 sqlite。",
+                "next_step_zh": "部署 PostgreSQL/TimescaleDB。"
+              }
+            ],
+            "generated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final readiness = await client.fetchProductionReadiness();
+
+    expect(readiness.productionReady, isFalse);
+    expect(readiness.statusZh, '1 个阻断');
+    expect(readiness.passCount, 1);
+    expect(readiness.warningCount, 1);
+    expect(readiness.blockingCount, 1);
+    expect(readiness.items.first.passed, isTrue);
+    expect(readiness.items[1].warning, isTrue);
+    expect(readiness.items.last.statusZh, '阻断');
+    expect(readiness.items.last.nextStepZh, contains('PostgreSQL'));
+  });
+
   test('smoke workflow report parses status and steps', () async {
     final client = CoreClient(
       baseUrl: 'http://127.0.0.1:8019',

@@ -396,6 +396,8 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
+  ExternalServiceChecks? _externalChecks;
+  ProductionReadiness? _productionReadiness;
   OnboardingChecklist? _onboardingChecklist;
   SmokeWorkflowReport? _smokeReport;
   LocalRuntimeConfig? _localConfig;
@@ -625,6 +627,8 @@ class _CompanionHomeState extends State<CompanionHome> {
     try {
       final coreResponses = await Future.wait<dynamic>([
         widget.client.fetchSystemStatus(),
+        widget.client.fetchExternalServiceChecks(),
+        widget.client.fetchProductionReadiness(),
         widget.client.fetchNewsFeed(
           market: _newsMarket,
           symbol: _selectedNewsSymbolOrNull(),
@@ -638,11 +642,13 @@ class _CompanionHomeState extends State<CompanionHome> {
         ),
       ]);
       final systemStatus = coreResponses[0] as SystemStatus;
-      final newsFeed = coreResponses[1] as NewsFeed;
-      final portfolio = coreResponses[2] as PaperPortfolio;
-      final onboardingChecklist = coreResponses[3] as OnboardingChecklist;
-      final smokeReport = coreResponses[4] as SmokeWorkflowReport;
-      final workspaceSnapshot = coreResponses[5] as WorkspaceSnapshot;
+      final externalChecks = coreResponses[1] as ExternalServiceChecks;
+      final productionReadiness = coreResponses[2] as ProductionReadiness;
+      final newsFeed = coreResponses[3] as NewsFeed;
+      final portfolio = coreResponses[4] as PaperPortfolio;
+      final onboardingChecklist = coreResponses[5] as OnboardingChecklist;
+      final smokeReport = coreResponses[6] as SmokeWorkflowReport;
+      final workspaceSnapshot = coreResponses[7] as WorkspaceSnapshot;
       var approvals = <ApprovalRequest>[];
       KillSwitchState? killSwitch;
       var auditLogs = <AuditLogEntry>[];
@@ -687,6 +693,8 @@ class _CompanionHomeState extends State<CompanionHome> {
       );
       setState(() {
         _systemStatus = systemStatus;
+        _externalChecks = externalChecks;
+        _productionReadiness = productionReadiness;
         _onboardingChecklist = onboardingChecklist;
         _smokeReport = smokeReport;
         _localConfig = localConfig;
@@ -1185,6 +1193,32 @@ class _CompanionHomeState extends State<CompanionHome> {
     }
   }
 
+  Future<void> _refreshExternalChecks({bool live = false}) async {
+    setState(() {
+      _configBusy = true;
+      _message = live ? '正在进行 live 外部服务体检。' : null;
+    });
+    try {
+      final checks = await widget.client.fetchExternalServiceChecks(live: live);
+      if (!mounted) return;
+      setState(() {
+        _externalChecks = checks;
+        _message = checks.messageZh;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error is DubheApiException ? error.message : '外部服务体检失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _configBusy = false;
+        });
+      }
+    }
+  }
+
   Future<void> _reloadLocalConfig() async {
     if (!widget.session.canEditRuntimeConfig) {
       setState(() {
@@ -1249,12 +1283,18 @@ class _CompanionHomeState extends State<CompanionHome> {
       final nextConfig = await widget.client.updateLocalRuntimeConfig(
         values: values,
       );
-      final nextStatus = await widget.client.fetchSystemStatus();
+      final nextChecks = await Future.wait<dynamic>([
+        widget.client.fetchSystemStatus(),
+        widget.client.fetchExternalServiceChecks(),
+        widget.client.fetchProductionReadiness(),
+      ]);
       if (!mounted) return;
       setState(() {
         _localConfig = nextConfig;
         _localConfigForm = _localConfigFormFromConfig(nextConfig);
-        _systemStatus = nextStatus;
+        _systemStatus = nextChecks[0] as SystemStatus;
+        _externalChecks = nextChecks[1] as ExternalServiceChecks;
+        _productionReadiness = nextChecks[2] as ProductionReadiness;
         _message = '本地配置已保存并应用到当前 Core；数据库路径变更需重启后生效。';
       });
     } catch (error) {
@@ -1357,6 +1397,8 @@ class _CompanionHomeState extends State<CompanionHome> {
       _TodayPage(
         session: widget.session,
         systemStatus: _systemStatus,
+        externalChecks: _externalChecks,
+        productionReadiness: _productionReadiness,
         onboardingChecklist: _onboardingChecklist,
         smokeReport: _smokeReport,
         localConfig: _localConfig,
@@ -1371,6 +1413,8 @@ class _CompanionHomeState extends State<CompanionHome> {
         loading: _loading,
         onReloadLocalConfig: _reloadLocalConfig,
         onSaveLocalConfig: _saveLocalConfig,
+        onRefreshExternalChecks: ({required live}) =>
+            _refreshExternalChecks(live: live),
         onLocalConfigChanged: _updateLocalConfigField,
         onUseStrategyDraft: _useSyncedStrategyDraft,
         onRunOnboardingAction: _runOnboardingAction,
@@ -1474,6 +1518,8 @@ class _TodayPage extends StatelessWidget {
   const _TodayPage({
     required this.session,
     required this.systemStatus,
+    required this.externalChecks,
+    required this.productionReadiness,
     required this.onboardingChecklist,
     required this.smokeReport,
     required this.localConfig,
@@ -1488,6 +1534,7 @@ class _TodayPage extends StatelessWidget {
     required this.loading,
     required this.onReloadLocalConfig,
     required this.onSaveLocalConfig,
+    required this.onRefreshExternalChecks,
     required this.onLocalConfigChanged,
     required this.onUseStrategyDraft,
     required this.onRunOnboardingAction,
@@ -1495,6 +1542,8 @@ class _TodayPage extends StatelessWidget {
 
   final DeviceSession session;
   final SystemStatus? systemStatus;
+  final ExternalServiceChecks? externalChecks;
+  final ProductionReadiness? productionReadiness;
   final OnboardingChecklist? onboardingChecklist;
   final SmokeWorkflowReport? smokeReport;
   final LocalRuntimeConfig? localConfig;
@@ -1509,6 +1558,7 @@ class _TodayPage extends StatelessWidget {
   final bool loading;
   final VoidCallback onReloadLocalConfig;
   final VoidCallback onSaveLocalConfig;
+  final Future<void> Function({required bool live}) onRefreshExternalChecks;
   final void Function(String key, String value) onLocalConfigChanged;
   final ValueChanged<StrategyDraft> onUseStrategyDraft;
   final ValueChanged<OnboardingStep> onRunOnboardingAction;
@@ -1554,6 +1604,13 @@ class _TodayPage extends StatelessWidget {
                   ? '--'
                   : '${systemStatus!.enabledAdapterCount}/${systemStatus!.newsAdapters.length}',
             ),
+            _Metric(
+              '外部服务',
+              externalChecks == null
+                  ? '--'
+                  : '${externalChecks!.readyCount}/${externalChecks!.totalCount}',
+            ),
+            _Metric('生产门禁', productionReadiness?.statusZh ?? '--'),
           ],
         ),
         const SizedBox(height: 12),
@@ -1570,12 +1627,15 @@ class _TodayPage extends StatelessWidget {
         _SystemStatusPanel(
           session: session,
           status: systemStatus,
+          externalChecks: externalChecks,
+          productionReadiness: productionReadiness,
           smokeReport: smokeReport,
           localConfig: localConfig,
           localConfigForm: localConfigForm,
           configBusy: configBusy,
           onReloadLocalConfig: onReloadLocalConfig,
           onSaveLocalConfig: onSaveLocalConfig,
+          onRefreshExternalChecks: onRefreshExternalChecks,
           onLocalConfigChanged: onLocalConfigChanged,
         ),
         _ProviderStatusList(statuses: newsFeed?.providerStatus ?? const []),
@@ -2970,23 +3030,29 @@ class _SystemStatusPanel extends StatelessWidget {
   const _SystemStatusPanel({
     required this.session,
     required this.status,
+    required this.externalChecks,
+    required this.productionReadiness,
     required this.smokeReport,
     required this.localConfig,
     required this.localConfigForm,
     required this.configBusy,
     required this.onReloadLocalConfig,
     required this.onSaveLocalConfig,
+    required this.onRefreshExternalChecks,
     required this.onLocalConfigChanged,
   });
 
   final DeviceSession session;
   final SystemStatus? status;
+  final ExternalServiceChecks? externalChecks;
+  final ProductionReadiness? productionReadiness;
   final SmokeWorkflowReport? smokeReport;
   final LocalRuntimeConfig? localConfig;
   final Map<String, String> localConfigForm;
   final bool configBusy;
   final VoidCallback onReloadLocalConfig;
   final VoidCallback onSaveLocalConfig;
+  final Future<void> Function({required bool live}) onRefreshExternalChecks;
   final void Function(String key, String value) onLocalConfigChanged;
 
   @override
@@ -3016,6 +3082,14 @@ class _SystemStatusPanel extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _SmokeWorkflowSummary(report: smokeReport),
+          const SizedBox(height: 12),
+          _ExternalServicesPanel(
+            checks: externalChecks,
+            busy: configBusy,
+            onRefresh: onRefreshExternalChecks,
+          ),
+          const SizedBox(height: 12),
+          _ProductionReadinessPanel(readiness: productionReadiness),
           const SizedBox(height: 12),
           _ConfigurationGuide(
             status: current,
@@ -3064,6 +3138,178 @@ class _SystemStatusPanel extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ExternalServicesPanel extends StatelessWidget {
+  const _ExternalServicesPanel({
+    required this.checks,
+    required this.busy,
+    required this.onRefresh,
+  });
+
+  final ExternalServiceChecks? checks;
+  final bool busy;
+  final Future<void> Function({required bool live}) onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = checks;
+    if (current == null) {
+      return const _InfoCard(text: '外部服务体检尚未同步。');
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final color = current.ready
+        ? scheme.primary
+        : current.actionRequired
+        ? scheme.error
+        : scheme.tertiary;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: color, width: 4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '外部服务体检',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text('${current.readyCount}/${current.totalCount}'),
+                ),
+              ],
+            ),
+            Text(current.messageZh),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => onRefresh(live: false),
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: const Text('配置检查'),
+                ),
+                FilledButton.icon(
+                  onPressed: busy ? null : () => onRefresh(live: true),
+                  icon: const Icon(Icons.cloud_sync_outlined),
+                  label: const Text('live 检查'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...current.checks.map(
+              (item) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: Icon(
+                  item.ok
+                      ? Icons.check_circle_outline
+                      : item.skipped
+                      ? Icons.pending_actions_outlined
+                      : Icons.error_outline,
+                  color: item.ok
+                      ? scheme.primary
+                      : item.skipped
+                      ? scheme.tertiary
+                      : scheme.error,
+                ),
+                title: Text(item.labelZh),
+                subtitle: Text('${item.messageZh}\n下一步：${item.nextStepZh}'),
+                trailing: Text(item.statusZh),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductionReadinessPanel extends StatelessWidget {
+  const _ProductionReadinessPanel({required this.readiness});
+
+  final ProductionReadiness? readiness;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = readiness;
+    if (current == null) {
+      return const _InfoCard(text: '生产门禁尚未同步。');
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final color = current.productionReady ? scheme.primary : scheme.error;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: color, width: 4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '生产门禁',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(current.statusZh),
+                ),
+              ],
+            ),
+            Text(current.messageZh),
+            const SizedBox(height: 8),
+            _MetricGrid(
+              metrics: [
+                _Metric('通过', '${current.passCount}'),
+                _Metric('警告', '${current.warningCount}'),
+                _Metric('阻断', '${current.blockingCount}'),
+                _Metric('总项', '${current.totalCount}'),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...current.items
+                .take(8)
+                .map(
+                  (item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: Icon(
+                      item.passed
+                          ? Icons.check_circle_outline
+                          : item.warning
+                          ? Icons.warning_amber_outlined
+                          : Icons.block_outlined,
+                      color: item.passed
+                          ? scheme.primary
+                          : item.warning
+                          ? scheme.tertiary
+                          : scheme.error,
+                    ),
+                    title: Text('${item.categoryZh} / ${item.id}'),
+                    subtitle: Text(
+                      '${item.evidenceZh}\n下一步：${item.nextStepZh}',
+                    ),
+                    trailing: Text(item.statusZh),
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }

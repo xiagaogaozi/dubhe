@@ -149,6 +149,54 @@ type InstallPackageStatus = {
   next_step_zh: string;
 };
 
+type ExternalServiceCheck = {
+  service: string;
+  label_zh: string;
+  configured: boolean;
+  live_checked: boolean;
+  status: 'ok' | 'skipped' | 'unavailable';
+  duration_ms: number;
+  message_zh: string;
+  next_step_zh: string;
+  checked_at: string;
+};
+
+type ExternalServiceCheckResponse = {
+  service: string;
+  language: string;
+  live: boolean;
+  overall_status: 'ready' | 'partial' | 'action_required';
+  ready_count: number;
+  total_count: number;
+  checks: ExternalServiceCheck[];
+  message_zh: string;
+  generated_at: string;
+};
+
+type ProductionReadinessItem = {
+  id: string;
+  category_zh: string;
+  requirement_zh: string;
+  status: 'pass' | 'warn' | 'fail';
+  blocking: boolean;
+  evidence_zh: string;
+  next_step_zh: string;
+};
+
+type ProductionReadinessResponse = {
+  service: string;
+  language: string;
+  production_ready: boolean;
+  overall_status: 'ready' | 'not_ready';
+  pass_count: number;
+  warning_count: number;
+  blocking_count: number;
+  total_count: number;
+  message_zh: string;
+  items: ProductionReadinessItem[];
+  generated_at: string;
+};
+
 type SystemStatusResponse = {
   service: string;
   version: string;
@@ -656,6 +704,8 @@ function DubheWorkbench(): React.ReactElement {
   const [systemStatus, setSystemStatus] = React.useState<SystemStatusResponse | null>(null);
   const [onboardingChecklist, setOnboardingChecklist] = React.useState<OnboardingChecklistResponse | null>(null);
   const [smokeReport, setSmokeReport] = React.useState<SmokeWorkflowReportResponse | null>(null);
+  const [externalChecks, setExternalChecks] = React.useState<ExternalServiceCheckResponse | null>(null);
+  const [productionReadiness, setProductionReadiness] = React.useState<ProductionReadinessResponse | null>(null);
   const [localConfig, setLocalConfig] = React.useState<LocalRuntimeConfigResponse | null>(null);
   const [localConfigForm, setLocalConfigForm] = React.useState<Record<string, string>>({});
   const [localConfigBusy, setLocalConfigBusy] = React.useState(false);
@@ -903,21 +953,34 @@ function DubheWorkbench(): React.ReactElement {
   async function checkHealth(): Promise<void> {
     setApiStatus('请求中');
     try {
-      const [, nextSystemStatus, nextChecklist, nextSmokeReport] = await Promise.all([
+      const [
+        ,
+        nextSystemStatus,
+        nextChecklist,
+        nextSmokeReport,
+        nextExternalChecks,
+        nextProductionReadiness,
+      ] = await Promise.all([
         getJson<Record<string, string>>(coreUrl, '/health'),
         getJson<SystemStatusResponse>(coreUrl, '/v1/system/status'),
         getJson<OnboardingChecklistResponse>(coreUrl, '/v1/onboarding/checklist', session?.access_token),
         getJson<SmokeWorkflowReportResponse>(coreUrl, '/v1/system/smoke-report'),
+        getJson<ExternalServiceCheckResponse>(coreUrl, '/v1/system/external-checks'),
+        getJson<ProductionReadinessResponse>(coreUrl, '/v1/system/production-readiness'),
       ]);
       setSystemStatus(nextSystemStatus);
       setOnboardingChecklist(nextChecklist);
       setSmokeReport(nextSmokeReport);
+      setExternalChecks(nextExternalChecks);
+      setProductionReadiness(nextProductionReadiness);
       setApiStatus('已连接');
       appendLog('positive', 'Dubhe Core 健康检查和系统状态读取通过。');
     } catch (error) {
       setSystemStatus(null);
       setOnboardingChecklist(null);
       setSmokeReport(null);
+      setExternalChecks(null);
+      setProductionReadiness(null);
       setApiStatus('离线');
       appendLog('warning', `Core 暂不可用：${errorMessage(error)}。`);
     }
@@ -1265,6 +1328,8 @@ function DubheWorkbench(): React.ReactElement {
         loadRiskControls(activeSession),
         loadLocalConfig(activeSession),
         loadOnboardingChecklist(activeSession),
+        loadExternalChecks(false),
+        loadProductionReadiness(),
       ]);
     } catch (error) {
       appendLog('warning', `会话数据同步失败：${errorMessage(error)}。`);
@@ -1382,6 +1447,29 @@ function DubheWorkbench(): React.ReactElement {
     } catch (error) {
       setSmokeReport(null);
       appendLog('warning', `主链路烟测报告读取失败：${errorMessage(error)}。`);
+    }
+  }
+
+  async function loadExternalChecks(live: boolean): Promise<void> {
+    try {
+      const path = live ? '/v1/system/external-checks?live=true' : '/v1/system/external-checks';
+      const report = await getJson<ExternalServiceCheckResponse>(coreUrl, path);
+      setExternalChecks(report);
+      appendLog(externalChecksTone(report.overall_status), report.message_zh);
+    } catch (error) {
+      setExternalChecks(null);
+      appendLog('warning', `外部服务体检读取失败：${errorMessage(error)}。`);
+    }
+  }
+
+  async function loadProductionReadiness(): Promise<void> {
+    try {
+      const report = await getJson<ProductionReadinessResponse>(coreUrl, '/v1/system/production-readiness');
+      setProductionReadiness(report);
+      appendLog(report.production_ready ? 'positive' : 'warning', report.message_zh);
+    } catch (error) {
+      setProductionReadiness(null);
+      appendLog('warning', `生产门禁读取失败：${errorMessage(error)}。`);
     }
   }
 
@@ -2161,6 +2249,81 @@ function DubheWorkbench(): React.ReactElement {
               </div>
             ) : (
               <p style={styles.bodyText}>点击左侧“检查”后显示 Core、存储、认证和交易开关状态。</p>
+            )}
+          </SidePanel>
+
+          <SidePanel
+            title="外部服务体检"
+            meta={externalChecks ? externalChecksSummary(externalChecks) : '待检查'}
+          >
+            {externalChecks ? (
+              <div style={styles.statusList}>
+                <StatusRow
+                  label="总体状态"
+                  value={externalChecksStatusLabel(externalChecks.overall_status)}
+                  tone={externalChecksTone(externalChecks.overall_status)}
+                  message={externalChecks.message_zh}
+                />
+                {externalChecks.checks.map((check) => (
+                  <StatusRow
+                    key={check.service}
+                    label={check.label_zh}
+                    value={externalCheckStatusLabel(check)}
+                    tone={externalCheckTone(check.status)}
+                    message={`${check.message_zh} 下一步：${check.next_step_zh}`}
+                  />
+                ))}
+                <div style={styles.riskButtonRow}>
+                  <button style={styles.smallButton} type="button" onClick={() => void loadExternalChecks(false)} disabled={isBusy}>
+                    读取配置检查
+                  </button>
+                  <button style={styles.fullWidthButtonInline} type="button" onClick={() => void loadExternalChecks(true)} disabled={isBusy}>
+                    live 检查
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p style={styles.bodyText}>连接 Core 后显示 AI 模型、Finnhub、Alpha Vantage、SEC 和 GDELT 的可用状态。</p>
+                <button style={styles.fullWidthButtonInline} type="button" onClick={() => void loadExternalChecks(false)}>
+                  读取外部服务体检
+                </button>
+              </>
+            )}
+          </SidePanel>
+
+          <SidePanel
+            title="生产门禁"
+            meta={productionReadiness ? productionReadinessSummary(productionReadiness) : '待检查'}
+          >
+            {productionReadiness ? (
+              <div style={styles.statusList}>
+                <StatusRow
+                  label="上线状态"
+                  value={productionReadiness.production_ready ? '可进入发布' : `${productionReadiness.blocking_count} 个阻断`}
+                  tone={productionReadiness.production_ready ? 'positive' : 'negative'}
+                  message={productionReadiness.message_zh}
+                />
+                {productionReadiness.items.slice(0, 8).map((item) => (
+                  <StatusRow
+                    key={item.id}
+                    label={`${item.category_zh} / ${item.id}`}
+                    value={productionReadinessItemLabel(item)}
+                    tone={productionReadinessItemTone(item)}
+                    message={`${item.evidence_zh} 下一步：${item.next_step_zh}`}
+                  />
+                ))}
+                <button style={styles.fullWidthButtonInline} type="button" onClick={() => void loadProductionReadiness()} disabled={isBusy}>
+                  刷新生产门禁
+                </button>
+              </div>
+            ) : (
+              <>
+                <p style={styles.bodyText}>连接 Core 后显示授权数据、生产身份、云同步、审计、券商和四端签名发布的阻断项。</p>
+                <button style={styles.fullWidthButtonInline} type="button" onClick={() => void loadProductionReadiness()}>
+                  读取生产门禁
+                </button>
+              </>
             )}
           </SidePanel>
 
@@ -3163,6 +3326,51 @@ function coverageMessage(coverage: NewsMarketCoverageStatus): string {
     coverage.missing_sources_zh.length > 0 ? `待补：${coverage.missing_sources_zh.slice(0, 4).join('、')}` : '',
     `下一步：${coverage.next_step_zh}`,
   ].filter(Boolean).join(' ');
+}
+
+function externalChecksSummary(report: ExternalServiceCheckResponse): string {
+  return `${report.ready_count}/${report.total_count} · ${externalChecksStatusLabel(report.overall_status)}`;
+}
+
+function externalChecksStatusLabel(status: ExternalServiceCheckResponse['overall_status']): string {
+  if (status === 'ready') return '全部通过';
+  if (status === 'partial') return '部分可用';
+  return '待配置';
+}
+
+function externalChecksTone(status: ExternalServiceCheckResponse['overall_status']): Tone {
+  if (status === 'ready') return 'positive';
+  if (status === 'partial') return 'warning';
+  return 'negative';
+}
+
+function externalCheckStatusLabel(check: ExternalServiceCheck): string {
+  if (check.status === 'ok') return check.live_checked ? `${check.duration_ms}ms` : '可用';
+  if (check.status === 'skipped') return check.configured ? '待 live' : '未配置';
+  return '不可用';
+}
+
+function externalCheckTone(status: ExternalServiceCheck['status']): Tone {
+  if (status === 'ok') return 'positive';
+  if (status === 'skipped') return 'warning';
+  return 'negative';
+}
+
+function productionReadinessSummary(report: ProductionReadinessResponse): string {
+  if (report.production_ready) return '通过';
+  return `${report.blocking_count} 阻断 / ${report.warning_count} 警告`;
+}
+
+function productionReadinessItemLabel(item: ProductionReadinessItem): string {
+  if (item.status === 'pass') return '通过';
+  if (item.status === 'warn') return '警告';
+  return item.blocking ? '阻断' : '失败';
+}
+
+function productionReadinessItemTone(item: ProductionReadinessItem): Tone {
+  if (item.status === 'pass') return 'positive';
+  if (item.status === 'warn') return 'warning';
+  return item.blocking ? 'negative' : 'warning';
 }
 
 function packageSummary(packages: InstallPackageStatus[]): string {

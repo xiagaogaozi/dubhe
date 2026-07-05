@@ -97,6 +97,21 @@ class CoreClient {
     return SystemStatus.fromJson(_map(json));
   }
 
+  Future<ExternalServiceChecks> fetchExternalServiceChecks({
+    bool live = false,
+  }) async {
+    final json = await _getJson(
+      '/v1/system/external-checks',
+      queryParameters: {'live': '$live'},
+    );
+    return ExternalServiceChecks.fromJson(_map(json));
+  }
+
+  Future<ProductionReadiness> fetchProductionReadiness() async {
+    final json = await _getJson('/v1/system/production-readiness');
+    return ProductionReadiness.fromJson(_map(json));
+  }
+
   Future<SmokeWorkflowReport> fetchSmokeWorkflowReport() async {
     final json = await _getJson('/v1/system/smoke-report');
     return SmokeWorkflowReport.fromJson(_map(json));
@@ -563,6 +578,176 @@ class SystemStatus {
       installPackages: _mapList(
         json['install_packages'],
       ).map(InstallPackageReadiness.fromJson).toList(),
+    );
+  }
+}
+
+class ExternalServiceChecks {
+  ExternalServiceChecks({
+    required this.live,
+    required this.overallStatus,
+    required this.readyCount,
+    required this.totalCount,
+    required this.checks,
+    required this.messageZh,
+    required this.generatedAt,
+  });
+
+  final bool live;
+  final String overallStatus;
+  final int readyCount;
+  final int totalCount;
+  final List<ExternalServiceCheck> checks;
+  final String messageZh;
+  final String generatedAt;
+
+  bool get ready => overallStatus == 'ready';
+  bool get actionRequired => overallStatus == 'action_required';
+
+  String get statusZh {
+    if (ready) return '全部通过';
+    if (actionRequired) return '待配置';
+    return '部分可用';
+  }
+
+  factory ExternalServiceChecks.fromJson(Map<String, dynamic> json) {
+    return ExternalServiceChecks(
+      live: _bool(json['live']),
+      overallStatus: _string(json['overall_status']),
+      readyCount: _int(json['ready_count']),
+      totalCount: _int(json['total_count']),
+      checks: _mapList(
+        json['checks'],
+      ).map(ExternalServiceCheck.fromJson).toList(),
+      messageZh: _string(json['message_zh']),
+      generatedAt: _string(json['generated_at']),
+    );
+  }
+}
+
+class ExternalServiceCheck {
+  ExternalServiceCheck({
+    required this.service,
+    required this.labelZh,
+    required this.configured,
+    required this.liveChecked,
+    required this.status,
+    required this.durationMs,
+    required this.messageZh,
+    required this.nextStepZh,
+  });
+
+  final String service;
+  final String labelZh;
+  final bool configured;
+  final bool liveChecked;
+  final String status;
+  final int durationMs;
+  final String messageZh;
+  final String nextStepZh;
+
+  bool get ok => status == 'ok';
+  bool get skipped => status == 'skipped';
+
+  String get statusZh {
+    if (ok) return liveChecked ? '${durationMs}ms' : '可用';
+    if (skipped) return configured ? '待 live' : '未配置';
+    return '不可用';
+  }
+
+  factory ExternalServiceCheck.fromJson(Map<String, dynamic> json) {
+    return ExternalServiceCheck(
+      service: _string(json['service']),
+      labelZh: _string(json['label_zh']),
+      configured: _bool(json['configured']),
+      liveChecked: _bool(json['live_checked']),
+      status: _string(json['status']),
+      durationMs: _int(json['duration_ms']),
+      messageZh: _string(json['message_zh']),
+      nextStepZh: _string(json['next_step_zh']),
+    );
+  }
+}
+
+class ProductionReadiness {
+  ProductionReadiness({
+    required this.productionReady,
+    required this.overallStatus,
+    required this.passCount,
+    required this.warningCount,
+    required this.blockingCount,
+    required this.totalCount,
+    required this.messageZh,
+    required this.items,
+    required this.generatedAt,
+  });
+
+  final bool productionReady;
+  final String overallStatus;
+  final int passCount;
+  final int warningCount;
+  final int blockingCount;
+  final int totalCount;
+  final String messageZh;
+  final List<ProductionReadinessItem> items;
+  final String generatedAt;
+
+  String get statusZh => productionReady ? '通过' : '$blockingCount 个阻断';
+
+  factory ProductionReadiness.fromJson(Map<String, dynamic> json) {
+    return ProductionReadiness(
+      productionReady: _bool(json['production_ready']),
+      overallStatus: _string(json['overall_status']),
+      passCount: _int(json['pass_count']),
+      warningCount: _int(json['warning_count']),
+      blockingCount: _int(json['blocking_count']),
+      totalCount: _int(json['total_count']),
+      messageZh: _string(json['message_zh']),
+      items: _mapList(
+        json['items'],
+      ).map(ProductionReadinessItem.fromJson).toList(),
+      generatedAt: _string(json['generated_at']),
+    );
+  }
+}
+
+class ProductionReadinessItem {
+  ProductionReadinessItem({
+    required this.id,
+    required this.categoryZh,
+    required this.requirementZh,
+    required this.status,
+    required this.blocking,
+    required this.evidenceZh,
+    required this.nextStepZh,
+  });
+
+  final String id;
+  final String categoryZh;
+  final String requirementZh;
+  final String status;
+  final bool blocking;
+  final String evidenceZh;
+  final String nextStepZh;
+
+  bool get passed => status == 'pass';
+  bool get warning => status == 'warn';
+
+  String get statusZh {
+    if (passed) return '通过';
+    if (warning) return '警告';
+    return blocking ? '阻断' : '失败';
+  }
+
+  factory ProductionReadinessItem.fromJson(Map<String, dynamic> json) {
+    return ProductionReadinessItem(
+      id: _string(json['id']),
+      categoryZh: _string(json['category_zh']),
+      requirementZh: _string(json['requirement_zh']),
+      status: _string(json['status']),
+      blocking: _bool(json['blocking']),
+      evidenceZh: _string(json['evidence_zh']),
+      nextStepZh: _string(json['next_step_zh']),
     );
   }
 }
