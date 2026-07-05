@@ -162,6 +162,26 @@ type LocalRuntimeConfigUpdateRequest = {
   values: Record<string, string>;
 };
 
+type OnboardingStepStatus = 'complete' | 'action_required' | 'warning';
+
+type OnboardingStep = {
+  id: string;
+  label_zh: string;
+  status: OnboardingStepStatus;
+  message_zh: string;
+  action_zh?: string | null;
+};
+
+type OnboardingChecklistResponse = {
+  service: string;
+  language: string;
+  complete_count: number;
+  total_count: number;
+  next_action_zh: string;
+  steps: OnboardingStep[];
+  generated_at: string;
+};
+
 type NewsAnalysis = {
   id: string;
   news_event_id: string;
@@ -574,6 +594,7 @@ function DubheWorkbench(): React.ReactElement {
   const [selectedNewsId, setSelectedNewsId] = React.useState(fallbackNewsEvent.id);
   const [providerStatus, setProviderStatus] = React.useState<NewsProviderStatus[]>([]);
   const [systemStatus, setSystemStatus] = React.useState<SystemStatusResponse | null>(null);
+  const [onboardingChecklist, setOnboardingChecklist] = React.useState<OnboardingChecklistResponse | null>(null);
   const [localConfig, setLocalConfig] = React.useState<LocalRuntimeConfigResponse | null>(null);
   const [localConfigForm, setLocalConfigForm] = React.useState<Record<string, string>>({});
   const [localConfigBusy, setLocalConfigBusy] = React.useState(false);
@@ -807,15 +828,18 @@ function DubheWorkbench(): React.ReactElement {
   async function checkHealth(): Promise<void> {
     setApiStatus('请求中');
     try {
-      const [, nextSystemStatus] = await Promise.all([
+      const [, nextSystemStatus, nextChecklist] = await Promise.all([
         getJson<Record<string, string>>(coreUrl, '/health'),
         getJson<SystemStatusResponse>(coreUrl, '/v1/system/status'),
+        getJson<OnboardingChecklistResponse>(coreUrl, '/v1/onboarding/checklist', session?.access_token),
       ]);
       setSystemStatus(nextSystemStatus);
+      setOnboardingChecklist(nextChecklist);
       setApiStatus('已连接');
       appendLog('positive', 'Dubhe Core 健康检查和系统状态读取通过。');
     } catch (error) {
       setSystemStatus(null);
+      setOnboardingChecklist(null);
       setApiStatus('离线');
       appendLog('warning', `Core 暂不可用：${errorMessage(error)}。`);
     }
@@ -1162,6 +1186,7 @@ function DubheWorkbench(): React.ReactElement {
         loadPortfolio(activeSession),
         loadRiskControls(activeSession),
         loadLocalConfig(activeSession),
+        loadOnboardingChecklist(activeSession),
       ]);
     } catch (error) {
       appendLog('warning', `会话数据同步失败：${errorMessage(error)}。`);
@@ -1254,6 +1279,20 @@ function DubheWorkbench(): React.ReactElement {
       appendLog('warning', `本地配置读取失败：${errorMessage(error)}。`);
     } finally {
       setLocalConfigBusy(false);
+    }
+  }
+
+  async function loadOnboardingChecklist(activeSession = session): Promise<void> {
+    try {
+      const checklist = await getJson<OnboardingChecklistResponse>(
+        coreUrl,
+        '/v1/onboarding/checklist',
+        activeSession?.access_token,
+      );
+      setOnboardingChecklist(checklist);
+    } catch (error) {
+      setOnboardingChecklist(null);
+      appendLog('warning', `首次使用清单读取失败：${errorMessage(error)}。`);
     }
   }
 
@@ -1972,6 +2011,17 @@ function DubheWorkbench(): React.ReactElement {
               </div>
             ) : (
               <p style={styles.bodyText}>点击左侧“检查”后显示 Core、存储、认证和交易开关状态。</p>
+            )}
+          </SidePanel>
+
+          <SidePanel
+            title="首次使用清单"
+            meta={onboardingChecklist ? `${onboardingChecklist.complete_count}/${onboardingChecklist.total_count}` : '待检查'}
+          >
+            {onboardingChecklist ? (
+              <OnboardingChecklistPanel checklist={onboardingChecklist} />
+            ) : (
+              <p style={styles.bodyText}>连接 Core 后显示从登录、配置到纸面交易的下一步清单。</p>
             )}
           </SidePanel>
 
@@ -2870,6 +2920,52 @@ function sourceLabel(source: LocalRuntimeConfigItem['source']): string {
   if (source === 'local_file') return '本机文件';
   if (source === 'process_env') return '环境变量';
   return '未配置';
+}
+
+function OnboardingChecklistPanel(props: { checklist: OnboardingChecklistResponse }): React.ReactElement {
+  return (
+    <div style={styles.onboardingBox}>
+      <div style={styles.onboardingProgress}>
+        <span>{props.checklist.complete_count}/{props.checklist.total_count}</span>
+        <strong>下一步：{props.checklist.next_action_zh}</strong>
+      </div>
+      <div style={styles.onboardingStepList}>
+        {props.checklist.steps.map((step) => (
+          <div style={styles.onboardingStep} key={step.id}>
+            <span style={{ ...styles.onboardingDot, ...onboardingDotStyle(step.status) }} />
+            <div>
+              <div style={styles.statusRowHeader}>
+                <strong style={styles.statusName}>{step.label_zh}</strong>
+                <span style={{ ...styles.miniPill, ...tonePillStyle(onboardingTone(step.status)) }}>
+                  {onboardingStatusLabel(step.status)}
+                </span>
+              </div>
+              <p style={styles.statusMessage}>{step.message_zh}</p>
+              {step.action_zh && <p style={styles.configHint}>建议：{step.action_zh}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function onboardingTone(status: OnboardingStepStatus): Tone {
+  if (status === 'complete') return 'positive';
+  if (status === 'warning') return 'warning';
+  return 'negative';
+}
+
+function onboardingStatusLabel(status: OnboardingStepStatus): string {
+  if (status === 'complete') return '已完成';
+  if (status === 'warning') return '可优化';
+  return '待操作';
+}
+
+function onboardingDotStyle(status: OnboardingStepStatus): React.CSSProperties {
+  if (status === 'complete') return styles.onboardingDotComplete;
+  if (status === 'warning') return styles.onboardingDotWarning;
+  return styles.onboardingDotAction;
 }
 
 function StepPill(props: { label: string; done: boolean }): React.ReactElement {
@@ -3780,6 +3876,44 @@ const styles = {
     fontSize: 11,
     lineHeight: 1.4,
     overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  onboardingBox: {
+    display: 'grid',
+    gap: 10,
+  } as React.CSSProperties,
+  onboardingProgress: {
+    display: 'grid',
+    gap: 4,
+    padding: '8px 0',
+    color: '#30433b',
+    fontSize: 12,
+  } as React.CSSProperties,
+  onboardingStepList: {
+    display: 'grid',
+    gap: 9,
+  } as React.CSSProperties,
+  onboardingStep: {
+    display: 'grid',
+    gridTemplateColumns: '12px minmax(0, 1fr)',
+    gap: 8,
+    alignItems: 'start',
+    paddingTop: 9,
+    borderTop: '1px solid #e5ebe8',
+  } as React.CSSProperties,
+  onboardingDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 999,
+    marginTop: 5,
+  } as React.CSSProperties,
+  onboardingDotComplete: {
+    background: '#45a46f',
+  } as React.CSSProperties,
+  onboardingDotWarning: {
+    background: '#d6a23d',
+  } as React.CSSProperties,
+  onboardingDotAction: {
+    background: '#c6503c',
   } as React.CSSProperties,
   miniPill: {
     flex: '0 0 auto',

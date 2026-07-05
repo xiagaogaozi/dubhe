@@ -294,6 +294,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
+  OnboardingChecklist? _onboardingChecklist;
   LocalRuntimeConfig? _localConfig;
   Map<String, String> _localConfigForm = const {};
   WorkspaceSnapshot? _workspaceSnapshot;
@@ -520,6 +521,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         widget.client.fetchSystemStatus(),
         widget.client.fetchNewsFeed(live: false),
         widget.client.fetchPaperPortfolio(defaultPaperAccountId),
+        widget.client.fetchOnboardingChecklist(),
         widget.client.fetchWorkspaceSnapshot(
           workspaceId: widget.session.workspaceId,
         ),
@@ -527,7 +529,8 @@ class _CompanionHomeState extends State<CompanionHome> {
       final systemStatus = coreResponses[0] as SystemStatus;
       final newsFeed = coreResponses[1] as NewsFeed;
       final portfolio = coreResponses[2] as PaperPortfolio;
-      final workspaceSnapshot = coreResponses[3] as WorkspaceSnapshot;
+      final onboardingChecklist = coreResponses[3] as OnboardingChecklist;
+      final workspaceSnapshot = coreResponses[4] as WorkspaceSnapshot;
       var approvals = <ApprovalRequest>[];
       KillSwitchState? killSwitch;
       var auditLogs = <AuditLogEntry>[];
@@ -572,6 +575,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       );
       setState(() {
         _systemStatus = systemStatus;
+        _onboardingChecklist = onboardingChecklist;
         _localConfig = localConfig;
         _localConfigForm = localConfig == null
             ? const {}
@@ -1133,6 +1137,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       _TodayPage(
         session: widget.session,
         systemStatus: _systemStatus,
+        onboardingChecklist: _onboardingChecklist,
         localConfig: _localConfig,
         localConfigForm: _localConfigForm,
         configBusy: _configBusy,
@@ -1226,6 +1231,7 @@ class _TodayPage extends StatelessWidget {
   const _TodayPage({
     required this.session,
     required this.systemStatus,
+    required this.onboardingChecklist,
     required this.localConfig,
     required this.localConfigForm,
     required this.configBusy,
@@ -1244,6 +1250,7 @@ class _TodayPage extends StatelessWidget {
 
   final DeviceSession session;
   final SystemStatus? systemStatus;
+  final OnboardingChecklist? onboardingChecklist;
   final LocalRuntimeConfig? localConfig;
   final Map<String, String> localConfigForm;
   final bool configBusy;
@@ -1309,6 +1316,7 @@ class _TodayPage extends StatelessWidget {
           lastPushedEvent: lastPushedSyncEvent,
           onUseStrategyDraft: onUseStrategyDraft,
         ),
+        _OnboardingChecklistCard(checklist: onboardingChecklist),
         _SystemStatusPanel(
           session: session,
           status: systemStatus,
@@ -1425,6 +1433,56 @@ class _SyncStatusPanel extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OnboardingChecklistCard extends StatelessWidget {
+  const _OnboardingChecklistCard({required this.checklist});
+
+  final OnboardingChecklist? checklist;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = checklist;
+    if (current == null) {
+      return const _InfoCard(text: '首次使用清单尚未同步。');
+    }
+    return _SectionCard(
+      title: '首次使用清单',
+      trailing: '${current.completeCount}/${current.totalCount}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('下一步：${current.nextActionZh}'),
+          const SizedBox(height: 8),
+          ...current.steps.map(
+            (step) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(
+                step.complete
+                    ? Icons.check_circle_outline
+                    : step.warning
+                    ? Icons.info_outline
+                    : Icons.radio_button_unchecked,
+                color: step.complete
+                    ? Theme.of(context).colorScheme.primary
+                    : step.warning
+                    ? Theme.of(context).colorScheme.tertiary
+                    : Theme.of(context).colorScheme.error,
+              ),
+              title: Text(step.labelZh),
+              subtitle: Text(
+                step.actionZh.isEmpty
+                    ? step.messageZh
+                    : '${step.messageZh}\n建议：${step.actionZh}',
+              ),
+              trailing: Text(_onboardingStatusZh(step.status)),
+            ),
+          ),
         ],
       ),
     );
@@ -2076,6 +2134,13 @@ String _riskStatusZh(String status) {
   if (status == 'approved') return '已通过';
   if (status == 'rejected') return '已拒绝';
   return '需要审批';
+}
+
+String _onboardingStatusZh(String status) {
+  if (status == 'complete') return '已完成';
+  if (status == 'warning') return '可优化';
+  if (status == 'action_required') return '待操作';
+  return status;
 }
 
 String _auditActionZh(String action) {

@@ -253,6 +253,30 @@ class LocalRuntimeConfigUpdateRequest(BaseModel):
         return keys
 
 
+class OnboardingStepStatus(str, Enum):
+    COMPLETE = "complete"
+    ACTION_REQUIRED = "action_required"
+    WARNING = "warning"
+
+
+class OnboardingStep(BaseModel):
+    id: str
+    label_zh: str
+    status: OnboardingStepStatus
+    message_zh: str
+    action_zh: str | None = None
+
+
+class OnboardingChecklistResponse(BaseModel):
+    service: str = "dubhe-core"
+    language: str = "zh-CN"
+    complete_count: int
+    total_count: int
+    next_action_zh: str
+    steps: list[OnboardingStep] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
 class StrategySpec(BaseModel):
     strategy_name: str = Field(min_length=1)
     market_scope: list[Market] = Field(min_length=1)

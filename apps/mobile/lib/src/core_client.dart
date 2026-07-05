@@ -91,6 +91,11 @@ class CoreClient {
     return LocalRuntimeConfig.fromJson(_map(json));
   }
 
+  Future<OnboardingChecklist> fetchOnboardingChecklist() async {
+    final json = await _getJson('/v1/onboarding/checklist');
+    return OnboardingChecklist.fromJson(_map(json));
+  }
+
   Future<LocalRuntimeConfig> updateLocalRuntimeConfig({
     required Map<String, String> values,
   }) async {
@@ -594,6 +599,58 @@ class LocalRuntimeConfigItem {
       source: _string(json['source']),
       maskedValue: _string(json['masked_value']),
       restartRequired: _bool(json['restart_required']),
+    );
+  }
+}
+
+class OnboardingChecklist {
+  OnboardingChecklist({
+    required this.completeCount,
+    required this.totalCount,
+    required this.nextActionZh,
+    required this.steps,
+  });
+
+  final int completeCount;
+  final int totalCount;
+  final String nextActionZh;
+  final List<OnboardingStep> steps;
+
+  factory OnboardingChecklist.fromJson(Map<String, dynamic> json) {
+    return OnboardingChecklist(
+      completeCount: _int(json['complete_count']),
+      totalCount: _int(json['total_count']),
+      nextActionZh: _string(json['next_action_zh']),
+      steps: _mapList(json['steps']).map(OnboardingStep.fromJson).toList(),
+    );
+  }
+}
+
+class OnboardingStep {
+  OnboardingStep({
+    required this.id,
+    required this.labelZh,
+    required this.status,
+    required this.messageZh,
+    required this.actionZh,
+  });
+
+  final String id;
+  final String labelZh;
+  final String status;
+  final String messageZh;
+  final String actionZh;
+
+  bool get complete => status == 'complete';
+  bool get warning => status == 'warning';
+
+  factory OnboardingStep.fromJson(Map<String, dynamic> json) {
+    return OnboardingStep(
+      id: _string(json['id']),
+      labelZh: _string(json['label_zh']),
+      status: _string(json['status']),
+      messageZh: _string(json['message_zh']),
+      actionZh: _string(json['action_zh']),
     );
   }
 }

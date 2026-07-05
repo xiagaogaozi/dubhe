@@ -32,6 +32,9 @@ from .models import (
     NewsAdapterRuntimeStatus,
     NewsEvent,
     NewsFeedResponse,
+    OnboardingChecklistResponse,
+    OnboardingStep,
+    OnboardingStepStatus,
     OrderIntent,
     OrderSide,
     PaperOrder,
@@ -320,6 +323,13 @@ def require_device_session(authorization: str | None = Header(default=None)) -> 
     return session
 
 
+def optional_device_session(authorization: str | None = Header(default=None)) -> DeviceSession | None:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return authenticate_device_token(token)
+
+
 def require_workspace_access(workspace_id: str, session: DeviceSession) -> None:
     if session.workspace_id != workspace_id:
         raise HTTPException(status_code=403, detail="当前设备无权访问该工作区。")
@@ -342,6 +352,135 @@ def require_admin_session(
 ) -> DeviceSession:
     require_roles(session, {UserRole.ADMIN})
     return session
+
+
+@app.get("/v1/onboarding/checklist", response_model=OnboardingChecklistResponse)
+def onboarding_checklist_endpoint(
+    session: DeviceSession | None = Depends(optional_device_session),
+) -> OnboardingChecklistResponse:
+    status = system_status()
+    llm_ready = status.llm.enabled
+    licensed_news_ready = any(
+        adapter.requires_license and adapter.enabled for adapter in status.news_adapters
+    )
+    public_news_ready = any(
+        (not adapter.requires_license) and adapter.enabled for adapter in status.news_adapters
+    )
+
+    steps = [
+        OnboardingStep(
+            id="core_connected",
+            label_zh="连接 Core",
+            status=OnboardingStepStatus.COMPLETE,
+            message_zh="Dubhe Core 正在响应请求。",
+        ),
+        OnboardingStep(
+            id="account_login",
+            label_zh="账号登录",
+            status=OnboardingStepStatus.COMPLETE
+            if session
+            else OnboardingStepStatus.ACTION_REQUIRED,
+            message_zh=(
+                f"已登录：{session.device_name}，角色 {session.role.value}。"
+                if session
+                else "请创建或登录本地账号，才能同步工作区和保存研究记录。"
+            ),
+            action_zh=None if session else "创建账号或登录工作台。",
+        ),
+        OnboardingStep(
+            id="runtime_config",
+            label_zh="模型与授权新闻源",
+            status=OnboardingStepStatus.COMPLETE
+            if llm_ready and licensed_news_ready
+            else OnboardingStepStatus.WARNING,
+            message_zh=(
+                "真实 AI 模型和至少一个授权新闻源已接入。"
+                if llm_ready and licensed_news_ready
+                else "当前可用本地 AI 兜底和公开/演示新闻源；填写模型与授权新闻 key 后体验更接近真实投研。"
+            ),
+            action_zh=None
+            if llm_ready and licensed_news_ready
+            else "管理员可在系统状态里保存 AI 模型和新闻源 key。",
+        ),
+        OnboardingStep(
+            id="news_ready",
+            label_zh="新闻雷达",
+            status=OnboardingStepStatus.COMPLETE
+            if public_news_ready
+            else OnboardingStepStatus.ACTION_REQUIRED,
+            message_zh=(
+                "新闻源聚合链路可用，授权源缺失时会自动降级到公开/演示来源。"
+                if public_news_ready
+                else "新闻源当前不可用。"
+            ),
+            action_zh=None if public_news_ready else "检查网络和新闻源配置。",
+        ),
+        OnboardingStep(
+            id="ai_assistant_ready",
+            label_zh="AI 分析师",
+            status=OnboardingStepStatus.COMPLETE
+            if status.llm.fallback_available or status.llm.enabled
+            else OnboardingStepStatus.ACTION_REQUIRED,
+            message_zh=(
+                status.llm.message_zh
+                if status.llm.message_zh
+                else "AI 分析师可使用本地兜底或真实模型生成中文研究答复。"
+            ),
+            action_zh=None
+            if status.llm.fallback_available or status.llm.enabled
+            else "配置可用模型或启用本地兜底。",
+        ),
+        OnboardingStep(
+            id="workspace_sync",
+            label_zh="跨端同步",
+            status=OnboardingStepStatus.COMPLETE
+            if session
+            else OnboardingStepStatus.ACTION_REQUIRED,
+            message_zh=(
+                f"当前工作区 {session.workspace_id} 可同步自选股、策略、回测和 AI 问答。"
+                if session
+                else "登录后会启用工作区快照、同步事件和跨端问答恢复。"
+            ),
+            action_zh=None if session else "登录账号后刷新同步状态。",
+        ),
+        OnboardingStep(
+            id="paper_trading_ready",
+            label_zh="纸面交易",
+            status=OnboardingStepStatus.COMPLETE
+            if session and status.trading.paper_broker_enabled
+            else OnboardingStepStatus.ACTION_REQUIRED,
+            message_zh=(
+                "纸面交易、模拟券商和组合账本可用。"
+                if session and status.trading.paper_broker_enabled
+                else "登录并完成分析/策略/回测后，可以提交 1 股纸面买入验证账本链路。"
+            ),
+            action_zh=None
+            if session and status.trading.paper_broker_enabled
+            else "先登录，再完成新闻分析、策略草案和回测。",
+        ),
+        OnboardingStep(
+            id="live_trading_guard",
+            label_zh="实盘风控边界",
+            status=OnboardingStepStatus.COMPLETE
+            if not status.trading.live_trading_enabled
+            else OnboardingStepStatus.WARNING,
+            message_zh=status.trading.message_zh,
+            action_zh=None
+            if not status.trading.live_trading_enabled
+            else "确认券商签名、审批、审计和 kill switch 均已上线。",
+        ),
+    ]
+    complete_count = sum(1 for step in steps if step.status == OnboardingStepStatus.COMPLETE)
+    next_step = next(
+        (step for step in steps if step.status == OnboardingStepStatus.ACTION_REQUIRED),
+        next((step for step in steps if step.status == OnboardingStepStatus.WARNING), None),
+    )
+    return OnboardingChecklistResponse(
+        complete_count=complete_count,
+        total_count=len(steps),
+        next_action_zh=next_step.action_zh if next_step and next_step.action_zh else "可以开始刷新新闻并进行 AI 分析。",
+        steps=steps,
+    )
 
 
 @app.get("/v1/runtime/local-config", response_model=LocalRuntimeConfigResponse)

@@ -123,6 +123,14 @@ GET /v1/system/status
 
 该接口只返回 `configured: true/false`、中文说明和适配器启用状态，不会返回任何 API key 或 User-Agent 原始值。桌面端可用它展示“数据源配置 / 系统状态”面板。
 
+首次使用清单接口：
+
+```http
+GET /v1/onboarding/checklist
+```
+
+未登录时会提示创建/登录账号；携带设备 Bearer token 时会把工作区同步、纸面交易等步骤标为已就绪。该接口用于桌面端和移动端的中文小白引导，不执行任何写操作。
+
 ## 本地运行
 
 ```powershell

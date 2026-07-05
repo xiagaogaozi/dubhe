@@ -66,6 +66,52 @@
         }
       }
     },
+    "/v1/onboarding/checklist": {
+      "get": {
+        "summary": "Onboarding Checklist Endpoint",
+        "operationId": "onboarding_checklist_endpoint_v1_onboarding_checklist_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingChecklistResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/runtime/local-config": {
       "get": {
         "summary": "Get Local Runtime Config Endpoint",
@@ -3325,6 +3371,98 @@
           "message_zh"
         ],
         "title": "NewsProviderStatus"
+      },
+      "OnboardingChecklistResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "default": "dubhe-core"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "zh-CN"
+          },
+          "complete_count": {
+            "type": "integer",
+            "title": "Complete Count"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          },
+          "next_action_zh": {
+            "type": "string",
+            "title": "Next Action Zh"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/OnboardingStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "complete_count",
+          "total_count",
+          "next_action_zh"
+        ],
+        "title": "OnboardingChecklistResponse"
+      },
+      "OnboardingStep": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OnboardingStepStatus"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "action_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label_zh",
+          "status",
+          "message_zh"
+        ],
+        "title": "OnboardingStep"
+      },
+      "OnboardingStepStatus": {
+        "type": "string",
+        "enum": [
+          "complete",
+          "action_required",
+          "warning"
+        ],
+        "title": "OnboardingStepStatus"
       },
       "OrderDestination": {
         "type": "string",

@@ -492,6 +492,63 @@ void main() {
     expect(requestIndex, 2);
   });
 
+  test('onboarding checklist parses next action and steps', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'device-token',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/onboarding/checklist');
+        expect(request.headers['authorization'], 'Bearer device-token');
+        return http.Response(
+          '''
+          {
+            "service": "dubhe-core",
+            "language": "zh-CN",
+            "complete_count": 2,
+            "total_count": 3,
+            "next_action_zh": "创建账号或登录工作台。",
+            "steps": [
+              {
+                "id": "core_connected",
+                "label_zh": "连接 Core",
+                "status": "complete",
+                "message_zh": "Dubhe Core 正在响应请求。",
+                "action_zh": null
+              },
+              {
+                "id": "account_login",
+                "label_zh": "账号登录",
+                "status": "action_required",
+                "message_zh": "请创建或登录本地账号。",
+                "action_zh": "创建账号或登录工作台。"
+              },
+              {
+                "id": "runtime_config",
+                "label_zh": "模型与授权新闻源",
+                "status": "warning",
+                "message_zh": "当前可用本地兜底。",
+                "action_zh": "填写模型与新闻源 key。"
+              }
+            ],
+            "generated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final checklist = await client.fetchOnboardingChecklist();
+    expect(checklist.completeCount, 2);
+    expect(checklist.totalCount, 3);
+    expect(checklist.nextActionZh, contains('登录'));
+    expect(checklist.steps.first.complete, isTrue);
+    expect(checklist.steps[1].actionZh, contains('创建账号'));
+    expect(checklist.steps.last.warning, isTrue);
+  });
+
   test(
     'assistant chat sends portfolio research context and parses guidance',
     () async {

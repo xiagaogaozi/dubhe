@@ -198,6 +198,31 @@ def test_local_runtime_config_editor_writes_file_without_leaking_secrets(
     assert cleared_items["FINNHUB_API_KEY"]["configured"] is False
 
 
+def test_onboarding_checklist_guides_unauthenticated_and_logged_in_users() -> None:
+    anonymous_response = client.get("/v1/onboarding/checklist")
+    assert anonymous_response.status_code == 200
+    anonymous = anonymous_response.json()
+    anonymous_steps = {step["id"]: step for step in anonymous["steps"]}
+    assert anonymous["total_count"] >= 8
+    assert anonymous_steps["core_connected"]["status"] == "complete"
+    assert anonymous_steps["account_login"]["status"] == "action_required"
+    assert "登录" in anonymous["next_action_zh"] or "创建" in anonymous["next_action_zh"]
+
+    session = register_test_device(f"onboarding-{uuid4().hex[:8]}")
+    logged_in_response = client.get(
+        "/v1/onboarding/checklist",
+        headers=auth_headers(session),
+    )
+    assert logged_in_response.status_code == 200
+    logged_in = logged_in_response.json()
+    logged_in_steps = {step["id"]: step for step in logged_in["steps"]}
+    assert logged_in_steps["account_login"]["status"] == "complete"
+    assert logged_in_steps["workspace_sync"]["status"] == "complete"
+    assert logged_in_steps["paper_trading_ready"]["status"] == "complete"
+    assert logged_in_steps["live_trading_guard"]["status"] == "complete"
+    assert logged_in["complete_count"] > anonymous["complete_count"]
+
+
 def test_local_desktop_cors_allows_random_theia_port() -> None:
     response = client.options(
         "/health",
