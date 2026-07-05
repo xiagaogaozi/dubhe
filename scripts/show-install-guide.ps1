@@ -132,6 +132,7 @@ $tokens = @{
     "{{START_LAN_CMD}}" = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
     "{{USER_KIT_CMD}}" = Join-Path $repoRoot "Build-Dubhe-User-Kit.cmd"
     "{{MOBILE_GUIDE_CMD}}" = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
+    "{{ACCEPT_CMD}}" = Join-Path $repoRoot "Accept-Dubhe.cmd"
     "{{CHECK_CMD}}" = Join-Path $repoRoot "Check-Dubhe.cmd"
     "{{SMOKE_CMD}}" = Join-Path $repoRoot "Smoke-Dubhe.cmd"
     "{{SERVICE_CHECK_CMD}}" = Join-Path $repoRoot "Test-Dubhe-Services.cmd"

@@ -69,6 +69,11 @@ $entries = @(
         description = "Open Dubhe local runtime configuration."
     },
     @{
+        name = "Accept Dubhe"
+        file = Join-Path $repoRoot "Accept-Dubhe.cmd"
+        description = "Run local acceptance: readiness check, smoke workflow, and external service status."
+    },
+    @{
         name = "Check Dubhe"
         file = Join-Path $repoRoot "Check-Dubhe.cmd"
         description = "Check local Dubhe Core, desktop, mobile toolchain, and package readiness."

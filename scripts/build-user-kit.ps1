@@ -237,16 +237,18 @@ if (Test-Path $renderedMobileGuide) {
 Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination (Join-Path $guidesDir "README-project.md") -Force
 
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\check-local-dubhe.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "local-check.txt")
+Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\run-local-acceptance.ps1") -Arguments @("-CoreUrl", $CoreUrl, "-SkipExternalLive") -Path (Join-Path $checksDir "local-acceptance.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\test-external-services.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "external-services.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\check-production-readiness.ps1") -Arguments @("-CoreUrl", $CoreUrl) -Path (Join-Path $checksDir "production-readiness.txt")
 
 Write-Launcher -Path (Join-Path $kitRoot "00-Start-Dubhe-This-PC.cmd") -Title "Start Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "01-Configure-Dubhe-This-PC.cmd") -Title "Configure Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Configure-Dubhe.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "02-Check-Dubhe-This-PC.cmd") -Title "Check Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "03-Start-Dubhe-LAN-This-PC.cmd") -Title "Start Dubhe LAN on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe-LAN.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "04-Test-Services-This-PC.cmd") -Title "Test Dubhe services on this PC" -TargetScript (Join-Path $repoRoot "Test-Dubhe-Services.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "05-Check-Production-This-PC.cmd") -Title "Check Dubhe production readiness on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe-Production.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "06-Smoke-Dubhe-This-PC.cmd") -Title "Smoke Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Smoke-Dubhe.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "02-Accept-Dubhe-This-PC.cmd") -Title "Accept Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Accept-Dubhe.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "03-Check-Dubhe-This-PC.cmd") -Title "Check Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "04-Start-Dubhe-LAN-This-PC.cmd") -Title "Start Dubhe LAN on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe-LAN.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "05-Test-Services-This-PC.cmd") -Title "Test Dubhe services on this PC" -TargetScript (Join-Path $repoRoot "Test-Dubhe-Services.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "06-Check-Production-This-PC.cmd") -Title "Check Dubhe production readiness on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe-Production.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "07-Smoke-Dubhe-This-PC.cmd") -Title "Smoke Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Smoke-Dubhe.cmd")
 
 $template = Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "docs\USER_KIT_README.md")
 $readme = $template

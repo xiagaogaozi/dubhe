@@ -8,10 +8,12 @@
 
 1. 双击 `00-Start-Dubhe-This-PC.cmd`，启动 Dubhe Core 和桌面端。
 2. 第一次使用真实 AI 或新闻源时，双击 `01-Configure-Dubhe-This-PC.cmd`，按中文向导填写 key；不知道的项目直接回车即可。
-3. 双击 `02-Check-Dubhe-This-PC.cmd` 做本机体检。
-4. 需要手机连接时，双击 `03-Start-Dubhe-LAN-This-PC.cmd`，再看 `03-Guides\mobile-quick-start.txt`。
-5. 填完 key 后，双击 `04-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。
-6. 真正准备商业发布前，双击 `05-Check-Production-This-PC.cmd` 查看生产门禁。
+3. 双击 `02-Accept-Dubhe-This-PC.cmd` 做本机完整验收。
+4. 如需单独定位环境问题，双击 `03-Check-Dubhe-This-PC.cmd` 做本机体检。
+5. 需要手机连接时，双击 `04-Start-Dubhe-LAN-This-PC.cmd`，再看 `03-Guides\mobile-quick-start.txt`。
+6. 填完 key 后，双击 `05-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。
+7. 真正准备商业发布前，双击 `06-Check-Production-This-PC.cmd` 查看生产门禁。
+8. 需要单独重跑主链路时，双击 `07-Smoke-Dubhe-This-PC.cmd`。
 
 ## 这个包里的内容
 
