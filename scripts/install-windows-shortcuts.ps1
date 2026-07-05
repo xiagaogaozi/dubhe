@@ -49,6 +49,11 @@ $entries = @(
         description = "Start Dubhe Core for phones on the same Wi-Fi and open Dubhe Desktop."
     },
     @{
+        name = "Dubhe Mobile Guide"
+        file = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
+        description = "Open the Chinese phone/tablet install and connection guide."
+    },
+    @{
         name = "Configure Dubhe"
         file = Join-Path $repoRoot "Configure-Dubhe.cmd"
         description = "Open Dubhe local runtime configuration."

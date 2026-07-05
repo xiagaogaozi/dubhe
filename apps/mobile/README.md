@@ -49,7 +49,7 @@ iOS 模拟器连接本机 Core 时可使用：
 flutter run --dart-define=DUBHE_CORE_URL=http://127.0.0.1:8000
 ```
 
-真机需要把 `DUBHE_CORE_URL` 改成局域网或公网可访问的 Dubhe Core 地址。Windows 用户可在仓库根目录双击 `Start-Dubhe-LAN.cmd`，它会重启 Core 为局域网模式，并在体检结果里显示类似 `http://192.168.x.x:8000` 的地址；把这个地址填到登录页“Core 地址”即可，成功进入后会自动保存。
+真机需要把 `DUBHE_CORE_URL` 改成局域网或公网可访问的 Dubhe Core 地址。Windows 用户可在仓库根目录先双击 `Open-Dubhe-Mobile-Guide.cmd` 查看手机安装与连接向导；连接前再双击 `Start-Dubhe-LAN.cmd`，它会重启 Core 为局域网模式，并在体检结果里显示类似 `http://192.168.x.x:8000` 的地址；把这个地址填到登录页“Core 地址”即可，成功进入后会自动保存。
 
 ## 安装包命令
 

@@ -152,6 +152,7 @@ $mobileRoot = Join-Path $repoRoot "apps\mobile"
 $runRoot = Join-Path $repoRoot ".dubhe-run"
 $startCmd = Join-Path $repoRoot "Start-Dubhe.cmd"
 $startLanCmd = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
+$mobileGuideCmd = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
 $checkCmd = Join-Path $repoRoot "Check-Dubhe.cmd"
 $smokeCmd = Join-Path $repoRoot "Smoke-Dubhe.cmd"
 $stopCmd = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
@@ -177,6 +178,7 @@ $checks = [System.Collections.Generic.List[object]]::new()
 Add-Check (New-Check "仓库" "根目录" "ok" $repoRoot)
 Add-Check (New-Check "Windows 入口" "双击启动" ($(if (Test-Path $startCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startCmd) { $startCmd } else { "缺少 Start-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机局域网启动" ($(if (Test-Path $startLanCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startLanCmd) { $startLanCmd } else { "缺少 Start-Dubhe-LAN.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击手机连接向导" ($(if (Test-Path $mobileGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $mobileGuideCmd) { $mobileGuideCmd } else { "缺少 Open-Dubhe-Mobile-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击体检" ($(if (Test-Path $checkCmd) { "ok" } else { "warn" })) ($(if (Test-Path $checkCmd) { $checkCmd } else { "缺少 Check-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击烟测" ($(if (Test-Path $smokeCmd) { "ok" } else { "warn" })) ($(if (Test-Path $smokeCmd) { $smokeCmd } else { "缺少 Smoke-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击停止 Core" ($(if (Test-Path $stopCmd) { "ok" } else { "warn" })) ($(if (Test-Path $stopCmd) { $stopCmd } else { "缺少 Stop-Dubhe-Core.cmd。" })))
