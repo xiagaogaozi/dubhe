@@ -192,6 +192,30 @@ POST /v1/strategy/drafts/from-analysis
 POST /v1/backtests/replay
 ```
 
+本地端到端烟测脚本：
+
+```powershell
+.\scripts\smoke-core-workflow.ps1
+```
+
+该脚本会在已运行的 Core 上串起：
+
+```text
+health
+-> local account register
+-> onboarding checklist
+-> fixture news feed
+-> Chinese AI news analysis
+-> AI assistant chat
+-> strategy draft
+-> deterministic replay backtest
+-> paper buy order
+-> paper portfolio
+-> workspace snapshot
+```
+
+脚本输出 `.dubhe-run\smoke-core-workflow.json`，可作为本地验收和后续 CI smoke 的机器可读结果。
+
 用途：
 
 - 将 `NewsAnalysis` 转成中文可解释的 `StrategyDraft` 和 `StrategySpec`。

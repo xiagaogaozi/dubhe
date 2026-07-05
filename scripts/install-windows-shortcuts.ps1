@@ -54,6 +54,11 @@ $entries = @(
         description = "Check local Dubhe Core, desktop, mobile toolchain, and package readiness."
     },
     @{
+        name = "Smoke Dubhe"
+        file = Join-Path $repoRoot "Smoke-Dubhe.cmd"
+        description = "Run Dubhe Core account, news, AI, backtest, paper trading, and sync smoke test."
+    },
+    @{
         name = "Stop Dubhe Core"
         file = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
         description = "Stop local Dubhe Core backend service."

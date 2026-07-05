@@ -104,6 +104,7 @@ $mobileRoot = Join-Path $repoRoot "apps\mobile"
 $runRoot = Join-Path $repoRoot ".dubhe-run"
 $startCmd = Join-Path $repoRoot "Start-Dubhe.cmd"
 $checkCmd = Join-Path $repoRoot "Check-Dubhe.cmd"
+$smokeCmd = Join-Path $repoRoot "Smoke-Dubhe.cmd"
 $stopCmd = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
 $configureCmd = Join-Path $repoRoot "Configure-Dubhe.cmd"
 $localConfigPath = Join-Path $repoRoot "config\dubhe.local.env"
@@ -111,6 +112,7 @@ $localConfigExamplePath = Join-Path $repoRoot "config\dubhe.local.env.example"
 $shortcutInstaller = Join-Path $repoRoot "scripts\install-windows-shortcuts.ps1"
 $coreRunScript = Join-Path $coreRoot "scripts\run.ps1"
 $coreTestScript = Join-Path $coreRoot "scripts\test.ps1"
+$coreSmokeScript = Join-Path $repoRoot "scripts\smoke-core-workflow.ps1"
 $desktopExe = Join-Path $theiaRoot "app\dist\win-unpacked\Dubhe.exe"
 $mobileDebugApk = Join-Path $mobileRoot "build\app\outputs\flutter-apk\app-debug.apk"
 $nodeExe = Resolve-ToolCommand "node" (Join-Path $env:LOCALAPPDATA "DubheToolchains\node-v22.23.1-win-x64\node.exe")
@@ -124,6 +126,7 @@ $checks = [System.Collections.Generic.List[object]]::new()
 Add-Check (New-Check "仓库" "根目录" "ok" $repoRoot)
 Add-Check (New-Check "Windows 入口" "双击启动" ($(if (Test-Path $startCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startCmd) { $startCmd } else { "缺少 Start-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击体检" ($(if (Test-Path $checkCmd) { "ok" } else { "warn" })) ($(if (Test-Path $checkCmd) { $checkCmd } else { "缺少 Check-Dubhe.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击烟测" ($(if (Test-Path $smokeCmd) { "ok" } else { "warn" })) ($(if (Test-Path $smokeCmd) { $smokeCmd } else { "缺少 Smoke-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击停止 Core" ($(if (Test-Path $stopCmd) { "ok" } else { "warn" })) ($(if (Test-Path $stopCmd) { $stopCmd } else { "缺少 Stop-Dubhe-Core.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击配置" ($(if (Test-Path $configureCmd) { "ok" } else { "warn" })) ($(if (Test-Path $configureCmd) { $configureCmd } else { "缺少 Configure-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "快捷方式安装器" ($(if (Test-Path $shortcutInstaller) { "ok" } else { "warn" })) ($(if (Test-Path $shortcutInstaller) { $shortcutInstaller } else { "缺少 scripts/install-windows-shortcuts.ps1。" })))
@@ -131,6 +134,7 @@ Add-Check (New-Check "本地配置" "配置模板" ($(if (Test-Path $localConfig
 Add-Check (New-Check "本地配置" "配置文件" ($(if (Test-Path $localConfigPath) { "ok" } else { "warn" })) ($(if (Test-Path $localConfigPath) { "已加载 $($loadedLocalConfigKeys.Count) 项：$localConfigPath" } else { "尚未创建；可双击 Configure-Dubhe.cmd 创建并填写模型/新闻源 Key。" })))
 Add-Check (New-Check "Core" "运行脚本" ($(if (Test-Path $coreRunScript) { "ok" } else { "fail" })) ($(if (Test-Path $coreRunScript) { $coreRunScript } else { "缺少 services/core/scripts/run.ps1。" })) (-not (Test-Path $coreRunScript)))
 Add-Check (New-Check "Core" "测试脚本" ($(if (Test-Path $coreTestScript) { "ok" } else { "warn" })) ($(if (Test-Path $coreTestScript) { $coreTestScript } else { "缺少测试脚本，后续无法一键验证 Core。" })))
+Add-Check (New-Check "Core" "主链路烟测" ($(if (Test-Path $coreSmokeScript) { "ok" } else { "warn" })) ($(if (Test-Path $coreSmokeScript) { $coreSmokeScript } else { "缺少 scripts/smoke-core-workflow.ps1。" })))
 
 $venvPython = Join-Path $coreRoot ".venv\Scripts\python.exe"
 if (Test-Path $venvPython) {
