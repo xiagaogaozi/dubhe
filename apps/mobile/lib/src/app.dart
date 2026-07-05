@@ -3035,6 +3035,10 @@ class _SystemStatusPanel extends StatelessWidget {
           Text(current.storageMessageZh),
           if (current.storagePath.isNotEmpty)
             Text('存储路径：${current.storagePath}'),
+          if (current.newsCoverage.isNotEmpty) ...[
+            const Divider(height: 24),
+            _NewsCoveragePanel(coverage: current.newsCoverage),
+          ],
           const Divider(height: 24),
           Text('配置项', style: Theme.of(context).textTheme.titleSmall),
           ...current.configItems.map(
@@ -3057,6 +3061,56 @@ class _SystemStatusPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NewsCoveragePanel extends StatelessWidget {
+  const _NewsCoveragePanel({required this.coverage});
+
+  final List<NewsMarketCoverage> coverage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('市场新闻覆盖', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        ...coverage.map(
+          (item) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: Icon(
+              item.productionReady
+                  ? Icons.verified_outlined
+                  : item.licensedSourceReady
+                  ? Icons.key_outlined
+                  : Icons.science_outlined,
+            ),
+            title: Text(item.labelZh),
+            subtitle: Text(
+              [
+                item.messageZh,
+                if (item.availableSourcesZh.isNotEmpty)
+                  '可用：${item.availableSourcesZh.join('、')}',
+                if (item.missingSourcesZh.isNotEmpty)
+                  '待补：${item.missingSourcesZh.take(3).join('、')}',
+                item.nextStepZh,
+              ].where((part) => part.isNotEmpty).join('\n'),
+            ),
+            trailing: Text(
+              item.productionReady
+                  ? '生产可用'
+                  : item.licensedSourceReady
+                  ? '授权源'
+                  : item.demoReady
+                  ? '演示'
+                  : '缺失',
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

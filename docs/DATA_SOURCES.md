@@ -41,7 +41,13 @@ Configuration readiness endpoint:
 GET /v1/system/status
 ```
 
-`/v1/system/status` reports storage, local auth mode, paper/live trading switches, configured/not configured API keys, and adapter readiness. It deliberately does not return API key values or the raw `DUBHE_SEC_USER_AGENT`.
+`/v1/system/status` reports storage, local auth mode, paper/live trading switches, configured/not configured API keys, adapter readiness, and `news_coverage`, a market-level coverage matrix for A 股、港股、美股和全球宏观. It deliberately does not return API key values or the raw `DUBHE_SEC_USER_AGENT`.
+
+The coverage matrix separates three states:
+
+- `demo_ready`: enough public/demo data exists to run the Dubhe workflow.
+- `licensed_source_ready`: at least one licensed API key for that market context is configured.
+- `production_ready`: remains `false` until provider contracts, storage/display rights, and AI processing permissions are reviewed and recorded.
 
 Behavior:
 

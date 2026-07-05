@@ -509,6 +509,7 @@ class SystemStatus {
     required this.llm,
     required this.configItems,
     required this.newsAdapters,
+    required this.newsCoverage,
   });
 
   final String service;
@@ -522,6 +523,7 @@ class SystemStatus {
   final LlmReadiness llm;
   final List<RuntimeConfigItem> configItems;
   final List<NewsAdapterReadiness> newsAdapters;
+  final List<NewsMarketCoverage> newsCoverage;
 
   int get missingConfigCount =>
       configItems.where((item) => !item.configured).length;
@@ -553,6 +555,9 @@ class SystemStatus {
       newsAdapters: _mapList(
         json['news_adapters'],
       ).map(NewsAdapterReadiness.fromJson).toList(),
+      newsCoverage: _mapList(
+        json['news_coverage'],
+      ).map(NewsMarketCoverage.fromJson).toList(),
     );
   }
 }
@@ -835,6 +840,44 @@ class NewsAdapterReadiness {
       enabled: _bool(json['enabled']),
       requiresLicense: _bool(json['requires_license']),
       messageZh: _string(json['message_zh']),
+    );
+  }
+}
+
+class NewsMarketCoverage {
+  NewsMarketCoverage({
+    required this.market,
+    required this.labelZh,
+    required this.demoReady,
+    required this.licensedSourceReady,
+    required this.productionReady,
+    required this.availableSourcesZh,
+    required this.missingSourcesZh,
+    required this.messageZh,
+    required this.nextStepZh,
+  });
+
+  final String market;
+  final String labelZh;
+  final bool demoReady;
+  final bool licensedSourceReady;
+  final bool productionReady;
+  final List<String> availableSourcesZh;
+  final List<String> missingSourcesZh;
+  final String messageZh;
+  final String nextStepZh;
+
+  factory NewsMarketCoverage.fromJson(Map<String, dynamic> json) {
+    return NewsMarketCoverage(
+      market: _string(json['market']),
+      labelZh: _string(json['label_zh']),
+      demoReady: _bool(json['demo_ready']),
+      licensedSourceReady: _bool(json['licensed_source_ready']),
+      productionReady: _bool(json['production_ready']),
+      availableSourcesZh: _stringList(json['available_sources_zh']),
+      missingSourcesZh: _stringList(json['missing_sources_zh']),
+      messageZh: _string(json['message_zh']),
+      nextStepZh: _string(json['next_step_zh']),
     );
   }
 }

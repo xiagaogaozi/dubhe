@@ -3395,6 +3395,62 @@
         "type": "object",
         "title": "NewsFeedResponse"
       },
+      "NewsMarketCoverageStatus": {
+        "properties": {
+          "market": {
+            "$ref": "#/components/schemas/Market"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "demo_ready": {
+            "type": "boolean",
+            "title": "Demo Ready"
+          },
+          "licensed_source_ready": {
+            "type": "boolean",
+            "title": "Licensed Source Ready"
+          },
+          "production_ready": {
+            "type": "boolean",
+            "title": "Production Ready",
+            "default": false
+          },
+          "available_sources_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Available Sources Zh"
+          },
+          "missing_sources_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Sources Zh"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market",
+          "label_zh",
+          "demo_ready",
+          "licensed_source_ready",
+          "message_zh",
+          "next_step_zh"
+        ],
+        "title": "NewsMarketCoverageStatus"
+      },
       "NewsProviderStatus": {
         "properties": {
           "provider": {
@@ -4346,6 +4402,13 @@
             },
             "type": "array",
             "title": "News Adapters"
+          },
+          "news_coverage": {
+            "items": {
+              "$ref": "#/components/schemas/NewsMarketCoverageStatus"
+            },
+            "type": "array",
+            "title": "News Coverage"
           },
           "llm": {
             "$ref": "#/components/schemas/LLMRuntimeStatus"

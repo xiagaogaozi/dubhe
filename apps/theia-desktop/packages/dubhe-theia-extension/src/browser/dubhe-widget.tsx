@@ -97,6 +97,18 @@ type NewsAdapterRuntimeStatus = {
   message_zh: string;
 };
 
+type NewsMarketCoverageStatus = {
+  market: Market;
+  label_zh: string;
+  demo_ready: boolean;
+  licensed_source_ready: boolean;
+  production_ready: boolean;
+  available_sources_zh: string[];
+  missing_sources_zh: string[];
+  message_zh: string;
+  next_step_zh: string;
+};
+
 type StorageRuntimeStatus = {
   backend: 'sqlite';
   path: string;
@@ -133,6 +145,7 @@ type SystemStatusResponse = {
   auth: AuthRuntimeStatus;
   config_items: RuntimeConfigStatus[];
   news_adapters: NewsAdapterRuntimeStatus[];
+  news_coverage?: NewsMarketCoverageStatus[];
   llm?: LLMRuntimeStatus;
   trading: TradingRuntimeStatus;
   generated_at: string;
@@ -2168,6 +2181,15 @@ function DubheWorkbench(): React.ReactElement {
                   onConfigFieldChange={updateLocalConfigField}
                 />
                 <div style={styles.statusList}>
+                  {(systemStatus.news_coverage ?? []).map((coverage) => (
+                    <StatusRow
+                      key={coverage.market}
+                      label={`${coverage.label_zh}新闻覆盖`}
+                      value={coverageLabel(coverage)}
+                      tone={coverageTone(coverage)}
+                      message={coverageMessage(coverage)}
+                    />
+                  ))}
                   {systemStatus.config_items.map((item) => (
                     <StatusRow
                       key={item.key}
@@ -3046,6 +3068,28 @@ function sourceLabel(source: LocalRuntimeConfigItem['source']): string {
   if (source === 'local_file') return '本机文件';
   if (source === 'process_env') return '环境变量';
   return '未配置';
+}
+
+function coverageLabel(coverage: NewsMarketCoverageStatus): string {
+  if (coverage.production_ready) return '生产可用';
+  if (coverage.licensed_source_ready) return '授权源';
+  if (coverage.demo_ready) return '演示';
+  return '缺失';
+}
+
+function coverageTone(coverage: NewsMarketCoverageStatus): Tone {
+  if (coverage.production_ready || coverage.licensed_source_ready) return 'positive';
+  if (coverage.demo_ready) return 'warning';
+  return 'negative';
+}
+
+function coverageMessage(coverage: NewsMarketCoverageStatus): string {
+  return [
+    coverage.message_zh,
+    coverage.available_sources_zh.length > 0 ? `可用：${coverage.available_sources_zh.join('、')}` : '',
+    coverage.missing_sources_zh.length > 0 ? `待补：${coverage.missing_sources_zh.slice(0, 4).join('、')}` : '',
+    `下一步：${coverage.next_step_zh}`,
+  ].filter(Boolean).join(' ');
 }
 
 function localConfigHint(item: LocalRuntimeConfigItem): string {

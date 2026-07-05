@@ -90,6 +90,14 @@ def test_system_status_reports_missing_provider_config(monkeypatch) -> None:
     assert adapters["sec_edgar"]["enabled"] is True
     assert adapters["fixture"]["enabled"] is True
 
+    coverage = {item["market"]: item for item in body["news_coverage"]}
+    assert coverage["A_SHARE"]["demo_ready"] is True
+    assert coverage["A_SHARE"]["licensed_source_ready"] is False
+    assert coverage["A_SHARE"]["production_ready"] is False
+    assert "Wind" in coverage["A_SHARE"]["missing_sources_zh"]
+    assert coverage["US"]["licensed_source_ready"] is False
+    assert "FINNHUB_API_KEY" in coverage["US"]["missing_sources_zh"]
+
 
 def test_system_status_reports_configured_keys_without_leaking_values(monkeypatch) -> None:
     monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-super-secret-token")
@@ -117,6 +125,13 @@ def test_system_status_reports_configured_keys_without_leaking_values(monkeypatc
     assert adapters["finnhub_company_news"]["enabled"] is True
     assert adapters["alpha_vantage_news_sentiment"]["enabled"] is True
     assert adapters["sec_edgar"]["configured"] is True
+
+    coverage = {item["market"]: item for item in body["news_coverage"]}
+    assert coverage["US"]["licensed_source_ready"] is True
+    assert coverage["US"]["production_ready"] is False
+    assert "Finnhub 公司新闻" in coverage["US"]["available_sources_zh"]
+    assert "FINNHUB_API_KEY" not in coverage["US"]["missing_sources_zh"]
+    assert coverage["GLOBAL"]["licensed_source_ready"] is True
 
     payload = response.text
     assert "finnhub-super-secret-token" not in payload

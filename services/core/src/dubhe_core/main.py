@@ -32,6 +32,7 @@ from .models import (
     NewsAdapterRuntimeStatus,
     NewsEvent,
     NewsFeedResponse,
+    NewsMarketCoverageStatus,
     OnboardingChecklistResponse,
     OnboardingStep,
     OnboardingStepStatus,
@@ -111,6 +112,65 @@ def system_status() -> SystemStatusResponse:
     llm_api_key_configured = env_is_configured("DUBHE_LLM_API_KEY")
     llm_status = llm_runtime_status()
     persistent_storage = store.db_path != ":memory:"
+    news_adapters = [
+        NewsAdapterRuntimeStatus(
+            provider="finnhub_company_news",
+            label_zh="Finnhub 公司新闻",
+            market_coverage=[Market.US, Market.GLOBAL],
+            configured=finnhub_configured,
+            enabled=finnhub_configured,
+            requires_license=True,
+            message_zh=(
+                "已就绪：需要遵守 Finnhub 套餐和合同条款。"
+                if finnhub_configured
+                else "待配置：缺少 FINNHUB_API_KEY，实时拉取时会跳过。"
+            ),
+        ),
+        NewsAdapterRuntimeStatus(
+            provider="alpha_vantage_news_sentiment",
+            label_zh="Alpha Vantage 新闻情绪",
+            market_coverage=[Market.US, Market.GLOBAL],
+            configured=alpha_configured,
+            enabled=alpha_configured,
+            requires_license=True,
+            message_zh=(
+                "已就绪：需要遵守 Alpha Vantage 套餐和合同条款。"
+                if alpha_configured
+                else "待配置：缺少 ALPHA_VANTAGE_API_KEY，实时拉取时会跳过。"
+            ),
+        ),
+        NewsAdapterRuntimeStatus(
+            provider="sec_edgar",
+            label_zh="SEC EDGAR 公告",
+            market_coverage=[Market.US, Market.GLOBAL],
+            configured=sec_user_agent_configured,
+            enabled=True,
+            requires_license=False,
+            message_zh=(
+                "可用：已配置专用 User-Agent。"
+                if sec_user_agent_configured
+                else "可用：当前使用开发默认 User-Agent，生产版应补充联系人。"
+            ),
+        ),
+        NewsAdapterRuntimeStatus(
+            provider="gdelt_doc",
+            label_zh="GDELT 全球新闻索引",
+            market_coverage=[Market.A_SHARE, Market.HK, Market.US, Market.GLOBAL],
+            configured=True,
+            enabled=True,
+            requires_license=False,
+            message_zh="可用：作为公开全球新闻索引和兜底上下文，不代表原文转载授权。",
+        ),
+        NewsAdapterRuntimeStatus(
+            provider="fixture",
+            label_zh="本地演示新闻源",
+            market_coverage=[Market.A_SHARE, Market.HK, Market.US, Market.GLOBAL],
+            configured=True,
+            enabled=True,
+            requires_license=False,
+            message_zh="可用：真实来源为空或故障时兜底，保证分析、回测和纸面交易链路可测试。",
+        ),
+    ]
 
     return SystemStatusResponse(
         service="dubhe-core",
@@ -198,65 +258,8 @@ def system_status() -> SystemStatusResponse:
                 ),
             ),
         ],
-        news_adapters=[
-            NewsAdapterRuntimeStatus(
-                provider="finnhub_company_news",
-                label_zh="Finnhub 公司新闻",
-                market_coverage=[Market.US, Market.GLOBAL],
-                configured=finnhub_configured,
-                enabled=finnhub_configured,
-                requires_license=True,
-                message_zh=(
-                    "已就绪：需要遵守 Finnhub 套餐和合同条款。"
-                    if finnhub_configured
-                    else "待配置：缺少 FINNHUB_API_KEY，实时拉取时会跳过。"
-                ),
-            ),
-            NewsAdapterRuntimeStatus(
-                provider="alpha_vantage_news_sentiment",
-                label_zh="Alpha Vantage 新闻情绪",
-                market_coverage=[Market.US, Market.GLOBAL],
-                configured=alpha_configured,
-                enabled=alpha_configured,
-                requires_license=True,
-                message_zh=(
-                    "已就绪：需要遵守 Alpha Vantage 套餐和合同条款。"
-                    if alpha_configured
-                    else "待配置：缺少 ALPHA_VANTAGE_API_KEY，实时拉取时会跳过。"
-                ),
-            ),
-            NewsAdapterRuntimeStatus(
-                provider="sec_edgar",
-                label_zh="SEC EDGAR 公告",
-                market_coverage=[Market.US, Market.GLOBAL],
-                configured=sec_user_agent_configured,
-                enabled=True,
-                requires_license=False,
-                message_zh=(
-                    "可用：已配置专用 User-Agent。"
-                    if sec_user_agent_configured
-                    else "可用：当前使用开发默认 User-Agent，生产版应补充联系人。"
-                ),
-            ),
-            NewsAdapterRuntimeStatus(
-                provider="gdelt_doc",
-                label_zh="GDELT 全球新闻索引",
-                market_coverage=[Market.A_SHARE, Market.HK, Market.US, Market.GLOBAL],
-                configured=True,
-                enabled=True,
-                requires_license=False,
-                message_zh="可用：作为公开全球新闻索引和兜底上下文，不代表原文转载授权。",
-            ),
-            NewsAdapterRuntimeStatus(
-                provider="fixture",
-                label_zh="本地演示新闻源",
-                market_coverage=[Market.A_SHARE, Market.HK, Market.US, Market.GLOBAL],
-                configured=True,
-                enabled=True,
-                requires_license=False,
-                message_zh="可用：真实来源为空或故障时兜底，保证分析、回测和纸面交易链路可测试。",
-            ),
-        ],
+        news_adapters=news_adapters,
+        news_coverage=build_news_coverage(news_adapters),
         llm=llm_status,
         trading=TradingRuntimeStatus(
             paper_broker_enabled=True,
@@ -264,6 +267,89 @@ def system_status() -> SystemStatusResponse:
             message_zh="纸面交易和模拟 broker 已启用；实盘交易保持关闭，需完成券商适配、签名、审批、审计和风控后才能开放。",
         ),
     )
+
+
+def build_news_coverage(
+    adapters: list[NewsAdapterRuntimeStatus],
+) -> list[NewsMarketCoverageStatus]:
+    markets = [Market.A_SHARE, Market.HK, Market.US, Market.GLOBAL]
+    enabled_by_market = {
+        market: [
+            adapter
+            for adapter in adapters
+            if adapter.enabled and market in adapter.market_coverage
+        ]
+        for market in markets
+    }
+    licensed_by_market = {
+        market: [
+            adapter
+            for adapter in enabled_by_market[market]
+            if adapter.requires_license
+        ]
+        for market in markets
+    }
+
+    def available_names(market: Market) -> list[str]:
+        return [adapter.label_zh for adapter in enabled_by_market[market]]
+
+    return [
+        NewsMarketCoverageStatus(
+            market=Market.A_SHARE,
+            label_zh="A 股",
+            demo_ready=bool(enabled_by_market[Market.A_SHARE]),
+            licensed_source_ready=False,
+            production_ready=False,
+            available_sources_zh=available_names(Market.A_SHARE),
+            missing_sources_zh=["Wind", "同花顺 iFinD", "Choice", "财联社授权快讯"],
+            message_zh="当前可用公开全球索引和本地演示源，适合流程测试；尚未接入可生产使用的 A 股授权快讯、公告和研报源。",
+            next_step_zh="生产部署前需要签约 A 股数据/新闻供应商，并补充对应 adapter、授权范围和审计记录。",
+        ),
+        NewsMarketCoverageStatus(
+            market=Market.HK,
+            label_zh="港股",
+            demo_ready=bool(enabled_by_market[Market.HK]),
+            licensed_source_ready=False,
+            production_ready=False,
+            available_sources_zh=available_names(Market.HK),
+            missing_sources_zh=["HKEXnews / HKEX IIS", "AASTOCKS 授权新闻", "ET Net 授权新闻"],
+            message_zh="当前可用公开全球索引和本地演示源，适合流程测试；尚未接入港交所公告和港股授权新闻源。",
+            next_step_zh="生产部署前需要确认 HKEX 与港股新闻供应商条款，接入公告、快讯和延迟/实时权限。",
+        ),
+        NewsMarketCoverageStatus(
+            market=Market.US,
+            label_zh="美股",
+            demo_ready=bool(enabled_by_market[Market.US]),
+            licensed_source_ready=bool(licensed_by_market[Market.US]),
+            production_ready=False,
+            available_sources_zh=available_names(Market.US),
+            missing_sources_zh=[
+                "Benzinga / Dow Jones / Polygon 等商业新闻合同",
+                *(
+                    []
+                    if licensed_by_market[Market.US]
+                    else ["FINNHUB_API_KEY", "ALPHA_VANTAGE_API_KEY"]
+                ),
+            ],
+            message_zh=(
+                "已接入美股公开公告/全球索引，并检测到至少一个授权新闻 API key；仍需按合同确认正文展示、缓存和 AI 处理范围。"
+                if licensed_by_market[Market.US]
+                else "已接入 SEC EDGAR、GDELT 和本地演示源；缺少 Finnhub/Alpha Vantage 等授权新闻 key。"
+            ),
+            next_step_zh="补齐授权新闻 key 后，生产前仍需保存供应商合同、调用频率、缓存和 AI 使用许可结论。",
+        ),
+        NewsMarketCoverageStatus(
+            market=Market.GLOBAL,
+            label_zh="全球宏观",
+            demo_ready=bool(enabled_by_market[Market.GLOBAL]),
+            licensed_source_ready=bool(licensed_by_market[Market.GLOBAL]),
+            production_ready=False,
+            available_sources_zh=available_names(Market.GLOBAL),
+            missing_sources_zh=["机构级全球新闻线", "宏观日历与央行公告授权源"],
+            message_zh="当前可用 GDELT 全球新闻索引和演示源；若配置美股授权源，也可补充部分全球 ticker 语境。",
+            next_step_zh="生产部署前需要接入机构级全球新闻、宏观日历和公告源，并逐项记录授权边界。",
+        ),
+    ]
 
 
 @app.get("/v1/system/smoke-report", response_model=SmokeWorkflowReportResponse)

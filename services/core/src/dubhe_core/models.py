@@ -169,6 +169,18 @@ class NewsAdapterRuntimeStatus(BaseModel):
     message_zh: str
 
 
+class NewsMarketCoverageStatus(BaseModel):
+    market: Market
+    label_zh: str
+    demo_ready: bool
+    licensed_source_ready: bool
+    production_ready: bool = False
+    available_sources_zh: list[str] = Field(default_factory=list)
+    missing_sources_zh: list[str] = Field(default_factory=list)
+    message_zh: str
+    next_step_zh: str
+
+
 class StorageRuntimeStatus(BaseModel):
     backend: Literal["sqlite"]
     path: str
@@ -205,6 +217,7 @@ class SystemStatusResponse(BaseModel):
     auth: AuthRuntimeStatus
     config_items: list[RuntimeConfigStatus] = Field(default_factory=list)
     news_adapters: list[NewsAdapterRuntimeStatus] = Field(default_factory=list)
+    news_coverage: list[NewsMarketCoverageStatus] = Field(default_factory=list)
     llm: LLMRuntimeStatus
     trading: TradingRuntimeStatus
     generated_at: datetime = Field(default_factory=utc_now)

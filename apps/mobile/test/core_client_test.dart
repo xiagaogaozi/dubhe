@@ -440,6 +440,30 @@ void main() {
                 "message_zh": "可用：真实来源为空或故障时兜底。"
               }
             ],
+            "news_coverage": [
+              {
+                "market": "A_SHARE",
+                "label_zh": "A 股",
+                "demo_ready": true,
+                "licensed_source_ready": false,
+                "production_ready": false,
+                "available_sources_zh": ["本地演示新闻源"],
+                "missing_sources_zh": ["Wind", "同花顺 iFinD"],
+                "message_zh": "当前仅适合流程测试。",
+                "next_step_zh": "生产部署前需要签约 A 股数据/新闻供应商。"
+              },
+              {
+                "market": "US",
+                "label_zh": "美股",
+                "demo_ready": true,
+                "licensed_source_ready": false,
+                "production_ready": false,
+                "available_sources_zh": ["本地演示新闻源"],
+                "missing_sources_zh": ["FINNHUB_API_KEY"],
+                "message_zh": "缺少授权新闻 key。",
+                "next_step_zh": "补齐授权新闻 key。"
+              }
+            ],
             "trading": {
               "paper_broker_enabled": true,
               "live_trading_enabled": false,
@@ -476,6 +500,13 @@ void main() {
     expect(status.configItems.first.key, 'FINNHUB_API_KEY');
     expect(status.newsAdapters.first.requiresLicense, isTrue);
     expect(status.newsAdapters.last.labelZh, '本地演示新闻源');
+    expect(status.newsCoverage, hasLength(2));
+    expect(status.newsCoverage.first.labelZh, 'A 股');
+    expect(status.newsCoverage.first.productionReady, isFalse);
+    expect(
+      status.newsCoverage.last.missingSourcesZh,
+      contains('FINNHUB_API_KEY'),
+    );
   });
 
   test('smoke workflow report parses status and steps', () async {
