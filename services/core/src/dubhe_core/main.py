@@ -7,10 +7,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, W
 from fastapi.middleware.cors import CORSMiddleware
 
 from .analysis import analyze_news
+from .assistant import answer_research_question
 from .backtest import draft_strategy_from_analysis, run_replay_backtest
 from .models import (
     AccountLoginRequest,
     AccountRegistrationRequest,
+    AssistantChatRequest,
+    AssistantChatResponse,
     AuditLogEntry,
     ApprovalActionRequest,
     ApprovalRequest,
@@ -512,6 +515,29 @@ def run_replay_backtest_endpoint(request: BacktestRequest) -> BacktestResult:
 @app.get("/v1/backtests", response_model=list[BacktestResult])
 def list_backtests_endpoint() -> list[BacktestResult]:
     return store.backtest_results
+
+
+@app.post("/v1/assistant/chat", response_model=AssistantChatResponse)
+def assistant_chat_endpoint(
+    request: AssistantChatRequest,
+    session: DeviceSession = Depends(require_device_session),
+) -> AssistantChatResponse:
+    response = answer_research_question(request)
+    store.append_audit_log(
+        actor_session=session,
+        action="assistant.chat_requested",
+        target_type="assistant_response",
+        target_id=response.id,
+        summary_zh="AI 分析师生成了一条中文研究答复。",
+        metadata={
+            "question_length": len(request.question_zh),
+            "citation_count": len(response.citations),
+            "has_analysis": request.context.analysis is not None,
+            "has_strategy": request.context.strategy is not None,
+            "has_backtest": request.context.backtest is not None,
+        },
+    )
+    return response
 
 
 @app.post("/v1/risk/evaluate", response_model=RiskDecision)

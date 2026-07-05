@@ -967,6 +967,62 @@
         }
       }
     },
+    "/v1/assistant/chat": {
+      "post": {
+        "summary": "Assistant Chat Endpoint",
+        "operationId": "assistant_chat_endpoint_v1_assistant_chat_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantChatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/risk/evaluate": {
       "post": {
         "summary": "Evaluate Risk Endpoint",
@@ -1771,6 +1827,133 @@
           "rejected"
         ],
         "title": "ApprovalStatus"
+      },
+      "AssistantChatRequest": {
+        "properties": {
+          "question_zh": {
+            "type": "string",
+            "maxLength": 1200,
+            "minLength": 1,
+            "title": "Question Zh"
+          },
+          "context": {
+            "$ref": "#/components/schemas/AssistantContext"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_zh"
+        ],
+        "title": "AssistantChatRequest"
+      },
+      "AssistantChatResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "answer_zh": {
+            "type": "string",
+            "title": "Answer Zh"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantCitation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "suggested_actions_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggested Actions Zh"
+          },
+          "safety_notes_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Safety Notes Zh"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer_zh"
+        ],
+        "title": "AssistantChatResponse"
+      },
+      "AssistantCitation": {
+        "properties": {
+          "label_zh": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label Zh"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label_zh",
+          "ref"
+        ],
+        "title": "AssistantCitation"
+      },
+      "AssistantContext": {
+        "properties": {
+          "news_event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NewsEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "analysis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NewsAnalysis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StrategyDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "backtest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "AssistantContext"
       },
       "AuditLogEntry": {
         "properties": {

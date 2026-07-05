@@ -628,6 +628,73 @@ def test_strategy_draft_and_replay_backtest_from_news_analysis() -> None:
     assert any(item["id"] == backtest["id"] for item in list_response.json())
 
 
+def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
+    session = register_test_device(
+        account_key=f"assistant-chat-{uuid4().hex[:8]}",
+        account_name="AI 分析师测试账户",
+    )
+    analysis = {
+        "id": "analysis_assistant_fixture",
+        "news_event_id": "news_assistant_fixture",
+        "summary_zh": "英伟达相关新闻显示 AI 算力需求仍然强劲。",
+        "sentiment": "positive",
+        "impact_score": 0.74,
+        "affected_tickers": ["NVDA"],
+        "source_refs": ["https://example.com/nvda-news"],
+        "confidence": 0.82,
+        "generated_at": "2026-07-05T00:00:00Z",
+    }
+    draft_response = client.post(
+        "/v1/strategy/drafts/from-analysis",
+        json={
+            "analysis": analysis,
+            "symbol": "NVDA",
+            "market": "US",
+            "max_order_notional": 10000,
+        },
+    )
+    assert draft_response.status_code == 200
+    draft = draft_response.json()
+    backtest_response = client.post(
+        "/v1/backtests/replay",
+        json={"strategy": draft, "initial_cash": 100000},
+    )
+    assert backtest_response.status_code == 200
+    backtest = backtest_response.json()
+
+    unauthorized_response = client.post(
+        "/v1/assistant/chat",
+        json={"question_zh": "可以直接实盘买吗？", "context": {"analysis": analysis}},
+    )
+    assert unauthorized_response.status_code == 401
+
+    response = client.post(
+        "/v1/assistant/chat",
+        headers=auth_headers(session),
+        json={
+            "question_zh": "这条新闻会影响哪些股票？可以直接实盘买吗？策略脚本和回测怎么看？",
+            "context": {
+                "analysis": analysis,
+                "strategy": draft,
+                "backtest": backtest,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "NVDA" in body["answer_zh"]
+    assert "不能" in body["answer_zh"]
+    assert "实盘" in body["answer_zh"]
+    assert any(item["ref"] == "https://example.com/nvda-news" for item in body["citations"])
+    assert any("纸面" in item for item in body["suggested_actions_zh"])
+    assert any("风控" in item for item in body["safety_notes_zh"])
+
+    audit_response = client.get("/v1/audit/logs", headers=auth_headers(session))
+    assert audit_response.status_code == 200
+    assert any(item["action"] == "assistant.chat_requested" for item in audit_response.json())
+
+
 def test_theia_workbench_user_flow_reaches_paper_portfolio() -> None:
     register_response = client.post(
         "/v1/auth/accounts/register",

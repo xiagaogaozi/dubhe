@@ -200,6 +200,28 @@ type BacktestResult = {
   generated_at: string;
 };
 
+type AssistantCitation = {
+  label_zh: string;
+  ref: string;
+};
+
+type AssistantChatResponse = {
+  id: string;
+  answer_zh: string;
+  citations: AssistantCitation[];
+  suggested_actions_zh: string[];
+  safety_notes_zh: string[];
+  generated_at: string;
+};
+
+type AssistantChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  citations?: AssistantCitation[];
+  suggestedActions?: string[];
+};
+
 type RiskDecision = {
   id: string;
   order_intent_id: string;
@@ -492,6 +514,15 @@ function DubheWorkbench(): React.ReactElement {
   const [strategyWorkshopSavedAt, setStrategyWorkshopSavedAt] = React.useState<string | null>(() => readStoredStrategyWorkshop()?.savedAt ?? null);
   const [backtestResult, setBacktestResult] = React.useState<BacktestResult | null>(null);
   const [paperOrder, setPaperOrder] = React.useState<PaperOrder | null>(null);
+  const [assistantQuestion, setAssistantQuestion] = React.useState('这条新闻会影响哪些股票？');
+  const [assistantBusy, setAssistantBusy] = React.useState(false);
+  const [assistantMessages, setAssistantMessages] = React.useState<AssistantChatMessage[]>([
+    {
+      id: 'assistant_welcome',
+      role: 'assistant',
+      text: '登录后可以直接问我新闻影响、策略规则、回测结果和纸面验证路径。',
+    },
+  ]);
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
   const [workspaceSnapshot, setWorkspaceSnapshot] = React.useState<WorkspaceSnapshot | null>(null);
   const [syncConnectionStatus, setSyncConnectionStatus] = React.useState<SyncConnectionStatus>('未连接');
@@ -954,6 +985,60 @@ function DubheWorkbench(): React.ReactElement {
     }).catch((error: unknown) => {
       appendLog('negative', `回测失败：${errorMessage(error)}。`);
     });
+  }
+
+  async function askAssistant(event?: React.FormEvent<HTMLFormElement>): Promise<void> {
+    event?.preventDefault();
+    const question = assistantQuestion.trim();
+    if (!question) return;
+    if (!session) {
+      appendLog('warning', '请先登录账号，再使用 AI 分析师对话。');
+      return;
+    }
+
+    const userMessage: AssistantChatMessage = {
+      id: `assistant_user_${Date.now()}`,
+      role: 'user',
+      text: question,
+    };
+    setAssistantMessages((current) => [...current, userMessage].slice(-8));
+    setAssistantQuestion('');
+    setAssistantBusy(true);
+    try {
+      const response = await postJson<AssistantChatResponse>(
+        coreUrl,
+        '/v1/assistant/chat',
+        {
+          question_zh: question,
+          context: {
+            news_event: selectedNews,
+            analysis,
+            strategy: strategyDraft,
+            backtest: backtestResult,
+          },
+        },
+        session.access_token,
+      );
+      const assistantMessage: AssistantChatMessage = {
+        id: response.id,
+        role: 'assistant',
+        text: response.answer_zh,
+        citations: response.citations,
+        suggestedActions: response.suggested_actions_zh,
+      };
+      setAssistantMessages((current) => [...current, assistantMessage].slice(-8));
+      appendLog('positive', 'AI 分析师已生成中文研究答复。');
+    } catch (error) {
+      const failureMessage: AssistantChatMessage = {
+        id: `assistant_error_${Date.now()}`,
+        role: 'assistant',
+        text: `AI 分析师暂时不可用：${errorMessage(error)}。`,
+      };
+      setAssistantMessages((current) => [...current, failureMessage].slice(-8));
+      appendLog('negative', `AI 分析师对话失败：${errorMessage(error)}。`);
+    } finally {
+      setAssistantBusy(false);
+    }
   }
 
   async function submitPaperOrder(): Promise<void> {
@@ -1655,15 +1740,61 @@ function DubheWorkbench(): React.ReactElement {
           </header>
 
           <div style={styles.chatList}>
-            <div style={styles.chatUser}>这条新闻会影响哪些股票？</div>
-            <div style={styles.chatAssistant}>
-              {analysis
-                ? `当前关联 ${analysis.affected_tickers.join('、') || symbol}，影响分 ${Math.round(analysis.impact_score * 100)}。`
-                : '请先运行新闻分析，我会给出中文摘要、影响分和来源引用。'}
-            </div>
-            <div style={styles.chatUser}>可以直接实盘买吗？</div>
-            <div style={styles.chatAssistant}>不可以。AI 只能生成订单意图；真实订单必须经过确定性风控、审计和人工审批。</div>
+            {assistantMessages.map((message) => (
+              <div
+                key={message.id}
+                style={message.role === 'user' ? styles.chatUser : styles.chatAssistant}
+              >
+                <div>{message.text}</div>
+                {message.citations && message.citations.length > 0 && (
+                  <div style={styles.chatCitations}>
+                    {message.citations.slice(0, 3).map((citation) => (
+                      <span style={styles.chatCitation} key={`${message.id}-${citation.ref}`}>
+                        {citation.label_zh} · {shortRef(citation.ref)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {message.suggestedActions && message.suggestedActions.length > 0 && (
+                  <div style={styles.chatSuggestions}>
+                    {message.suggestedActions.slice(0, 3).map((action) => (
+                      <span style={styles.chatSuggestion} key={`${message.id}-${action}`}>{action}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
+          <form style={styles.assistantForm} onSubmit={(event) => void askAssistant(event)}>
+            <textarea
+              style={styles.assistantInput}
+              value={assistantQuestion}
+              onChange={(event) => setAssistantQuestion(event.target.value)}
+              placeholder="问：这条新闻影响哪些股票？策略和回测怎么看？"
+              rows={3}
+            />
+            <div style={styles.assistantActions}>
+              <button
+                style={styles.inlineTextButton}
+                type="button"
+                disabled={assistantBusy}
+                onClick={() => setAssistantQuestion('可以直接实盘买吗？需要哪些风控步骤？')}
+              >
+                实盘风险
+              </button>
+              <button
+                style={styles.inlineTextButton}
+                type="button"
+                disabled={assistantBusy}
+                onClick={() => setAssistantQuestion('请根据当前新闻、策略和回测，给我下一步纸面验证清单。')}
+              >
+                验证清单
+              </button>
+              <button style={styles.primaryButton} type="submit" disabled={assistantBusy || !assistantQuestion.trim()}>
+                {assistantBusy ? '分析中' : '发送'}
+              </button>
+            </div>
+          </form>
 
           <SidePanel title="系统状态" meta={systemStatus ? `Core v${systemStatus.version}` : '待检查'}>
             {systemStatus ? (
@@ -2367,6 +2498,12 @@ function shortTime(value: string): string {
   } catch {
     return '--:--';
   }
+}
+
+function shortRef(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 36) return trimmed;
+  return `${trimmed.slice(0, 18)}...${trimmed.slice(-12)}`;
 }
 
 function PanelTitle(props: { title: string; meta: string }): React.ReactElement {
@@ -3098,6 +3235,58 @@ const styles = {
     color: '#26362f',
     fontSize: 13,
     lineHeight: 1.45,
+  } as React.CSSProperties,
+  chatCitations: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  } as React.CSSProperties,
+  chatCitation: {
+    padding: '4px 6px',
+    borderRadius: 6,
+    background: '#e3ebe6',
+    color: '#4f6259',
+    fontSize: 11,
+    fontWeight: 700,
+  } as React.CSSProperties,
+  chatSuggestions: {
+    display: 'grid',
+    gap: 5,
+    marginTop: 8,
+  } as React.CSSProperties,
+  chatSuggestion: {
+    padding: '5px 7px',
+    borderLeft: '3px solid #9db7aa',
+    background: '#fbfcfb',
+    color: '#41524a',
+    fontSize: 12,
+    lineHeight: 1.4,
+  } as React.CSSProperties,
+  assistantForm: {
+    display: 'grid',
+    gap: 8,
+    marginTop: 12,
+  } as React.CSSProperties,
+  assistantInput: {
+    width: '100%',
+    minHeight: 72,
+    boxSizing: 'border-box',
+    resize: 'vertical',
+    border: '1px solid #d8e2dc',
+    borderRadius: 8,
+    padding: 10,
+    color: '#1f2f28',
+    background: '#ffffff',
+    fontSize: 13,
+    lineHeight: 1.45,
+    outline: 'none',
+  } as React.CSSProperties,
+  assistantActions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
   } as React.CSSProperties,
   sidePanel: {
     marginTop: 12,

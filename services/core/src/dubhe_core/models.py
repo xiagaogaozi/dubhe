@@ -270,6 +270,32 @@ class BacktestResult(BaseModel):
     generated_at: datetime = Field(default_factory=utc_now)
 
 
+class AssistantCitation(BaseModel):
+    label_zh: str = Field(min_length=1)
+    ref: str = Field(min_length=1)
+
+
+class AssistantContext(BaseModel):
+    news_event: NewsEvent | None = None
+    analysis: NewsAnalysis | None = None
+    strategy: StrategyDraft | None = None
+    backtest: BacktestResult | None = None
+
+
+class AssistantChatRequest(BaseModel):
+    question_zh: str = Field(min_length=1, max_length=1200)
+    context: AssistantContext = Field(default_factory=AssistantContext)
+
+
+class AssistantChatResponse(BaseModel):
+    id: str = Field(default_factory=lambda: f"assistant_{uuid4().hex}")
+    answer_zh: str
+    citations: list[AssistantCitation] = Field(default_factory=list)
+    suggested_actions_zh: list[str] = Field(default_factory=list)
+    safety_notes_zh: list[str] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
 class OrderIntent(BaseModel):
     id: str = Field(default_factory=lambda: f"intent_{uuid4().hex}")
     account_id: str = Field(min_length=1)
