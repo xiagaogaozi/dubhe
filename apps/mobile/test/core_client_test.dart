@@ -124,7 +124,29 @@ void main() {
             "paper_orders": [],
             "broker_orders": [],
             "paper_portfolios": [],
-            "strategy_drafts": [],
+            "strategy_drafts": [
+              {
+                "id": "strategy_draft_1",
+                "strategy_version_id": "strategy_v_1",
+                "name": "Blockly 新闻情绪策略",
+                "spec": {
+                  "strategy_name": "Blockly 新闻情绪策略",
+                  "market_scope": ["US"],
+                  "asset_universe": ["NVDA"],
+                  "entry_rules": ["新闻情绪为正面且影响分大于 0.7"],
+                  "exit_rules": ["新闻影响消退或触发止损"],
+                  "risk_limits": {"max_order_notional": 10000},
+                  "timeframe": "1d",
+                  "rebalance_rule": "daily",
+                  "data_dependencies": ["news", "market_bars"],
+                  "broker_permissions": ["paper"]
+                },
+                "explanation_zh": "由 Blockly 策略工坊生成。",
+                "generated_code": "strategy blockly",
+                "source_analysis_id": "blockly_manual",
+                "created_at": "2026-07-05T00:01:00Z"
+              }
+            ],
             "backtest_results": [],
             "events": [
               {
@@ -154,6 +176,8 @@ void main() {
     expect(snapshot.workspaceName, '同步测试账户的默认工作区');
     expect(snapshot.serverSequence, 7);
     expect(snapshot.watchlist.single.symbol, 'NVDA');
+    expect(snapshot.strategyDrafts.single.name, 'Blockly 新闻情绪策略');
+    expect(snapshot.strategyDrafts.single.spec.brokerPermissions, ['paper']);
     expect(snapshot.events.single.entityType, 'watchlist_item');
   });
 

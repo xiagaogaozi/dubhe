@@ -974,6 +974,7 @@ class _TodayPage extends StatelessWidget {
                   ? _syncConnectionStatusZh(syncStatus)
                   : '#${workspaceSnapshot!.serverSequence}',
             ),
+            _Metric('策略', '${workspaceSnapshot?.strategyDrafts.length ?? 0} 个'),
             _Metric(
               '数据源',
               systemStatus == null
@@ -1025,6 +1026,7 @@ class _SyncStatusPanel extends StatelessWidget {
           _MetricGrid(
             metrics: [
               _Metric('自选股', '${current.watchlist.length} 个'),
+              _Metric('策略草案', '${current.strategyDrafts.length} 个'),
               _Metric('同步事件', '${current.events.length} 条'),
               _Metric('实时连接', _syncConnectionStatusZh(syncStatus)),
               _Metric('工作区', current.workspaceId),
@@ -1042,6 +1044,21 @@ class _SyncStatusPanel extends StatelessWidget {
               text:
                   '最近推送：#${lastPushedEvent!.sequence} ${_syncEntityZh(lastPushedEvent!.entityType)} ${_syncEventActionZh(lastPushedEvent!.action)}。',
               tone: _InfoTone.success,
+            ),
+          ],
+          if (current.strategyDrafts.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.account_tree_outlined),
+              title: Text(current.strategyDrafts.first.name),
+              subtitle: Text(
+                '版本 ${current.strategyDrafts.first.strategyVersionId}',
+              ),
+              trailing: Text(
+                _shortTimestamp(current.strategyDrafts.first.createdAt),
+              ),
             ),
           ],
           if (recentEvents.isNotEmpty) ...[
