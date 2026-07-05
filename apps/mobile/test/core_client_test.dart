@@ -315,4 +315,114 @@ void main() {
       ]);
     },
   );
+
+  test('live approval demo creates a live risk evaluation only', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'dubhe_dev_token',
+      client: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/v1/risk/evaluate');
+        expect(request.headers['authorization'], 'Bearer dubhe_dev_token');
+
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['account_id'], defaultPaperAccountId);
+        expect(body['strategy_version_id'], 'strategy_v_1');
+        expect(body['market'], 'US');
+        expect(body['symbol'], 'NVDA');
+        expect(body['created_by'], 'ai');
+        expect(body['destination'], 'live');
+        expect(body['source_refs'], ['analysis_1']);
+
+        return http.Response(
+          '''
+          {
+            "id": "risk_approval_1",
+            "order_intent_id": "intent_live_1",
+            "status": "requires_approval",
+            "allowed_destination": "live_after_approval",
+            "notional": 120,
+            "reasons_zh": ["实盘订单需要人工审批。"],
+            "evaluated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final decision = await client.createLiveApprovalDemo(
+      accountId: defaultPaperAccountId,
+      strategyVersionId: 'strategy_v_1',
+      market: 'US',
+      symbol: 'NVDA',
+      quantity: 1,
+      estimatedPrice: 120,
+      currency: 'USD',
+      sourceRefs: const ['analysis_1'],
+    );
+
+    expect(decision.requiresApproval, isTrue);
+    expect(decision.allowedDestination, 'live_after_approval');
+    expect(decision.notional, 120);
+  });
+
+  test('kill switch endpoints parse and send risk manager state', () async {
+    var callCount = 0;
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'dubhe_dev_token',
+      client: MockClient((request) async {
+        callCount += 1;
+        expect(request.url.path, '/v1/risk/kill-switch');
+        expect(request.headers['authorization'], 'Bearer dubhe_dev_token');
+
+        if (request.method == 'GET') {
+          return http.Response(
+            '''
+            {
+              "enabled": false,
+              "reason_zh": "未启用 kill switch。",
+              "updated_by": "system",
+              "updated_at": "2026-07-05T00:00:00Z"
+            }
+            ''',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        expect(request.method, 'POST');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['enabled'], isTrue);
+        expect(body['reason_zh'], '移动端手动启用 kill switch。');
+        expect(body['updated_by'], 'Dubhe Companion');
+        return http.Response(
+          '''
+          {
+            "enabled": true,
+            "reason_zh": "移动端手动启用 kill switch。",
+            "updated_by": "Dubhe Companion",
+            "updated_at": "2026-07-05T00:01:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final initial = await client.fetchKillSwitch();
+    final enabled = await client.setKillSwitch(
+      enabled: true,
+      reason: '移动端手动启用 kill switch。',
+      updatedBy: 'Dubhe Companion',
+    );
+
+    expect(initial.enabled, isFalse);
+    expect(enabled.enabled, isTrue);
+    expect(enabled.reasonZh, '移动端手动启用 kill switch。');
+    expect(callCount, 2);
+  });
 }

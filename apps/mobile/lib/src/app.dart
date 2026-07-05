@@ -205,6 +205,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   int _tabIndex = 0;
   bool _loading = false;
   bool _analyzing = false;
+  bool _riskBusy = false;
   String? _message;
   String? _approvalMessage;
   NewsFeed? _newsFeed;
@@ -214,6 +215,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
+  KillSwitchState? _killSwitch;
   List<ApprovalRequest> _approvals = const [];
 
   @override
@@ -244,13 +246,26 @@ class _CompanionHomeState extends State<CompanionHome> {
       final newsFeed = coreResponses[1] as NewsFeed;
       final portfolio = coreResponses[2] as PaperPortfolio;
       var approvals = <ApprovalRequest>[];
+      KillSwitchState? killSwitch;
       String? approvalMessage;
-      try {
-        approvals = await widget.client.fetchApprovals();
-      } on DubheApiException catch (error) {
-        approvalMessage = error.statusCode == 403
-            ? '当前账号没有审批权限。'
-            : error.message;
+      if (widget.session.canReviewApprovals) {
+        try {
+          final riskResponses = await Future.wait<dynamic>([
+            widget.client.fetchApprovals(),
+            widget.client.fetchKillSwitch(),
+          ]);
+          approvals = riskResponses[0] as List<ApprovalRequest>;
+          killSwitch = riskResponses[1] as KillSwitchState;
+          approvalMessage = approvals.isEmpty
+              ? '当前没有待处理审批。'
+              : '当前有 ${approvals.length} 个待处理审批。';
+        } on DubheApiException catch (error) {
+          approvalMessage = error.statusCode == 403
+              ? '当前账号没有审批权限。'
+              : error.message;
+        }
+      } else {
+        approvalMessage = '当前账号没有审批权限。管理员或风控管理员登录后可管理审批和 kill switch。';
       }
 
       if (!mounted) return;
@@ -259,6 +274,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         _newsFeed = newsFeed;
         _portfolio = portfolio;
         _approvals = approvals;
+        _killSwitch = killSwitch;
         _approvalMessage = approvalMessage;
       });
     } catch (error) {
@@ -427,17 +443,186 @@ class _CompanionHomeState extends State<CompanionHome> {
   }
 
   Future<void> _decideApproval(ApprovalRequest approval, bool approve) async {
+    if (!widget.session.canReviewApprovals) {
+      setState(() {
+        _approvalMessage = '当前账号没有审批权限。';
+      });
+      return;
+    }
+
+    setState(() {
+      _riskBusy = true;
+      _approvalMessage = null;
+    });
     try {
       await widget.client.decideApproval(
         approvalId: approval.id,
         approve: approve,
         comment: approve ? '移动端通过。' : '移动端拒绝。',
       );
-      await _refresh();
+      await _refreshRiskControls(markBusy: false);
     } catch (error) {
       setState(() {
-        _message = error is DubheApiException ? error.message : '审批操作失败。';
+        _approvalMessage = error is DubheApiException
+            ? error.message
+            : '审批操作失败。';
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _riskBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleKillSwitch(bool enabled) async {
+    if (!widget.session.canReviewApprovals) {
+      setState(() {
+        _approvalMessage = '当前账号没有急停权限。';
+      });
+      return;
+    }
+
+    setState(() {
+      _riskBusy = true;
+      _approvalMessage = null;
+    });
+    try {
+      final nextState = await widget.client.setKillSwitch(
+        enabled: enabled,
+        reason: enabled ? '移动端手动启用 kill switch。' : '移动端解除 kill switch。',
+        updatedBy: widget.session.deviceName.isEmpty
+            ? 'dubhe-mobile'
+            : widget.session.deviceName,
+      );
+      if (!mounted) return;
+      setState(() {
+        _killSwitch = nextState;
+        _approvalMessage = nextState.reasonZh;
+      });
+    } catch (error) {
+      setState(() {
+        _approvalMessage = error is DubheApiException
+            ? error.message
+            : '更新 kill switch 失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _riskBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _createLiveApprovalDemo() async {
+    if (!widget.session.canReviewApprovals) {
+      setState(() {
+        _approvalMessage = '请使用管理员或风控管理员账号创建审批演示。';
+      });
+      return;
+    }
+
+    final event = _firstNewsEvent;
+    if (event == null) {
+      setState(() {
+        _approvalMessage = '请先同步新闻后再生成审批演示。';
+      });
+      return;
+    }
+
+    setState(() {
+      _riskBusy = true;
+      _approvalMessage = null;
+    });
+    try {
+      final market = _primaryMarket(event);
+      final symbol = _primarySymbol(event);
+      final sourceRef = _analysis?.id.isNotEmpty == true
+          ? _analysis!.id
+          : event.id.isNotEmpty
+          ? event.id
+          : 'mobile_news_event';
+      final decision = await widget.client.createLiveApprovalDemo(
+        accountId: defaultPaperAccountId,
+        strategyVersionId:
+            _strategyDraft?.strategyVersionId ?? 'mobile_live_approval_demo',
+        market: market,
+        symbol: symbol,
+        quantity: 1,
+        estimatedPrice: _estimatedPrice(symbol),
+        currency: _currencyForMarket(market),
+        sourceRefs: [sourceRef],
+      );
+      await _refreshRiskControls(markBusy: false);
+      if (!mounted) return;
+      setState(() {
+        _approvalMessage = decision.requiresApproval
+            ? '已生成实盘审批演示：$symbol，名义金额 ${decision.notional.toStringAsFixed(2)}。'
+            : '风控评估完成：${_riskStatusZh(decision.status)}。';
+      });
+    } catch (error) {
+      setState(() {
+        _approvalMessage = error is DubheApiException
+            ? error.message
+            : '实盘审批演示生成失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _riskBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshRiskControls({bool markBusy = true}) async {
+    if (!widget.session.canReviewApprovals) {
+      if (!mounted) return;
+      setState(() {
+        _approvals = const [];
+        _killSwitch = null;
+        _approvalMessage = '当前账号没有审批权限。管理员或风控管理员登录后可管理审批和 kill switch。';
+      });
+      return;
+    }
+
+    if (markBusy) {
+      setState(() {
+        _riskBusy = true;
+        _approvalMessage = null;
+      });
+    }
+    try {
+      final riskResponses = await Future.wait<dynamic>([
+        widget.client.fetchApprovals(),
+        widget.client.fetchKillSwitch(),
+      ]);
+      if (!mounted) return;
+      final approvals = riskResponses[0] as List<ApprovalRequest>;
+      setState(() {
+        _approvals = approvals;
+        _killSwitch = riskResponses[1] as KillSwitchState;
+        _approvalMessage = approvals.isEmpty
+            ? '当前没有待处理审批。'
+            : '当前有 ${approvals.length} 个待处理审批。';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _approvals = const [];
+        _killSwitch = null;
+        _approvalMessage = error is DubheApiException
+            ? error.message
+            : '风控中心同步失败。';
+      });
+    } finally {
+      if (mounted && markBusy) {
+        setState(() {
+          _riskBusy = false;
+        });
+      }
     }
   }
 
@@ -469,7 +654,12 @@ class _CompanionHomeState extends State<CompanionHome> {
       _PortfolioPage(portfolio: _portfolio),
       _ApprovalPage(
         approvals: _approvals,
+        killSwitch: _killSwitch,
         message: _approvalMessage,
+        canManageRisk: widget.session.canReviewApprovals,
+        riskBusy: _riskBusy,
+        onToggleKillSwitch: _toggleKillSwitch,
+        onCreateLiveApprovalDemo: _createLiveApprovalDemo,
         onDecide: _decideApproval,
       ),
     ];
@@ -834,59 +1024,161 @@ class _PortfolioPage extends StatelessWidget {
 class _ApprovalPage extends StatelessWidget {
   const _ApprovalPage({
     required this.approvals,
+    required this.killSwitch,
     required this.message,
+    required this.canManageRisk,
+    required this.riskBusy,
+    required this.onToggleKillSwitch,
+    required this.onCreateLiveApprovalDemo,
     required this.onDecide,
   });
 
   final List<ApprovalRequest> approvals;
+  final KillSwitchState? killSwitch;
   final String? message;
+  final bool canManageRisk;
+  final bool riskBusy;
+  final Future<void> Function(bool enabled) onToggleKillSwitch;
+  final Future<void> Function() onCreateLiveApprovalDemo;
   final Future<void> Function(ApprovalRequest approval, bool approve) onDecide;
 
   @override
   Widget build(BuildContext context) {
+    final switchEnabled = killSwitch?.enabled ?? false;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (riskBusy) const LinearProgressIndicator(),
         if (message != null) _InfoCard(text: message!),
-        if (approvals.isEmpty && message == null)
-          const _InfoCard(text: '当前没有待处理审批。'),
-        ...approvals.map(
-          (approval) => _SectionCard(
-            title: approval.status,
+        if (canManageRisk) ...[
+          _SectionCard(
+            title: '急停开关',
+            trailing: switchEnabled ? '已启用' : '未启用',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(approval.messageZh),
-                const SizedBox(height: 8),
-                Text('名义金额：${approval.notional.toStringAsFixed(2)}'),
-                for (final reason in approval.reasonsZh) Text('• $reason'),
-                if (approval.isPending) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => onDecide(approval, false),
-                          child: const Text('拒绝'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: () => onDecide(approval, true),
-                          child: const Text('通过'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: switchEnabled,
+                  onChanged: riskBusy
+                      ? null
+                      : (value) {
+                          onToggleKillSwitch(value);
+                        },
+                  title: Text(switchEnabled ? '阻止新订单' : '允许新订单'),
+                  subtitle: Text(killSwitch?.reasonZh ?? '状态尚未同步。'),
+                ),
+                if (killSwitch?.updatedAt.isNotEmpty == true)
+                  Text('更新：${killSwitch!.updatedAt}'),
               ],
             ),
           ),
-        ),
+          _SectionCard(
+            title: '实盘审批演示',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('只创建审批请求，不连接真实券商或发送真实订单。'),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: riskBusy
+                      ? null
+                      : () {
+                          onCreateLiveApprovalDemo();
+                        },
+                  icon: const Icon(Icons.add_task_outlined),
+                  label: const Text('生成实盘审批演示'),
+                ),
+              ],
+            ),
+          ),
+          _SectionCard(
+            title: '待处理审批',
+            child: approvals.isEmpty
+                ? const Text('当前没有待处理审批。')
+                : Column(
+                    children: approvals
+                        .map(
+                          (approval) => Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _approvalStatusZh(approval.status),
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleSmall,
+                                      ),
+                                    ),
+                                    Text(
+                                      approval.notional.toStringAsFixed(2),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(approval.messageZh),
+                                const SizedBox(height: 6),
+                                for (final reason in approval.reasonsZh)
+                                  Text('• $reason'),
+                                if (approval.isPending) ...[
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: riskBusy
+                                              ? null
+                                              : () {
+                                                  onDecide(approval, false);
+                                                },
+                                          child: const Text('拒绝'),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: FilledButton(
+                                          onPressed: riskBusy
+                                              ? null
+                                              : () {
+                                                  onDecide(approval, true);
+                                                },
+                                          child: const Text('通过'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+          ),
+        ] else if (message == null)
+          const _InfoCard(text: '当前账号没有审批权限。'),
       ],
     );
   }
+}
+
+String _approvalStatusZh(String status) {
+  if (status == 'approved') return '已通过';
+  if (status == 'rejected') return '已拒绝';
+  return '待审批';
+}
+
+String _riskStatusZh(String status) {
+  if (status == 'approved') return '已通过';
+  if (status == 'rejected') return '已拒绝';
+  return '需要审批';
 }
 
 class _BrandHeader extends StatelessWidget {

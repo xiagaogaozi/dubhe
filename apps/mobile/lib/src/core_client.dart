@@ -150,8 +150,41 @@ class CoreClient {
     return PaperPortfolio.fromJson(_map(json));
   }
 
-  Future<List<ApprovalRequest>> fetchApprovals() async {
-    final json = await _getJson('/v1/approvals');
+  Future<RiskDecision> createLiveApprovalDemo({
+    required String accountId,
+    required String strategyVersionId,
+    required String market,
+    required String symbol,
+    required double quantity,
+    required double estimatedPrice,
+    required String currency,
+    required List<String> sourceRefs,
+  }) async {
+    final json = await _postJson('/v1/risk/evaluate', {
+      'account_id': accountId,
+      'strategy_version_id': strategyVersionId,
+      'market': market,
+      'symbol': symbol,
+      'side': 'buy',
+      'order_type': 'market',
+      'quantity': quantity,
+      'estimated_price': estimatedPrice,
+      'currency': currency,
+      'created_by': 'ai',
+      'destination': 'live',
+      'rationale_zh': '移动端风控中心生成的实盘审批演示；仅创建审批请求，不会连接真实券商。',
+      'source_refs': sourceRefs,
+    });
+    return RiskDecision.fromJson(_map(json));
+  }
+
+  Future<List<ApprovalRequest>> fetchApprovals({
+    String status = 'pending',
+  }) async {
+    final json = await _getJson(
+      '/v1/approvals',
+      queryParameters: {'status': status},
+    );
     return _mapList(json).map(ApprovalRequest.fromJson).toList();
   }
 
@@ -166,6 +199,24 @@ class CoreClient {
       'decision_comment_zh': comment,
     });
     return ApprovalRequest.fromJson(_map(json));
+  }
+
+  Future<KillSwitchState> fetchKillSwitch() async {
+    final json = await _getJson('/v1/risk/kill-switch');
+    return KillSwitchState.fromJson(_map(json));
+  }
+
+  Future<KillSwitchState> setKillSwitch({
+    required bool enabled,
+    required String reason,
+    String updatedBy = 'dubhe-mobile',
+  }) async {
+    final json = await _postJson('/v1/risk/kill-switch', {
+      'enabled': enabled,
+      'reason_zh': reason,
+      'updated_by': updatedBy,
+    });
+    return KillSwitchState.fromJson(_map(json));
   }
 
   void close() => _client.close();
@@ -758,6 +809,63 @@ class ApprovalRequest {
       messageZh: _string(json['message_zh']),
       notional: _double(riskDecision['notional']),
       reasonsZh: _stringList(riskDecision['reasons_zh']),
+    );
+  }
+}
+
+class RiskDecision {
+  RiskDecision({
+    required this.id,
+    required this.orderIntentId,
+    required this.status,
+    required this.allowedDestination,
+    required this.notional,
+    required this.reasonsZh,
+    required this.evaluatedAt,
+  });
+
+  final String id;
+  final String orderIntentId;
+  final String status;
+  final String allowedDestination;
+  final double notional;
+  final List<String> reasonsZh;
+  final String evaluatedAt;
+
+  bool get requiresApproval => status == 'requires_approval';
+
+  factory RiskDecision.fromJson(Map<String, dynamic> json) {
+    return RiskDecision(
+      id: _string(json['id']),
+      orderIntentId: _string(json['order_intent_id']),
+      status: _string(json['status']),
+      allowedDestination: _string(json['allowed_destination']),
+      notional: _double(json['notional']),
+      reasonsZh: _stringList(json['reasons_zh']),
+      evaluatedAt: _string(json['evaluated_at']),
+    );
+  }
+}
+
+class KillSwitchState {
+  KillSwitchState({
+    required this.enabled,
+    required this.reasonZh,
+    required this.updatedBy,
+    required this.updatedAt,
+  });
+
+  final bool enabled;
+  final String reasonZh;
+  final String updatedBy;
+  final String updatedAt;
+
+  factory KillSwitchState.fromJson(Map<String, dynamic> json) {
+    return KillSwitchState(
+      enabled: _bool(json['enabled']),
+      reasonZh: _string(json['reason_zh']),
+      updatedBy: _string(json['updated_by']),
+      updatedAt: _string(json['updated_at']),
     );
   }
 }

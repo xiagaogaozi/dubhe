@@ -13,6 +13,8 @@ Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中
 - 调用 `/v1/simulation/paper-orders` 提交纸面买入验证。
 - 查看 `/v1/simulation/paper-portfolio/{account_id}` 纸面组合。
 - 管理员或风控管理员可查看 `/v1/approvals`，并调用通过/拒绝接口。
+- 管理员或风控管理员可查看 `/v1/risk/kill-switch`，并在移动端启用或解除急停开关。
+- 管理员或风控管理员可通过 `/v1/risk/evaluate` 生成实盘审批演示；该入口只创建审批请求，不连接真实券商或发送真实订单。
 
 ## 平台工程
 
