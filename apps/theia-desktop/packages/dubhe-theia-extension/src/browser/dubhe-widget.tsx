@@ -182,6 +182,26 @@ type RiskDecision = {
   evaluated_at: string;
 };
 
+type ApprovalRequest = {
+  id: string;
+  order_intent_id: string;
+  risk_decision: RiskDecision;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by: 'ai' | 'strategy' | 'user';
+  decided_by?: string | null;
+  decision_comment_zh?: string | null;
+  created_at: string;
+  decided_at?: string | null;
+  message_zh: string;
+};
+
+type KillSwitchState = {
+  enabled: boolean;
+  reason_zh: string;
+  updated_by: string;
+  updated_at: string;
+};
+
 type PaperOrder = {
   id: string;
   order_intent_id: string;
@@ -308,6 +328,10 @@ function DubheWorkbench(): React.ReactElement {
   const [backtestResult, setBacktestResult] = React.useState<BacktestResult | null>(null);
   const [paperOrder, setPaperOrder] = React.useState<PaperOrder | null>(null);
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
+  const [approvals, setApprovals] = React.useState<ApprovalRequest[]>([]);
+  const [killSwitch, setKillSwitch] = React.useState<KillSwitchState | null>(null);
+  const [riskMessage, setRiskMessage] = React.useState('登录后显示审批和急停状态。');
+  const [riskBusy, setRiskBusy] = React.useState(false);
   const [logs, setLogs] = React.useState<LogEntry[]>([
     createLog('neutral', '工作台已载入。先连接 Dubhe Core，再刷新新闻源。'),
     createLog('warning', '实盘交易保持关闭：AI 不能直接下真实订单。'),
@@ -326,6 +350,17 @@ function DubheWorkbench(): React.ReactElement {
   React.useEffect(() => {
     void checkHealth();
   }, [coreUrl]);
+
+  React.useEffect(() => {
+    if (!session) {
+      setApprovals([]);
+      setKillSwitch(null);
+      setPortfolio(null);
+      setRiskMessage('登录后显示审批和急停状态。');
+      return;
+    }
+    void loadSessionData(session);
+  }, [coreUrl, session?.access_token, session?.role]);
 
   function appendLog(tone: Tone, text: string): void {
     setLogs((current) => [createLog(tone, text), ...current].slice(0, 5));
@@ -394,7 +429,6 @@ function DubheWorkbench(): React.ReactElement {
       setSession(nextSession);
       setApiStatus('已连接');
       appendLog('positive', `已登录：${roleLabel(nextSession.role)}，工作区 ${nextSession.workspace_id}。`);
-      await loadPortfolio(nextSession);
     }).catch((error: unknown) => {
       setApiStatus('离线');
       appendLog('negative', `登录失败：${errorMessage(error)}。`);
@@ -413,6 +447,9 @@ function DubheWorkbench(): React.ReactElement {
       localStorage.removeItem(DEVICE_SESSION_STORAGE_KEY);
       setSession(null);
       setPortfolio(null);
+      setApprovals([]);
+      setKillSwitch(null);
+      setRiskMessage('登录后显示审批和急停状态。');
       appendLog('warning', '已退出当前设备。');
     });
   }
@@ -532,6 +569,14 @@ function DubheWorkbench(): React.ReactElement {
     });
   }
 
+  async function loadSessionData(activeSession: DeviceSession): Promise<void> {
+    try {
+      await Promise.all([loadPortfolio(activeSession), loadRiskControls(activeSession)]);
+    } catch (error) {
+      appendLog('warning', `会话数据同步失败：${errorMessage(error)}。`);
+    }
+  }
+
   async function loadPortfolio(activeSession = session): Promise<void> {
     if (!activeSession) return;
     const snapshot = await getJson<PaperPortfolioSnapshot>(
@@ -540,6 +585,91 @@ function DubheWorkbench(): React.ReactElement {
       activeSession.access_token,
     );
     setPortfolio(snapshot);
+  }
+
+  async function loadRiskControls(activeSession = session): Promise<void> {
+    if (!activeSession) {
+      setApprovals([]);
+      setKillSwitch(null);
+      setRiskMessage('登录后显示审批和急停状态。');
+      return;
+    }
+    if (activeSession.role !== 'admin' && activeSession.role !== 'risk_manager') {
+      setApprovals([]);
+      setKillSwitch(null);
+      setRiskMessage('当前账号没有审批权限。管理员或风控管理员登录后可管理审批和 kill switch。');
+      return;
+    }
+
+    setRiskBusy(true);
+    try {
+      const [nextApprovals, nextKillSwitch] = await Promise.all([
+        getJson<ApprovalRequest[]>(coreUrl, '/v1/approvals?status=pending', activeSession.access_token),
+        getJson<KillSwitchState>(coreUrl, '/v1/risk/kill-switch', activeSession.access_token),
+      ]);
+      setApprovals(nextApprovals);
+      setKillSwitch(nextKillSwitch);
+      setRiskMessage(nextApprovals.length > 0 ? `当前有 ${nextApprovals.length} 个待处理审批。` : '当前没有待处理审批。');
+    } catch (error) {
+      setApprovals([]);
+      setRiskMessage(`风控中心同步失败：${errorMessage(error)}。`);
+    } finally {
+      setRiskBusy(false);
+    }
+  }
+
+  async function decideApproval(approval: ApprovalRequest, approve: boolean): Promise<void> {
+    if (!session || !canManageRisk) {
+      appendLog('warning', '当前账号没有审批权限。');
+      return;
+    }
+
+    setRiskBusy(true);
+    try {
+      const action = approve ? 'approve' : 'reject';
+      const decided = await postJson<ApprovalRequest>(
+        coreUrl,
+        `/v1/approvals/${approval.id}/${action}`,
+        {
+          decided_by: session.device_name || 'dubhe-theia',
+          decision_comment_zh: approve ? '桌面端通过审批。' : '桌面端拒绝审批。',
+        },
+        session.access_token,
+      );
+      appendLog(approve ? 'positive' : 'warning', `审批请求已${approve ? '通过' : '拒绝'}：${decided.order_intent_id}。`);
+      await loadRiskControls(session);
+    } catch (error) {
+      appendLog('negative', `审批操作失败：${errorMessage(error)}。`);
+    } finally {
+      setRiskBusy(false);
+    }
+  }
+
+  async function toggleKillSwitch(nextEnabled: boolean): Promise<void> {
+    if (!session || !canManageRisk) {
+      appendLog('warning', '当前账号没有急停权限。');
+      return;
+    }
+
+    setRiskBusy(true);
+    try {
+      const nextState = await postJson<KillSwitchState>(
+        coreUrl,
+        '/v1/risk/kill-switch',
+        {
+          enabled: nextEnabled,
+          reason_zh: nextEnabled ? '桌面端手动启用 kill switch。' : '桌面端解除 kill switch。',
+          updated_by: session.device_name || 'dubhe-theia',
+        },
+        session.access_token,
+      );
+      setKillSwitch(nextState);
+      appendLog(nextEnabled ? 'warning' : 'positive', nextState.reason_zh);
+    } catch (error) {
+      appendLog('negative', `更新 kill switch 失败：${errorMessage(error)}。`);
+    } finally {
+      setRiskBusy(false);
+    }
   }
 
   return (
@@ -911,9 +1041,80 @@ function DubheWorkbench(): React.ReactElement {
             )}
           </SidePanel>
 
-          <SidePanel title="审批中心" meta={canManageRisk ? '可管理' : '只读'}>
-            <p style={styles.safeStatus}>实盘交易关闭</p>
-            <p style={styles.bodyText}>当前闭环只提交纸面交易。审批、kill switch 和真实券商适配器后续继续接入。</p>
+          <SidePanel title="风控中心" meta={canManageRisk ? `${approvals.length} 待审批` : '只读'}>
+            <div style={styles.riskHeaderRow}>
+              <p style={{ ...styles.safeStatus, ...(killSwitch?.enabled ? styles.killSwitchOnText : undefined) }}>
+                {killSwitch?.enabled ? 'Kill switch 已启用' : '实盘交易关闭'}
+              </p>
+              <button
+                style={styles.inlineTextButton}
+                type="button"
+                onClick={() => void loadRiskControls(session)}
+                disabled={riskBusy || !session}
+              >
+                刷新
+              </button>
+            </div>
+            <p style={styles.bodyText}>{riskMessage}</p>
+            {canManageRisk && (
+              <>
+                <div style={styles.riskButtonRow}>
+                  <button
+                    style={styles.smallButton}
+                    type="button"
+                    onClick={() => void toggleKillSwitch(true)}
+                    disabled={riskBusy || killSwitch?.enabled === true}
+                  >
+                    启用急停
+                  </button>
+                  <button
+                    style={styles.smallButton}
+                    type="button"
+                    onClick={() => void toggleKillSwitch(false)}
+                    disabled={riskBusy || killSwitch?.enabled === false}
+                  >
+                    解除急停
+                  </button>
+                </div>
+                {killSwitch && <p style={styles.bodyText}>原因：{killSwitch.reason_zh}</p>}
+                <div style={styles.approvalList}>
+                  {approvals.length === 0 ? (
+                    <p style={styles.bodyText}>没有待处理审批。</p>
+                  ) : (
+                    approvals.slice(0, 4).map((approval) => (
+                      <div style={styles.approvalRow} key={approval.id}>
+                        <div style={styles.approvalTopLine}>
+                          <strong style={styles.statusName}>名义金额 {notionalLabel(approval.risk_decision.notional)}</strong>
+                          <span style={{ ...styles.miniPill, ...styles.warningPill }}>{approvalStatusLabel(approval.status)}</span>
+                        </div>
+                        <p style={styles.statusMessage}>{approval.message_zh}</p>
+                        {approval.risk_decision.reasons_zh.slice(0, 2).map((reason) => (
+                          <p style={styles.statusMessage} key={reason}>· {reason}</p>
+                        ))}
+                        <div style={styles.riskButtonRow}>
+                          <button
+                            style={styles.smallButton}
+                            type="button"
+                            onClick={() => void decideApproval(approval, false)}
+                            disabled={riskBusy || approval.status !== 'pending'}
+                          >
+                            拒绝
+                          </button>
+                          <button
+                            style={styles.fullWidthButtonInline}
+                            type="button"
+                            onClick={() => void decideApproval(approval, true)}
+                            disabled={riskBusy || approval.status !== 'pending'}
+                          >
+                            通过
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </SidePanel>
 
           <SidePanel title="纸面交易" meta={paperOrder?.status ?? '待提交'}>
@@ -1074,6 +1275,12 @@ function authModeLabel(mode: AuthMode): string {
   return mode === 'register' ? '创建账号' : '登录';
 }
 
+function approvalStatusLabel(status: ApprovalRequest['status']): string {
+  if (status === 'approved') return '已通过';
+  if (status === 'rejected') return '已拒绝';
+  return '待审批';
+}
+
 function sentimentLabel(sentiment: Sentiment): string {
   if (sentiment === 'positive') return '正面';
   if (sentiment === 'negative') return '负面';
@@ -1110,6 +1317,12 @@ function moneyLabel(currency: string, value: number): string {
   } catch {
     return `${currency} ${value.toLocaleString('zh-CN')}`;
   }
+}
+
+function notionalLabel(value: number): string {
+  return value.toLocaleString('zh-CN', {
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatCurrencyMap(values: Record<string, number>): string {
@@ -1800,6 +2013,46 @@ const styles = {
     color: '#16623f',
     fontWeight: 800,
   } as React.CSSProperties,
+  killSwitchOnText: {
+    color: '#b13d2c',
+  } as React.CSSProperties,
+  riskHeaderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  } as React.CSSProperties,
+  inlineTextButton: {
+    marginTop: 8,
+    padding: 0,
+    border: 0,
+    background: 'transparent',
+    color: '#174a3a',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 800,
+  } as React.CSSProperties,
+  riskButtonRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 8,
+    marginTop: 10,
+  } as React.CSSProperties,
+  approvalList: {
+    display: 'grid',
+    gap: 8,
+    marginTop: 10,
+  } as React.CSSProperties,
+  approvalRow: {
+    paddingTop: 10,
+    borderTop: '1px solid #e5ebe8',
+  } as React.CSSProperties,
+  approvalTopLine: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  } as React.CSSProperties,
   portfolioMetric: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -1829,6 +2082,15 @@ const styles = {
     width: '100%',
     marginTop: 8,
     padding: '9px 10px',
+    border: 0,
+    borderRadius: 8,
+    background: '#174a3a',
+    color: '#ffffff',
+    cursor: 'pointer',
+    fontWeight: 800,
+  } as React.CSSProperties,
+  fullWidthButtonInline: {
+    padding: '8px 10px',
     border: 0,
     borderRadius: 8,
     background: '#174a3a',
