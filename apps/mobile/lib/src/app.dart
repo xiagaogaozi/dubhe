@@ -1131,6 +1131,66 @@ class _CompanionHomeState extends State<CompanionHome> {
     });
   }
 
+  void _runOnboardingAction(OnboardingStep step) {
+    switch (step.id) {
+      case 'core_connected':
+        unawaited(_refresh());
+        return;
+      case 'account_login':
+        setState(() {
+          _tabIndex = 0;
+          _message = '当前设备已登录：${widget.session.roleZh}。';
+        });
+        return;
+      case 'runtime_config':
+        setState(() {
+          _tabIndex = 0;
+          _message = widget.session.role == 'admin'
+              ? '请在“系统状态”卡片中填写并保存 AI 模型和授权新闻源 key。'
+              : '运行配置需要管理员账号修改；当前可先使用公开/演示新闻源和本地 AI 兜底。';
+        });
+        return;
+      case 'news_ready':
+        setState(() {
+          _tabIndex = 1;
+          _message = '正在刷新新闻雷达。';
+        });
+        unawaited(_refresh());
+        return;
+      case 'ai_assistant_ready':
+        setState(() {
+          _tabIndex = 2;
+          _assistantQuestion = '请根据当前新闻、策略和回测，告诉我下一步该怎么做。';
+          _message = '已切到 AI 页，并填好一个可直接发送的问题。';
+        });
+        return;
+      case 'workspace_sync':
+        setState(() {
+          _tabIndex = 0;
+          _message = '正在刷新工作区同步状态。';
+        });
+        unawaited(_refreshWorkspaceSnapshotFromSync());
+        return;
+      case 'paper_trading_ready':
+        setState(() {
+          _tabIndex = 2;
+        });
+        unawaited(_submitPaperBuy());
+        return;
+      case 'live_trading_guard':
+        setState(() {
+          _tabIndex = 4;
+          _approvalMessage = '实盘交易仍受审批、审计和 kill switch 边界保护。';
+        });
+        unawaited(_refreshRiskControls(markBusy: false));
+        return;
+      default:
+        setState(() {
+          _message = step.actionZh.isEmpty ? step.messageZh : step.actionZh;
+        });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -1152,6 +1212,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         onSaveLocalConfig: _saveLocalConfig,
         onLocalConfigChanged: _updateLocalConfigField,
         onUseStrategyDraft: _useSyncedStrategyDraft,
+        onRunOnboardingAction: _runOnboardingAction,
       ),
       _NewsPage(newsFeed: _newsFeed),
       _AiPage(
@@ -1246,6 +1307,7 @@ class _TodayPage extends StatelessWidget {
     required this.onSaveLocalConfig,
     required this.onLocalConfigChanged,
     required this.onUseStrategyDraft,
+    required this.onRunOnboardingAction,
   });
 
   final DeviceSession session;
@@ -1265,6 +1327,7 @@ class _TodayPage extends StatelessWidget {
   final VoidCallback onSaveLocalConfig;
   final void Function(String key, String value) onLocalConfigChanged;
   final ValueChanged<StrategyDraft> onUseStrategyDraft;
+  final ValueChanged<OnboardingStep> onRunOnboardingAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1316,7 +1379,10 @@ class _TodayPage extends StatelessWidget {
           lastPushedEvent: lastPushedSyncEvent,
           onUseStrategyDraft: onUseStrategyDraft,
         ),
-        _OnboardingChecklistCard(checklist: onboardingChecklist),
+        _OnboardingChecklistCard(
+          checklist: onboardingChecklist,
+          onRunAction: onRunOnboardingAction,
+        ),
         _SystemStatusPanel(
           session: session,
           status: systemStatus,
@@ -1440,9 +1506,13 @@ class _SyncStatusPanel extends StatelessWidget {
 }
 
 class _OnboardingChecklistCard extends StatelessWidget {
-  const _OnboardingChecklistCard({required this.checklist});
+  const _OnboardingChecklistCard({
+    required this.checklist,
+    required this.onRunAction,
+  });
 
   final OnboardingChecklist? checklist;
+  final ValueChanged<OnboardingStep> onRunAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1450,6 +1520,10 @@ class _OnboardingChecklistCard extends StatelessWidget {
     if (current == null) {
       return const _InfoCard(text: '首次使用清单尚未同步。');
     }
+    final nextStep = _nextOnboardingStep(current);
+    final actionLabel = nextStep == null
+        ? null
+        : _onboardingActionLabel(nextStep);
     return _SectionCard(
       title: '首次使用清单',
       trailing: '${current.completeCount}/${current.totalCount}',
@@ -1457,6 +1531,14 @@ class _OnboardingChecklistCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('下一步：${current.nextActionZh}'),
+          if (nextStep != null && actionLabel != null) ...[
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => onRunAction(nextStep),
+              icon: const Icon(Icons.play_arrow_outlined),
+              label: Text(actionLabel),
+            ),
+          ],
           const SizedBox(height: 8),
           ...current.steps.map(
             (step) => ListTile(
@@ -2141,6 +2223,31 @@ String _onboardingStatusZh(String status) {
   if (status == 'warning') return '可优化';
   if (status == 'action_required') return '待操作';
   return status;
+}
+
+OnboardingStep? _nextOnboardingStep(OnboardingChecklist checklist) {
+  for (final step in checklist.steps) {
+    if (step.status == 'action_required') return step;
+  }
+  for (final step in checklist.steps) {
+    if (step.status == 'warning') return step;
+  }
+  return null;
+}
+
+String? _onboardingActionLabel(OnboardingStep step) {
+  if (step.status == 'complete') return null;
+  return switch (step.id) {
+    'core_connected' => '重新检查 Core',
+    'account_login' => '查看账号状态',
+    'runtime_config' => '打开配置入口',
+    'news_ready' => '刷新新闻雷达',
+    'ai_assistant_ready' => '准备 AI 问题',
+    'workspace_sync' => '刷新同步状态',
+    'paper_trading_ready' => '去纸面验证',
+    'live_trading_guard' => '查看风控边界',
+    _ => step.actionZh.isEmpty ? null : '处理这一步',
+  };
 }
 
 String _auditActionZh(String action) {

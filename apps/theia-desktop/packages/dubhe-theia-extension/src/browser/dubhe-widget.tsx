@@ -182,6 +182,11 @@ type OnboardingChecklistResponse = {
   generated_at: string;
 };
 
+type OnboardingStepAction = {
+  label: string;
+  disabled?: boolean;
+};
+
 type NewsAnalysis = {
   id: string;
   news_event_id: string;
@@ -1343,6 +1348,67 @@ function DubheWorkbench(): React.ReactElement {
     }
   }
 
+  function onboardingActionForStep(step: OnboardingStep): OnboardingStepAction | null {
+    if (step.status === 'complete') return null;
+    if (step.id === 'account_login') return { label: '创建账号或登录', disabled: isBusy };
+    if (step.id === 'runtime_config') return { label: session?.role === 'admin' ? '打开配置检查' : '查看配置指引', disabled: localConfigBusy };
+    if (step.id === 'news_ready') return { label: '刷新新闻源', disabled: isBusy };
+    if (step.id === 'ai_assistant_ready') return { label: session ? '准备 AI 问题' : '先登录再使用 AI', disabled: assistantBusy };
+    if (step.id === 'workspace_sync') return { label: session ? '刷新同步状态' : '先登录启用同步', disabled: isBusy };
+    if (step.id === 'paper_trading_ready') return { label: '提交纸面验证', disabled: isBusy };
+    if (step.id === 'live_trading_guard') return { label: canManageRisk ? '查看风控中心' : '查看风控边界', disabled: riskBusy };
+    if (step.id === 'core_connected') return { label: '重新检查 Core', disabled: isBusy };
+    return step.action_zh ? { label: '处理这一步', disabled: isBusy } : null;
+  }
+
+  function runOnboardingStepAction(step: OnboardingStep): void {
+    if (step.id === 'account_login') {
+      setAuthMode('register');
+      appendLog('neutral', '请在左侧创建账号或切回登录；完成后会自动启用同步和纸面交易入口。');
+      return;
+    }
+    if (step.id === 'runtime_config') {
+      if (session?.role === 'admin') {
+        void loadLocalConfig(session);
+        appendLog('neutral', '请在右侧“数据源配置”填写 AI 模型和授权新闻源 key，保存后会重新检查 Core。');
+      } else {
+        appendLog('warning', '本地运行配置需要管理员账号修改；当前可先使用公开/演示新闻源和本地 AI 兜底。');
+      }
+      return;
+    }
+    if (step.id === 'news_ready' || step.id === 'core_connected') {
+      void (step.id === 'core_connected' ? checkHealth() : refreshNewsFeed());
+      return;
+    }
+    if (step.id === 'ai_assistant_ready') {
+      if (!session) {
+        appendLog('warning', '请先登录账号，再使用可跨端恢复的 AI 分析师对话。');
+        return;
+      }
+      setAssistantQuestion('请根据当前新闻、策略和回测，告诉我下一步该怎么做。');
+      appendLog('neutral', '已把问题填入右侧 AI 分析师对话框，请确认后发送。');
+      return;
+    }
+    if (step.id === 'workspace_sync') {
+      if (!session) {
+        appendLog('warning', '请先登录账号，再刷新工作区同步状态。');
+        return;
+      }
+      void loadWorkspaceSnapshot(session);
+      return;
+    }
+    if (step.id === 'paper_trading_ready') {
+      void submitPaperOrder();
+      return;
+    }
+    if (step.id === 'live_trading_guard') {
+      if (session) void loadRiskControls(session);
+      appendLog('neutral', '风控中心已在右侧面板展示；Dubhe 当前不会直接发送真实券商订单。');
+      return;
+    }
+    appendLog('neutral', step.action_zh ?? '这一步暂时只提供状态提示。');
+  }
+
   async function decideApproval(approval: ApprovalRequest, approve: boolean): Promise<void> {
     if (!session || !canManageRisk) {
       appendLog('warning', '当前账号没有审批权限。');
@@ -2019,7 +2085,11 @@ function DubheWorkbench(): React.ReactElement {
             meta={onboardingChecklist ? `${onboardingChecklist.complete_count}/${onboardingChecklist.total_count}` : '待检查'}
           >
             {onboardingChecklist ? (
-              <OnboardingChecklistPanel checklist={onboardingChecklist} />
+              <OnboardingChecklistPanel
+                checklist={onboardingChecklist}
+                actionForStep={onboardingActionForStep}
+                onRunStep={runOnboardingStepAction}
+              />
             ) : (
               <p style={styles.bodyText}>连接 Core 后显示从登录、配置到纸面交易的下一步清单。</p>
             )}
@@ -2922,31 +2992,68 @@ function sourceLabel(source: LocalRuntimeConfigItem['source']): string {
   return '未配置';
 }
 
-function OnboardingChecklistPanel(props: { checklist: OnboardingChecklistResponse }): React.ReactElement {
+function OnboardingChecklistPanel(props: {
+  checklist: OnboardingChecklistResponse;
+  actionForStep: (step: OnboardingStep) => OnboardingStepAction | null;
+  onRunStep: (step: OnboardingStep) => void;
+}): React.ReactElement {
+  const nextStep = nextOnboardingStep(props.checklist);
+  const nextAction = nextStep ? props.actionForStep(nextStep) : null;
   return (
     <div style={styles.onboardingBox}>
       <div style={styles.onboardingProgress}>
         <span>{props.checklist.complete_count}/{props.checklist.total_count}</span>
         <strong>下一步：{props.checklist.next_action_zh}</strong>
+        {nextStep && nextAction && (
+          <button
+            style={styles.onboardingPrimaryAction}
+            type="button"
+            disabled={nextAction.disabled}
+            onClick={() => props.onRunStep(nextStep)}
+          >
+            {nextAction.label}
+          </button>
+        )}
       </div>
       <div style={styles.onboardingStepList}>
-        {props.checklist.steps.map((step) => (
-          <div style={styles.onboardingStep} key={step.id}>
-            <span style={{ ...styles.onboardingDot, ...onboardingDotStyle(step.status) }} />
-            <div>
-              <div style={styles.statusRowHeader}>
-                <strong style={styles.statusName}>{step.label_zh}</strong>
-                <span style={{ ...styles.miniPill, ...tonePillStyle(onboardingTone(step.status)) }}>
-                  {onboardingStatusLabel(step.status)}
-                </span>
+        {props.checklist.steps.map((step) => {
+          const action = step.status === 'complete' ? null : props.actionForStep(step);
+          return (
+            <div style={styles.onboardingStep} key={step.id}>
+              <span style={{ ...styles.onboardingDot, ...onboardingDotStyle(step.status) }} />
+              <div>
+                <div style={styles.statusRowHeader}>
+                  <strong style={styles.statusName}>{step.label_zh}</strong>
+                  <span style={{ ...styles.miniPill, ...tonePillStyle(onboardingTone(step.status)) }}>
+                    {onboardingStatusLabel(step.status)}
+                  </span>
+                </div>
+                <p style={styles.statusMessage}>{step.message_zh}</p>
+                {step.action_zh && <p style={styles.configHint}>建议：{step.action_zh}</p>}
+                {action && (
+                  <button
+                    style={styles.onboardingInlineAction}
+                    type="button"
+                    disabled={action.disabled}
+                    onClick={() => props.onRunStep(step)}
+                  >
+                    {action.label}
+                  </button>
+                )}
               </div>
-              <p style={styles.statusMessage}>{step.message_zh}</p>
-              {step.action_zh && <p style={styles.configHint}>建议：{step.action_zh}</p>}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+function nextOnboardingStep(checklist: OnboardingChecklistResponse): OnboardingStep | null {
+  return (
+    checklist.steps.find((step) => step.status === 'action_required') ??
+    checklist.steps.find((step) => step.status === 'warning') ??
+    null
   );
 }
 
@@ -3887,6 +3994,30 @@ const styles = {
     padding: '8px 0',
     color: '#30433b',
     fontSize: 12,
+  } as React.CSSProperties,
+  onboardingPrimaryAction: {
+    width: '100%',
+    padding: '8px 10px',
+    border: 0,
+    borderRadius: 8,
+    background: '#174a3a',
+    color: '#ffffff',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 800,
+    overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  onboardingInlineAction: {
+    marginTop: 6,
+    padding: '6px 8px',
+    border: '1px solid #cdd8d3',
+    borderRadius: 8,
+    background: '#ffffff',
+    color: '#174a3a',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 800,
+    overflowWrap: 'anywhere',
   } as React.CSSProperties,
   onboardingStepList: {
     display: 'grid',
