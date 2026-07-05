@@ -167,8 +167,12 @@ def test_local_runtime_config_editor_writes_file_without_leaking_secrets(
     assert "finnhub-secret-token" not in response.text
     items_by_key = {item["key"]: item for item in body["items"]}
     assert items_by_key["DUBHE_LLM_MODEL"]["masked_value"] == "gpt-test"
+    assert items_by_key["DUBHE_LLM_MODEL"]["group_zh"] == "AI 模型"
+    assert items_by_key["DUBHE_LLM_MODEL"]["placeholder"]
     assert items_by_key["FINNHUB_API_KEY"]["configured"] is True
     assert items_by_key["FINNHUB_API_KEY"]["masked_value"] == "••••oken"
+    assert items_by_key["FINNHUB_API_KEY"]["group_zh"] == "授权新闻源"
+    assert "生产前" in items_by_key["FINNHUB_API_KEY"]["setup_hint_zh"]
     assert os.environ["FINNHUB_API_KEY"] == "finnhub-secret-token"
 
     config_text = (tmp_path / "config" / "dubhe.local.env").read_text(encoding="utf-8")

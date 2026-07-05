@@ -142,6 +142,9 @@ type LocalRuntimeConfigItem = {
   key: string;
   label_zh: string;
   description_zh: string;
+  group_zh?: string | null;
+  placeholder?: string | null;
+  setup_hint_zh?: string | null;
   configured: boolean;
   secret: boolean;
   source: 'local_file' | 'process_env' | 'missing';
@@ -3005,6 +3008,7 @@ function ConfigurationGuide(props: {
               <label style={styles.configField} key={item.key}>
                 <span style={styles.configFieldTopLine}>
                   <span style={styles.configFieldLabel}>{item.label_zh}</span>
+                  {item.group_zh && <span style={styles.smallMeta}>{item.group_zh}</span>}
                   <span style={{ ...styles.miniPill, ...tonePillStyle(item.configured ? 'positive' : 'warning') }}>
                     {item.configured ? sourceLabel(item.source) : '未配置'}
                   </span>
@@ -3013,13 +3017,11 @@ function ConfigurationGuide(props: {
                   style={styles.configInput}
                   type={item.secret ? 'password' : 'text'}
                   value={props.localConfigForm[item.key] ?? ''}
-                  placeholder={item.secret && item.configured ? '已配置，留空保持不变' : item.key}
+                  placeholder={item.secret && item.configured ? '已配置，留空保持不变' : item.placeholder ?? item.key}
                   onChange={(event) => props.onConfigFieldChange(item.key, event.target.value)}
                   disabled={props.configBusy}
                 />
-                <span style={styles.configHint}>
-                  {item.description_zh}{item.restart_required ? ' 修改后需要重启 Core。' : ''}
-                </span>
+                <span style={styles.configHint}>{localConfigHint(item)}</span>
               </label>
             ))}
             <button style={styles.fullWidthButtonInline} type="submit" disabled={props.configBusy}>
@@ -3044,6 +3046,14 @@ function sourceLabel(source: LocalRuntimeConfigItem['source']): string {
   if (source === 'local_file') return '本机文件';
   if (source === 'process_env') return '环境变量';
   return '未配置';
+}
+
+function localConfigHint(item: LocalRuntimeConfigItem): string {
+  return [
+    item.description_zh,
+    item.setup_hint_zh,
+    item.restart_required ? '修改后需要重启 Core。' : '',
+  ].filter(Boolean).join(' ');
 }
 
 function OnboardingChecklistPanel(props: {

@@ -113,7 +113,7 @@ $env:DUBHE_SEC_USER_AGENT="Dubhe/0.1 your-email@example.com"
 
 Windows 本地运行时也可以通过 `Configure-Dubhe.cmd` 填写这些 key。真实配置保存在 `config\dubhe.local.env`，该文件已被 Git 忽略；仓库只提交无密钥的 `config\dubhe.local.env.example` 模板。
 
-图形化配置和 `Configure-Dubhe.cmd` 使用同一个 `config\dubhe.local.env` 文件。模型和新闻源 key 保存后会同步到当前 Core 进程；`DUBHE_CORE_DB_PATH` 这类启动期配置保存后需要重启 Core 才能生效。
+图形化配置和 `Configure-Dubhe.cmd` 使用同一个 `config\dubhe.local.env` 文件。Core 会向客户端返回配置分组、输入示例和中文填写提示，帮助只会中文的用户区分 AI 模型、授权新闻源、公开公告源和本地存储。模型和新闻源 key 保存后会同步到当前 Core 进程；`DUBHE_CORE_DB_PATH` 这类启动期配置保存后需要重启 Core 才能生效。
 
 配置体检接口：
 

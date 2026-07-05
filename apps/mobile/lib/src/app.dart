@@ -3066,9 +3066,14 @@ class _ConfigurationGuide extends StatelessWidget {
                     onChanged: (value) => onLocalConfigChanged(item.key, value),
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
-                      labelText: item.labelZh,
-                      helperText:
-                          '${item.descriptionZh}${item.restartRequired ? ' 修改后需要重启 Core。' : ''}',
+                      labelText: item.groupZh.isEmpty
+                          ? item.labelZh
+                          : '${item.groupZh} / ${item.labelZh}',
+                      hintText: item.placeholder.isEmpty
+                          ? item.key
+                          : item.placeholder,
+                      helperText: _localConfigHelperText(item),
+                      helperMaxLines: 4,
                       suffixText: item.configured
                           ? _localConfigSourceZh(item.source)
                           : '未配置',
@@ -3100,6 +3105,14 @@ String _localConfigSourceZh(String source) {
   if (source == 'local_file') return '本机文件';
   if (source == 'process_env') return '环境变量';
   return '未配置';
+}
+
+String _localConfigHelperText(LocalRuntimeConfigItem item) {
+  return [
+    item.descriptionZh,
+    if (item.setupHintZh.isNotEmpty) item.setupHintZh,
+    if (item.restartRequired) '修改后需要重启 Core。',
+  ].where((part) => part.trim().isNotEmpty).join(' ');
 }
 
 class _ReadinessChip extends StatelessWidget {

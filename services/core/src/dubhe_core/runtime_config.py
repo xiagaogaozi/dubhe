@@ -18,6 +18,9 @@ class LocalConfigDefinition:
     key: str
     label_zh: str
     description_zh: str
+    group_zh: str
+    placeholder: str = ""
+    setup_hint_zh: str = ""
     secret: bool = False
     restart_required: bool = False
 
@@ -26,60 +29,93 @@ LOCAL_CONFIG_DEFINITIONS = [
     LocalConfigDefinition(
         key="DUBHE_LLM_MODEL",
         label_zh="AI 模型名称",
-        description_zh="OpenAI-compatible 模型名，例如 gpt-4.1-mini 或本地网关模型名。",
+        description_zh="OpenAI-compatible 模型名，填写服务商模型 ID 或本地网关模型名。",
+        group_zh="AI 模型",
+        placeholder="服务商提供的 model id",
+        setup_hint_zh="如果使用 OpenAI 官方或兼容网关，复制控制台里的模型 ID；本地模型则填网关暴露的模型名。",
     ),
     LocalConfigDefinition(
         key="DUBHE_LLM_API_KEY",
         label_zh="AI 模型 API Key",
         description_zh="OpenAI 官方或兼容网关的鉴权 Key；不会在接口响应中回显。",
+        group_zh="AI 模型",
+        placeholder="sk-... / 兼容网关 key",
+        setup_hint_zh="从模型服务商控制台复制；本地无鉴权模型可留空。",
         secret=True,
     ),
     LocalConfigDefinition(
         key="DUBHE_LLM_BASE_URL",
         label_zh="AI 模型地址",
         description_zh="OpenAI-compatible /v1 地址；留空时使用 OpenAI 官方地址。",
+        group_zh="AI 模型",
+        placeholder="https://api.openai.com/v1",
+        setup_hint_zh="使用本地模型、代理网关或第三方兼容服务时填写；只用 OpenAI 官方默认地址可留空。",
     ),
     LocalConfigDefinition(
         key="DUBHE_LLM_PROVIDER",
         label_zh="AI 模型供应商",
         description_zh="当前默认 openai_compatible，预留给后续多供应商路由。",
+        group_zh="AI 模型",
+        placeholder="openai_compatible",
+        setup_hint_zh="当前保持 openai_compatible 即可，后续接入多模型路由时再调整。",
     ),
     LocalConfigDefinition(
         key="DUBHE_LLM_TIMEOUT_SECONDS",
         label_zh="AI 超时秒数",
         description_zh="AI 请求超时时间，默认 20 秒。",
+        group_zh="AI 模型",
+        placeholder="20",
+        setup_hint_zh="网络较慢或本地大模型响应慢时可以适当调大。",
     ),
     LocalConfigDefinition(
         key="DUBHE_LLM_MAX_TOKENS",
         label_zh="AI 最大输出",
         description_zh="单次 AI 答复最大 token 数，默认 900。",
+        group_zh="AI 模型",
+        placeholder="900",
+        setup_hint_zh="越大越容易得到长分析，但成本和等待时间也会增加。",
     ),
     LocalConfigDefinition(
         key="DUBHE_LLM_TEMPERATURE",
         label_zh="AI 随机度",
         description_zh="AI 生成随机度，默认 0.2，越低越稳。",
+        group_zh="AI 模型",
+        placeholder="0.2",
+        setup_hint_zh="投资研究建议保持较低随机度，减少同一问题反复回答不一致。",
     ),
     LocalConfigDefinition(
         key="FINNHUB_API_KEY",
         label_zh="Finnhub 授权新闻 Key",
         description_zh="用于 Finnhub company-news 授权新闻源；不会在接口响应中回显。",
+        group_zh="授权新闻源",
+        placeholder="Finnhub 控制台 API key",
+        setup_hint_zh="用于美股公司新闻。接入生产前需要确认套餐、调用频率和二次展示/AI 处理条款。",
         secret=True,
     ),
     LocalConfigDefinition(
         key="ALPHA_VANTAGE_API_KEY",
         label_zh="Alpha Vantage Key",
         description_zh="用于 Alpha Vantage NEWS_SENTIMENT 新闻情绪源；不会在接口响应中回显。",
+        group_zh="授权新闻源",
+        placeholder="Alpha Vantage API key",
+        setup_hint_zh="用于新闻情绪和全球 ticker 语境。生产使用前同样需要确认授权条款。",
         secret=True,
     ),
     LocalConfigDefinition(
         key="DUBHE_SEC_USER_AGENT",
         label_zh="SEC User-Agent",
         description_zh="SEC EDGAR 官方接口建议填写真实产品名和联系人邮箱。",
+        group_zh="公开公告源",
+        placeholder="Dubhe/0.1 contact@example.com",
+        setup_hint_zh="用于礼貌访问 SEC EDGAR；生产环境请替换成真实产品名和可联系邮箱。",
     ),
     LocalConfigDefinition(
         key="DUBHE_CORE_DB_PATH",
         label_zh="Core 数据库路径",
         description_zh="SQLite 本地数据库路径；修改后需要重启 Core 才能切换数据库。",
+        group_zh="本地存储",
+        placeholder=r"D:\dubhe-data\dubhe.sqlite3",
+        setup_hint_zh="想把数据放到固定磁盘目录时填写；普通本地体验可先留空。",
         restart_required=True,
     ),
 ]
@@ -223,6 +259,9 @@ def _config_item(
         key=definition.key,
         label_zh=definition.label_zh,
         description_zh=definition.description_zh,
+        group_zh=definition.group_zh,
+        placeholder=definition.placeholder,
+        setup_hint_zh=definition.setup_hint_zh,
         configured=bool(value),
         secret=definition.secret,
         source=source,

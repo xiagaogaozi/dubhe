@@ -586,6 +586,9 @@ class LocalRuntimeConfigItem {
     required this.key,
     required this.labelZh,
     required this.descriptionZh,
+    required this.groupZh,
+    required this.placeholder,
+    required this.setupHintZh,
     required this.configured,
     required this.secret,
     required this.source,
@@ -596,6 +599,9 @@ class LocalRuntimeConfigItem {
   final String key;
   final String labelZh;
   final String descriptionZh;
+  final String groupZh;
+  final String placeholder;
+  final String setupHintZh;
   final bool configured;
   final bool secret;
   final String source;
@@ -607,6 +613,9 @@ class LocalRuntimeConfigItem {
       key: _string(json['key']),
       labelZh: _string(json['label_zh']),
       descriptionZh: _string(json['description_zh']),
+      groupZh: _string(json['group_zh']),
+      placeholder: _string(json['placeholder']),
+      setupHintZh: _string(json['setup_hint_zh']),
       configured: _bool(json['configured']),
       secret: _bool(json['secret']),
       source: _string(json['source']),

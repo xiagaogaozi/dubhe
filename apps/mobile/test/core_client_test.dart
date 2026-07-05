@@ -529,6 +529,9 @@ void main() {
                 "key": "DUBHE_LLM_MODEL",
                 "label_zh": "AI 模型名称",
                 "description_zh": "模型名",
+                "group_zh": "AI 模型",
+                "placeholder": "服务商提供的 model id",
+                "setup_hint_zh": "复制控制台里的模型 ID。",
                 "configured": true,
                 "secret": false,
                 "source": "local_file",
@@ -539,6 +542,9 @@ void main() {
                 "key": "FINNHUB_API_KEY",
                 "label_zh": "Finnhub 授权新闻 Key",
                 "description_zh": "密钥",
+                "group_zh": "授权新闻源",
+                "placeholder": "Finnhub 控制台 API key",
+                "setup_hint_zh": "生产使用前确认授权条款。",
                 "configured": true,
                 "secret": true,
                 "source": "local_file",
@@ -559,7 +565,10 @@ void main() {
     final config = await client.fetchLocalRuntimeConfig();
     expect(config.exists, isTrue);
     expect(config.items.first.maskedValue, 'gpt-test');
+    expect(config.items.first.groupZh, 'AI 模型');
+    expect(config.items.first.placeholder, contains('model id'));
     expect(config.items.last.secret, isTrue);
+    expect(config.items.last.setupHintZh, contains('授权条款'));
     expect(config.items.last.maskedValue, '••••oken');
 
     final updated = await client.updateLocalRuntimeConfig(

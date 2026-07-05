@@ -214,6 +214,9 @@ class LocalRuntimeConfigItem(BaseModel):
     key: str
     label_zh: str
     description_zh: str
+    group_zh: str | None = None
+    placeholder: str | None = None
+    setup_hint_zh: str | None = None
     configured: bool
     secret: bool
     source: Literal["local_file", "process_env", "missing"] = "missing"
