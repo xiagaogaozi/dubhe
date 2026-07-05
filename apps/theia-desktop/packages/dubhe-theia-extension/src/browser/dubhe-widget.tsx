@@ -306,6 +306,7 @@ type SyncEvent = {
 type WorkspaceSnapshot = {
   workspace: Workspace;
   watchlist: WatchlistItem[];
+  strategy_drafts: StrategyDraft[];
   events: SyncEvent[];
   server_sequence: number;
 };
@@ -508,6 +509,7 @@ function DubheWorkbench(): React.ReactElement {
     () => newsEvents.find((event) => event.id === selectedNewsId) ?? newsEvents[0] ?? fallbackNewsEvent,
     [newsEvents, selectedNewsId],
   );
+  const workspaceStrategyDrafts = workspaceSnapshot?.strategy_drafts ?? [];
   const selectedMarketLabel = marketOptions.find((option) => option.value === market)?.label ?? market;
   const canManageRisk = session?.role === 'admin' || session?.role === 'risk_manager';
   const enabledAdapterCount = systemStatus?.news_adapters.filter((adapter) => adapter.enabled).length ?? 0;
@@ -919,6 +921,21 @@ function DubheWorkbench(): React.ReactElement {
     });
   }
 
+  function loadWorkspaceStrategyDraft(draft: StrategyDraft): void {
+    const workspace = blocklyWorkspaceRef.current;
+    setStrategyDraft(draft);
+    setStrategyWorkshopForm(strategySpecToWorkshopForm(draft.spec));
+    setStrategyWorkshopSpec(draft.spec);
+    setStrategyValidation({ valid: true, reasons_zh: [] });
+    setBacktestResult(null);
+    setPaperOrder(null);
+    if (workspace) {
+      workspace.clear();
+      Blockly.serialization.workspaces.load(strategySpecToBlocklyState(draft.spec), workspace);
+    }
+    appendLog('positive', `已载入工作区策略草案：${draft.name}。`);
+  }
+
   async function runBacktest(): Promise<void> {
     if (!strategyDraft) {
       appendLog('warning', '请先生成策略草案，再运行回测。');
@@ -1279,6 +1296,7 @@ function DubheWorkbench(): React.ReactElement {
                 </div>
                 <div style={styles.syncMetrics}>
                   <Metric label="自选股" value={`${workspaceSnapshot.watchlist.length}`} tone="neutral" compact />
+                  <Metric label="策略草案" value={`${workspaceStrategyDrafts.length}`} tone="neutral" compact />
                   <Metric label="同步事件" value={`${workspaceSnapshot.events.length}`} tone="neutral" compact />
                   <Metric label="服务器序号" value={`${workspaceSnapshot.server_sequence}`} tone="positive" compact />
                   <Metric label="实时连接" value={syncConnectionStatus} tone={syncConnectionTone(syncConnectionStatus)} compact />
@@ -1557,6 +1575,27 @@ function DubheWorkbench(): React.ReactElement {
                       <p style={styles.statusMessage}>
                         当前标的：{strategyWorkshopSpec.asset_universe.join('、')} · 数据：{strategyWorkshopSpec.data_dependencies.join('、')}
                       </p>
+                    )}
+                  </div>
+                  <div style={styles.workspaceDraftList}>
+                    <div style={styles.auditHeaderLine}>
+                      <strong style={styles.statusName}>工作区草案</strong>
+                      <span style={styles.smallMeta}>{workspaceStrategyDrafts.length} 个</span>
+                    </div>
+                    {workspaceStrategyDrafts.length === 0 ? (
+                      <p style={styles.statusMessage}>保存到工作区后，其他设备也会同步看到。</p>
+                    ) : (
+                      workspaceStrategyDrafts.slice(0, 3).map((draft) => (
+                        <div style={styles.workspaceDraftRow} key={draft.id}>
+                          <div>
+                            <strong style={styles.statusName}>{draft.name}</strong>
+                            <p style={styles.statusMessage}>{draft.strategy_version_id} · {shortTime(draft.created_at)}</p>
+                          </div>
+                          <button style={styles.inlineTextButton} type="button" onClick={() => loadWorkspaceStrategyDraft(draft)}>
+                            使用
+                          </button>
+                        </div>
+                      ))
                     )}
                   </div>
                 </div>
@@ -2104,6 +2143,49 @@ function createStrategySpecFromBlockly(
     rebalance_rule: form.rebalanceRule || defaultStrategyWorkshopForm.rebalanceRule,
     data_dependencies: dataDependencies,
     broker_permissions: form.paperOnly ? ['paper'] : [],
+  };
+}
+
+function strategySpecToWorkshopForm(spec: StrategySpec): StrategyWorkshopForm {
+  return {
+    strategyName: spec.strategy_name || defaultStrategyWorkshopForm.strategyName,
+    timeframe: spec.timeframe || defaultStrategyWorkshopForm.timeframe,
+    rebalanceRule: spec.rebalance_rule || defaultStrategyWorkshopForm.rebalanceRule,
+    maxOrderNotional: Number(spec.risk_limits.max_order_notional) || defaultStrategyWorkshopForm.maxOrderNotional,
+    includeNews: spec.data_dependencies.includes('news'),
+    includeMarketBars: spec.data_dependencies.includes('market_bars'),
+    paperOnly: spec.broker_permissions.includes('paper'),
+  };
+}
+
+function strategySpecToBlocklyState(spec: StrategySpec): typeof defaultStrategyBlocklyState {
+  return {
+    blocks: {
+      languageVersion: 0,
+      blocks: [
+        {
+          type: 'text',
+          id: 'entry_rule_loaded',
+          x: 28,
+          y: 28,
+          fields: { TEXT: `入场：${spec.entry_rules.join('；') || '新闻情绪为正面且影响分大于 0.7'}` },
+        },
+        {
+          type: 'text',
+          id: 'exit_rule_loaded',
+          x: 28,
+          y: 102,
+          fields: { TEXT: `出场：${spec.exit_rules.join('；') || '新闻影响消退或触发止损'}` },
+        },
+        {
+          type: 'text',
+          id: 'data_rule_loaded',
+          x: 28,
+          y: 176,
+          fields: { TEXT: `数据：${spec.data_dependencies.join(', ') || 'news, market_bars'}` },
+        },
+      ],
+    },
   };
 }
 
@@ -2864,6 +2946,22 @@ const styles = {
     border: '1px solid #e1e8e4',
     borderRadius: 8,
     background: '#fbfcfb',
+  } as React.CSSProperties,
+  workspaceDraftList: {
+    display: 'grid',
+    gap: 8,
+    padding: 10,
+    border: '1px solid #e1e8e4',
+    borderRadius: 8,
+    background: '#fbfcfb',
+  } as React.CSSProperties,
+  workspaceDraftRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 8,
+    borderTop: '1px solid #e5ebe8',
   } as React.CSSProperties,
   splitPanels: {
     display: 'grid',
