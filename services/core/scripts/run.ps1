@@ -6,6 +6,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $serviceRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = Split-Path -Parent (Split-Path -Parent $serviceRoot)
+$configLoader = Join-Path $repoRoot "scripts\dubhe-config.ps1"
+if (Test-Path $configLoader) {
+    . $configLoader
+    Import-DubheLocalConfig -RepoRoot $repoRoot | Out-Null
+}
+
 Set-Location $serviceRoot
 
 if (-not (Test-Path ".venv")) {

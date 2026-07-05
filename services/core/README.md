@@ -35,6 +35,8 @@ services/core/data/dubhe-core.sqlite
 $env:DUBHE_CORE_DB_PATH="D:\dubhe-data\dubhe-core.sqlite"
 ```
 
+不会命令行的 Windows 用户也可以双击仓库根目录的 `Configure-Dubhe.cmd`，在打开的 `config\dubhe.local.env` 中启用 `DUBHE_CORE_DB_PATH`。
+
 `data/` 已加入忽略规则，不会提交本地运行数据。
 
 ## 本地认证与权限
@@ -89,6 +91,8 @@ $env:DUBHE_LLM_BASE_URL="https://api.openai.com/v1"
 
 未配置 `DUBHE_LLM_MODEL` 时，Core 会继续使用本地确定性安全兜底。配置官方 OpenAI `/v1` 地址时必须提供 `DUBHE_LLM_API_KEY`；本地无鉴权兼容服务可以只配置 `DUBHE_LLM_MODEL` 和 `DUBHE_LLM_BASE_URL`。模型输出会被限定为中文研究答复、下一步动作和安全提示，不会获得下单能力。
 
+如果不想手动设置环境变量，可以双击仓库根目录的 `Configure-Dubhe.cmd`，在本机配置文件中启用同名配置项；Core 启动脚本会自动加载它。
+
 纸面卖出会先校验当前持仓；空仓或超持仓卖出会被拦截，不会生成模拟券商回报，也不会写出负持仓。
 
 生产版必须替换为正式 OIDC/企业身份、真实 MFA、刷新令牌、密码策略、不可篡改审计存储和更完整的管理员 UI。当前 PBKDF2 密码哈希、本地 MFA 和 SQLite 审计日志只用于最小可运行链路。
@@ -104,6 +108,8 @@ $env:DUBHE_SEC_USER_AGENT="Dubhe/0.1 your-email@example.com"
 ```
 
 未配置 key 时，对应 provider 会返回中文 `skipped` 状态，并自动回退到 SEC/GDELT 或本地 fixture，不会导致客户端崩溃。商业源的正文存储、二次展示和 AI 处理范围必须以供应商合同为准；Core 当前只标准化标题、来源、URL、时间、标的、事件类型和 license flags。
+
+Windows 本地运行时也可以通过 `Configure-Dubhe.cmd` 填写这些 key。真实配置保存在 `config\dubhe.local.env`，该文件已被 Git 忽略；仓库只提交无密钥的 `config\dubhe.local.env.example` 模板。
 
 配置体检接口：
 

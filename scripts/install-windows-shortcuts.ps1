@@ -44,6 +44,11 @@ $entries = @(
         description = "Start Dubhe Core and open Dubhe Desktop."
     },
     @{
+        name = "Configure Dubhe"
+        file = Join-Path $repoRoot "Configure-Dubhe.cmd"
+        description = "Open Dubhe local runtime configuration."
+    },
+    @{
         name = "Check Dubhe"
         file = Join-Path $repoRoot "Check-Dubhe.cmd"
         description = "Check local Dubhe Core, desktop, mobile toolchain, and package readiness."

@@ -133,6 +133,7 @@ function Stop-DubheCorePort {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$configLoader = Join-Path $repoRoot "scripts\dubhe-config.ps1"
 $coreRoot = Join-Path $repoRoot "services\core"
 $theiaRoot = Join-Path $repoRoot "apps\theia-desktop"
 $coreRunScript = Join-Path $coreRoot "scripts\run.ps1"
@@ -145,6 +146,11 @@ $coreLog = Join-Path $runRoot "core.log"
 $coreErrorLog = Join-Path $runRoot "core.err.log"
 $desktopLog = Join-Path $runRoot "theia.log"
 $coreUrl = "http://127.0.0.1:$CorePort"
+
+if (Test-Path $configLoader) {
+    . $configLoader
+    Import-DubheLocalConfig -RepoRoot $repoRoot | Out-Null
+}
 
 New-Item -ItemType Directory -Force -Path $runRoot | Out-Null
 
