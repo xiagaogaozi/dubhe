@@ -137,6 +137,18 @@ type LLMRuntimeStatus = {
   message_zh: string;
 };
 
+type InstallPackageStatus = {
+  platform: 'windows' | 'macos' | 'android' | 'ios';
+  label_zh: string;
+  artifact_type: string;
+  available: boolean;
+  local_path?: string | null;
+  size_bytes: number;
+  build_channel_zh: string;
+  message_zh: string;
+  next_step_zh: string;
+};
+
 type SystemStatusResponse = {
   service: string;
   version: string;
@@ -146,6 +158,7 @@ type SystemStatusResponse = {
   config_items: RuntimeConfigStatus[];
   news_adapters: NewsAdapterRuntimeStatus[];
   news_coverage?: NewsMarketCoverageStatus[];
+  install_packages?: InstallPackageStatus[];
   llm?: LLMRuntimeStatus;
   trading: TradingRuntimeStatus;
   generated_at: string;
@@ -2215,6 +2228,27 @@ function DubheWorkbench(): React.ReactElement {
             )}
           </SidePanel>
 
+          <SidePanel
+            title="安装包状态"
+            meta={systemStatus ? packageSummary(systemStatus.install_packages ?? []) : '待检查'}
+          >
+            {systemStatus ? (
+              <div style={styles.statusList}>
+                {(systemStatus.install_packages ?? []).map((item) => (
+                  <StatusRow
+                    key={`${item.platform}-${item.artifact_type}`}
+                    label={item.label_zh}
+                    value={item.available ? packageSize(item.size_bytes) : '待构建'}
+                    tone={item.available ? 'positive' : 'warning'}
+                    message={packageMessage(item)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p style={styles.bodyText}>连接 Core 后显示 Windows、macOS、Android 和 iOS 的本机/CI 产物状态。</p>
+            )}
+          </SidePanel>
+
           <SidePanel title="新闻源状态" meta={liveNews ? 'live' : 'fixture'}>
             {providerStatus.length > 0 ? (
               providerStatus.slice(0, 4).map((status) => (
@@ -3089,6 +3123,26 @@ function coverageMessage(coverage: NewsMarketCoverageStatus): string {
     coverage.available_sources_zh.length > 0 ? `可用：${coverage.available_sources_zh.join('、')}` : '',
     coverage.missing_sources_zh.length > 0 ? `待补：${coverage.missing_sources_zh.slice(0, 4).join('、')}` : '',
     `下一步：${coverage.next_step_zh}`,
+  ].filter(Boolean).join(' ');
+}
+
+function packageSummary(packages: InstallPackageStatus[]): string {
+  if (packages.length === 0) return '待检查';
+  const readyCount = packages.filter((item) => item.available).length;
+  return `${readyCount}/${packages.length}`;
+}
+
+function packageSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '未生成';
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function packageMessage(item: InstallPackageStatus): string {
+  return [
+    item.message_zh,
+    item.local_path ? `路径：${item.local_path}` : '',
+    `构建方式：${item.build_channel_zh}`,
+    `下一步：${item.next_step_zh}`,
   ].filter(Boolean).join(' ');
 }
 

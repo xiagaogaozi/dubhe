@@ -464,6 +464,30 @@ void main() {
                 "next_step_zh": "补齐授权新闻 key。"
               }
             ],
+            "install_packages": [
+              {
+                "platform": "windows",
+                "label_zh": "Windows 便携版",
+                "artifact_type": "portable-exe",
+                "available": true,
+                "local_path": "D:/github/dubhe-main/apps/theia-desktop/app/dist/Dubhe-0.1.0-win-x64-portable.exe",
+                "size_bytes": 115711072,
+                "build_channel_zh": "本机 electron-builder",
+                "message_zh": "可直接拷贝运行。",
+                "next_step_zh": "需要重新生成时执行 electron-builder。"
+              },
+              {
+                "platform": "ios",
+                "label_zh": "iOS 应用包",
+                "artifact_type": "runner-app",
+                "available": false,
+                "local_path": "",
+                "size_bytes": 0,
+                "build_channel_zh": "macOS CI / Xcode",
+                "message_zh": "当前 Windows 本机不能生成 iOS 安装包。",
+                "next_step_zh": "在 macOS + Xcode 中构建。"
+              }
+            ],
             "trading": {
               "paper_broker_enabled": true,
               "live_trading_enabled": false,
@@ -507,6 +531,11 @@ void main() {
       status.newsCoverage.last.missingSourcesZh,
       contains('FINNHUB_API_KEY'),
     );
+    expect(status.installPackages, hasLength(2));
+    expect(status.installPackages.first.available, isTrue);
+    expect(status.installPackages.first.sizeBytes, 115711072);
+    expect(status.installPackages.last.platform, 'ios');
+    expect(status.installPackages.last.available, isFalse);
   });
 
   test('smoke workflow report parses status and steps', () async {

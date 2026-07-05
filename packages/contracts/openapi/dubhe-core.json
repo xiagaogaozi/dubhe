@@ -2855,6 +2855,71 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "InstallPackageStatus": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "windows",
+              "macos",
+              "android",
+              "ios"
+            ],
+            "title": "Platform"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "artifact_type": {
+            "type": "string",
+            "title": "Artifact Type"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "local_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Path"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "default": 0
+          },
+          "build_channel_zh": {
+            "type": "string",
+            "title": "Build Channel Zh"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "label_zh",
+          "artifact_type",
+          "available",
+          "build_channel_zh",
+          "message_zh",
+          "next_step_zh"
+        ],
+        "title": "InstallPackageStatus"
+      },
       "KillSwitchState": {
         "properties": {
           "enabled": {
@@ -4409,6 +4474,13 @@
             },
             "type": "array",
             "title": "News Coverage"
+          },
+          "install_packages": {
+            "items": {
+              "$ref": "#/components/schemas/InstallPackageStatus"
+            },
+            "type": "array",
+            "title": "Install Packages"
           },
           "llm": {
             "$ref": "#/components/schemas/LLMRuntimeStatus"

@@ -121,7 +121,7 @@ Windows 本地运行时也可以通过 `Configure-Dubhe.cmd` 填写这些 key。
 GET /v1/system/status
 ```
 
-该接口只返回 `configured: true/false`、中文说明和适配器启用状态，不会返回任何 API key 或 User-Agent 原始值。桌面端可用它展示“数据源配置 / 系统状态”面板。
+该接口只返回 `configured: true/false`、中文说明、适配器启用状态、市场新闻覆盖矩阵和本机/CI 安装包状态，不会返回任何 API key 或 User-Agent 原始值。桌面端可用它展示“数据源配置 / 系统状态 / 安装包状态”面板。
 
 主链路烟测报告接口：
 

@@ -209,6 +209,18 @@ class LLMRuntimeStatus(BaseModel):
     message_zh: str
 
 
+class InstallPackageStatus(BaseModel):
+    platform: Literal["windows", "macos", "android", "ios"]
+    label_zh: str
+    artifact_type: str
+    available: bool
+    local_path: str | None = None
+    size_bytes: int = 0
+    build_channel_zh: str
+    message_zh: str
+    next_step_zh: str
+
+
 class SystemStatusResponse(BaseModel):
     service: str = "dubhe-core"
     version: str = "0.1.0"
@@ -218,6 +230,7 @@ class SystemStatusResponse(BaseModel):
     config_items: list[RuntimeConfigStatus] = Field(default_factory=list)
     news_adapters: list[NewsAdapterRuntimeStatus] = Field(default_factory=list)
     news_coverage: list[NewsMarketCoverageStatus] = Field(default_factory=list)
+    install_packages: list[InstallPackageStatus] = Field(default_factory=list)
     llm: LLMRuntimeStatus
     trading: TradingRuntimeStatus
     generated_at: datetime = Field(default_factory=utc_now)

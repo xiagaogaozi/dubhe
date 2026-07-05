@@ -50,6 +50,25 @@ function Resolve-ToolCommand {
     return $null
 }
 
+function Resolve-NewestFile {
+    param(
+        [string]$Directory,
+        [string]$Pattern
+    )
+
+    if (-not (Test-Path $Directory)) {
+        return $null
+    }
+    $files = @(
+        Get-ChildItem -Path $Directory -Filter $Pattern -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
+    )
+    if ($files.Count -eq 0) {
+        return $null
+    }
+    return $files[0].FullName
+}
+
 function Test-CoreHealth {
     param([string]$Url)
 
@@ -164,7 +183,11 @@ $coreRunScript = Join-Path $coreRoot "scripts\run.ps1"
 $coreTestScript = Join-Path $coreRoot "scripts\test.ps1"
 $coreSmokeScript = Join-Path $repoRoot "scripts\smoke-core-workflow.ps1"
 $desktopExe = Join-Path $theiaRoot "app\dist\win-unpacked\Dubhe.exe"
+$desktopDist = Join-Path $theiaRoot "app\dist"
+$windowsSetup = Resolve-NewestFile $desktopDist "Dubhe-*-win-x64-setup.exe"
+$windowsPortable = Resolve-NewestFile $desktopDist "Dubhe-*-win-x64-portable.exe"
 $mobileDebugApk = Join-Path $mobileRoot "build\app\outputs\flutter-apk\app-debug.apk"
+$mobileReleaseAab = Join-Path $mobileRoot "build\app\outputs\bundle\release\app-release.aab"
 $nodeExe = Resolve-ToolCommand "node" (Join-Path $env:LOCALAPPDATA "DubheToolchains\node-v22.23.1-win-x64\node.exe")
 $yarnCmd = Resolve-ToolCommand "yarn" (Join-Path $env:LOCALAPPDATA "DubheToolchains\node-v22.23.1-win-x64\yarn.cmd")
 $flutterExe = Resolve-ToolCommand "flutter" (Join-Path $env:LOCALAPPDATA "DubheToolchains\flutter\bin\flutter.bat")
@@ -246,6 +269,18 @@ if ($packagedDesktopReady) {
     Add-Check (New-Check "桌面端" "Windows 桌面产物" "warn" "未找到已打包 Dubhe.exe；启动脚本会回退到 Theia 开发启动。")
 }
 
+if ($windowsSetup) {
+    Add-Check (New-Check "安装包" "Windows setup" "ok" $windowsSetup)
+} else {
+    Add-Check (New-Check "安装包" "Windows setup" "warn" "尚未生成 Windows setup；可在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win nsis。")
+}
+
+if ($windowsPortable) {
+    Add-Check (New-Check "安装包" "Windows portable" "ok" $windowsPortable)
+} else {
+    Add-Check (New-Check "安装包" "Windows portable" "warn" "尚未生成 Windows portable；可在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win portable。")
+}
+
 if (Test-Path (Join-Path $theiaRoot "node_modules")) {
     Add-Check (New-Check "桌面端" "依赖目录" "ok" "apps/theia-desktop/node_modules 已存在。")
 } else {
@@ -271,10 +306,18 @@ if (Test-Path $androidSdk) {
 }
 
 if (Test-Path $mobileDebugApk) {
-    Add-Check (New-Check "移动端" "Android debug APK" "ok" $mobileDebugApk)
+    Add-Check (New-Check "安装包" "Android debug APK" "ok" $mobileDebugApk)
 } else {
-    Add-Check (New-Check "移动端" "Android debug APK" "warn" "尚未生成 debug APK；可在 apps/mobile 执行 flutter build apk --debug。")
+    Add-Check (New-Check "安装包" "Android debug APK" "warn" "尚未生成 debug APK；可在 apps/mobile 执行 flutter build apk --debug。")
 }
+
+if (Test-Path $mobileReleaseAab) {
+    Add-Check (New-Check "安装包" "Android release AAB" "ok" $mobileReleaseAab)
+} else {
+    Add-Check (New-Check "安装包" "Android release AAB" "warn" "尚未生成 release AAB；正式分发前还需要签名、图标和商店元数据。")
+}
+
+Add-Check (New-Check "安装包" "macOS / iOS" "warn" "当前 Windows 本机不能生成 macOS/iOS 包；请在 macOS runner 启用 docs/ci/theia-desktop.yml 和 docs/ci/mobile.yml。")
 
 if ($lanCoreUrls.Count -eq 0) {
     Add-Check (New-Check "移动端" "手机连接地址" "warn" "未检测到可用局域网 IPv4 地址；真机需要电脑和手机在同一 Wi-Fi/局域网。")

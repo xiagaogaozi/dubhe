@@ -57,13 +57,37 @@ def test_health() -> None:
     assert response.json() == {"status": "ok", "service": "dubhe-core"}
 
 
-def test_system_status_reports_missing_provider_config(monkeypatch) -> None:
+def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
     monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
     monkeypatch.delenv("DUBHE_SEC_USER_AGENT", raising=False)
     monkeypatch.delenv("DUBHE_LLM_MODEL", raising=False)
     monkeypatch.delenv("DUBHE_LLM_BASE_URL", raising=False)
     monkeypatch.delenv("DUBHE_LLM_API_KEY", raising=False)
+    monkeypatch.setenv("DUBHE_REPO_ROOT", str(tmp_path))
+
+    windows_setup = (
+        tmp_path
+        / "apps"
+        / "theia-desktop"
+        / "app"
+        / "dist"
+        / "Dubhe-0.1.0-win-x64-setup.exe"
+    )
+    windows_setup.parent.mkdir(parents=True, exist_ok=True)
+    windows_setup.write_bytes(b"setup")
+    android_apk = (
+        tmp_path
+        / "apps"
+        / "mobile"
+        / "build"
+        / "app"
+        / "outputs"
+        / "flutter-apk"
+        / "app-debug.apk"
+    )
+    android_apk.parent.mkdir(parents=True, exist_ok=True)
+    android_apk.write_bytes(b"apk")
 
     response = client.get("/v1/system/status")
 
@@ -98,8 +122,19 @@ def test_system_status_reports_missing_provider_config(monkeypatch) -> None:
     assert coverage["US"]["licensed_source_ready"] is False
     assert "FINNHUB_API_KEY" in coverage["US"]["missing_sources_zh"]
 
+    packages = {(item["platform"], item["artifact_type"]): item for item in body["install_packages"]}
+    assert packages[("windows", "nsis-setup")]["available"] is True
+    assert packages[("windows", "nsis-setup")]["size_bytes"] == 5
+    assert packages[("android", "debug-apk")]["available"] is True
+    assert packages[("android", "debug-apk")]["size_bytes"] == 3
+    assert packages[("macos", "dmg-or-zip")]["available"] is False
+    assert packages[("ios", "runner-app")]["available"] is False
 
-def test_system_status_reports_configured_keys_without_leaking_values(monkeypatch) -> None:
+
+def test_system_status_reports_configured_keys_without_leaking_values(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("DUBHE_REPO_ROOT", str(tmp_path))
     monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-super-secret-token")
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-super-secret-token")
     monkeypatch.setenv("DUBHE_SEC_USER_AGENT", "Dubhe Test status-secret@example.com")

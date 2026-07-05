@@ -510,6 +510,7 @@ class SystemStatus {
     required this.configItems,
     required this.newsAdapters,
     required this.newsCoverage,
+    required this.installPackages,
   });
 
   final String service;
@@ -524,6 +525,7 @@ class SystemStatus {
   final List<RuntimeConfigItem> configItems;
   final List<NewsAdapterReadiness> newsAdapters;
   final List<NewsMarketCoverage> newsCoverage;
+  final List<InstallPackageReadiness> installPackages;
 
   int get missingConfigCount =>
       configItems.where((item) => !item.configured).length;
@@ -558,6 +560,9 @@ class SystemStatus {
       newsCoverage: _mapList(
         json['news_coverage'],
       ).map(NewsMarketCoverage.fromJson).toList(),
+      installPackages: _mapList(
+        json['install_packages'],
+      ).map(InstallPackageReadiness.fromJson).toList(),
     );
   }
 }
@@ -876,6 +881,44 @@ class NewsMarketCoverage {
       productionReady: _bool(json['production_ready']),
       availableSourcesZh: _stringList(json['available_sources_zh']),
       missingSourcesZh: _stringList(json['missing_sources_zh']),
+      messageZh: _string(json['message_zh']),
+      nextStepZh: _string(json['next_step_zh']),
+    );
+  }
+}
+
+class InstallPackageReadiness {
+  InstallPackageReadiness({
+    required this.platform,
+    required this.labelZh,
+    required this.artifactType,
+    required this.available,
+    required this.localPath,
+    required this.sizeBytes,
+    required this.buildChannelZh,
+    required this.messageZh,
+    required this.nextStepZh,
+  });
+
+  final String platform;
+  final String labelZh;
+  final String artifactType;
+  final bool available;
+  final String localPath;
+  final int sizeBytes;
+  final String buildChannelZh;
+  final String messageZh;
+  final String nextStepZh;
+
+  factory InstallPackageReadiness.fromJson(Map<String, dynamic> json) {
+    return InstallPackageReadiness(
+      platform: _string(json['platform']),
+      labelZh: _string(json['label_zh']),
+      artifactType: _string(json['artifact_type']),
+      available: _bool(json['available']),
+      localPath: _string(json['local_path']),
+      sizeBytes: _int(json['size_bytes']),
+      buildChannelZh: _string(json['build_channel_zh']),
       messageZh: _string(json['message_zh']),
       nextStepZh: _string(json['next_step_zh']),
     );

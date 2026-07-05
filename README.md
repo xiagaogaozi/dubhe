@@ -70,7 +70,7 @@ cd D:\github\dubhe-main
 .\scripts\smoke-core-workflow.ps1
 ```
 
-`check-local-dubhe.ps1` 会用中文检查 Core、桌面端、移动端工具链、新闻源配置、纸面/实盘交易开关和本地安装包状态；它只读取环境，不会修改系统。`start-local-dubhe.ps1 -RunCheck` 会先启动 Core，再输出同一份体检结果，然后打开已打包的 Dubhe 桌面端；如果没有打包产物，会回退到 Theia 开发启动。
+`check-local-dubhe.ps1` 会用中文检查 Core、桌面端、移动端工具链、新闻源配置、纸面/实盘交易开关和本地安装包状态；它会列出 Windows setup/portable、Android APK/AAB 以及 macOS/iOS 的构建缺口，只读取环境，不会修改系统。`start-local-dubhe.ps1 -RunCheck` 会先启动 Core，再输出同一份体检结果，然后打开已打包的 Dubhe 桌面端；如果没有打包产物，会回退到 Theia 开发启动。
 
 `smoke-core-workflow.ps1` 会在已运行的 Core 上执行主链路烟测：注册本地账号、读取首次使用清单、刷新 fixture 新闻、生成中文分析、询问 AI 分析师、生成策略草案、运行 deterministic replay 回测、提交 1 股纸面订单、验证组合入账和工作区同步。报告会写入 `.dubhe-run\smoke-core-workflow.json`；不会连接真实券商或发送真实订单。
 

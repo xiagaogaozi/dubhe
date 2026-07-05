@@ -3039,6 +3039,10 @@ class _SystemStatusPanel extends StatelessWidget {
             const Divider(height: 24),
             _NewsCoveragePanel(coverage: current.newsCoverage),
           ],
+          if (current.installPackages.isNotEmpty) ...[
+            const Divider(height: 24),
+            _InstallPackagePanel(packages: current.installPackages),
+          ],
           const Divider(height: 24),
           Text('配置项', style: Theme.of(context).textTheme.titleSmall),
           ...current.configItems.map(
@@ -3063,6 +3067,59 @@ class _SystemStatusPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _InstallPackagePanel extends StatelessWidget {
+  const _InstallPackagePanel({required this.packages});
+
+  final List<InstallPackageReadiness> packages;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('安装包状态', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        ...packages.map(
+          (item) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: Icon(
+              item.available
+                  ? Icons.download_done_outlined
+                  : Icons.pending_actions_outlined,
+            ),
+            title: Text(item.labelZh),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${item.messageZh}\n${item.nextStepZh}'),
+                if (item.localPath.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    item.localPath,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+            trailing: Text(
+              item.available
+                  ? _packageSize(item.sizeBytes)
+                  : item.buildChannelZh,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _packageSize(int bytes) {
+  if (bytes <= 0) return '未生成';
+  final mb = bytes / (1024 * 1024);
+  return '${mb.toStringAsFixed(1)} MB';
 }
 
 class _NewsCoveragePanel extends StatelessWidget {

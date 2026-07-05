@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +25,7 @@ from .models import (
     BacktestResult,
     BrokerOrder,
     DeviceRevocation,
+    InstallPackageStatus,
     KillSwitchState,
     KillSwitchUpdateRequest,
     LocalRuntimeConfigResponse,
@@ -67,7 +69,7 @@ from .models import (
 from .llm import llm_runtime_status
 from .news_sources import fetch_news_feed
 from .risk import evaluate_order_intent
-from .runtime_config import local_runtime_config_response, update_local_runtime_config
+from .runtime_config import local_runtime_config_response, repo_root, update_local_runtime_config
 from .simulation import submit_paper_order
 from .smoke_report import read_smoke_workflow_report
 from .store import store
@@ -260,6 +262,7 @@ def system_status() -> SystemStatusResponse:
         ],
         news_adapters=news_adapters,
         news_coverage=build_news_coverage(news_adapters),
+        install_packages=build_install_package_status(repo_root()),
         llm=llm_status,
         trading=TradingRuntimeStatus(
             paper_broker_enabled=True,
@@ -350,6 +353,121 @@ def build_news_coverage(
             next_step_zh="生产部署前需要接入机构级全球新闻、宏观日历和公告源，并逐项记录授权边界。",
         ),
     ]
+
+
+def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
+    desktop_dist = root / "apps" / "theia-desktop" / "app" / "dist"
+    mobile_build = root / "apps" / "mobile" / "build"
+    windows_setup = _newest_file(desktop_dist, "Dubhe-*-win-x64-setup.exe")
+    windows_portable = _newest_file(desktop_dist, "Dubhe-*-win-x64-portable.exe")
+    android_debug_apk = (
+        mobile_build / "app" / "outputs" / "flutter-apk" / "app-debug.apk"
+    )
+    android_release_aab = (
+        mobile_build / "app" / "outputs" / "bundle" / "release" / "app-release.aab"
+    )
+    macos_package = _newest_file(desktop_dist, "Dubhe-*-mac-*.dmg") or _newest_file(
+        desktop_dist, "Dubhe-*-mac-*.zip"
+    )
+    ios_app = mobile_build / "ios" / "iphoneos" / "Runner.app"
+
+    return [
+        _install_package(
+            platform="windows",
+            label_zh="Windows 安装包",
+            artifact_type="nsis-setup",
+            path=windows_setup,
+            build_channel_zh="本机 electron-builder",
+            ready_zh="可直接在 Windows 上安装；当前未签名，首次运行可能出现系统提示。",
+            missing_zh="尚未生成 Windows setup 安装包。",
+            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win nsis。",
+        ),
+        _install_package(
+            platform="windows",
+            label_zh="Windows 便携版",
+            artifact_type="portable-exe",
+            path=windows_portable,
+            build_channel_zh="本机 electron-builder",
+            ready_zh="可直接拷贝运行；适合当前阶段给测试用户体验。",
+            missing_zh="尚未生成 Windows portable 便携版。",
+            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win portable。",
+        ),
+        _install_package(
+            platform="android",
+            label_zh="Android 调试 APK",
+            artifact_type="debug-apk",
+            path=android_debug_apk,
+            build_channel_zh="本机 Flutter",
+            ready_zh="可安装到 Android 真机或模拟器，用于本地体验和烟测。",
+            missing_zh="尚未生成 Android debug APK。",
+            next_step_zh="在 apps/mobile 执行 flutter build apk --debug --dart-define=DUBHE_CORE_URL=http://10.0.2.2:8000。",
+        ),
+        _install_package(
+            platform="android",
+            label_zh="Android 发布 AAB",
+            artifact_type="release-aab",
+            path=android_release_aab,
+            build_channel_zh="本机 Flutter / CI",
+            ready_zh="已生成 Android app bundle；正式上架前仍需正式签名、图标和商店元数据。",
+            missing_zh="尚未生成 Android release appbundle。",
+            next_step_zh="配置正式签名后，在 apps/mobile 执行 flutter build appbundle --release。",
+        ),
+        _install_package(
+            platform="macos",
+            label_zh="macOS 桌面包",
+            artifact_type="dmg-or-zip",
+            path=macos_package,
+            build_channel_zh="macOS CI / macOS 本机",
+            ready_zh="已找到 macOS 未签名桌面包；正式分发仍需 Apple 签名和公证。",
+            missing_zh="当前 Windows 本机不能生成 macOS 安装包。",
+            next_step_zh="在 macOS runner 启用 docs/ci/theia-desktop.yml，生成 dmg/zip 后再做签名和公证。",
+        ),
+        _install_package(
+            platform="ios",
+            label_zh="iOS 应用包",
+            artifact_type="runner-app",
+            path=ios_app,
+            build_channel_zh="macOS CI / Xcode",
+            ready_zh="已找到 iOS no-codesign app bundle；真机/TestFlight 仍需 Apple Developer 签名。",
+            missing_zh="当前 Windows 本机不能生成 iOS 安装包。",
+            next_step_zh="在 macOS + Xcode 或 docs/ci/mobile.yml 的 iOS job 中构建，并补齐 Bundle ID、证书和描述文件。",
+        ),
+    ]
+
+
+def _install_package(
+    *,
+    platform: str,
+    label_zh: str,
+    artifact_type: str,
+    path: Path | None,
+    build_channel_zh: str,
+    ready_zh: str,
+    missing_zh: str,
+    next_step_zh: str,
+) -> InstallPackageStatus:
+    available = bool(path and path.exists())
+    size_bytes = path.stat().st_size if available and path else 0
+    return InstallPackageStatus(
+        platform=platform,
+        label_zh=label_zh,
+        artifact_type=artifact_type,
+        available=available,
+        local_path=str(path) if path else None,
+        size_bytes=size_bytes,
+        build_channel_zh=build_channel_zh,
+        message_zh=ready_zh if available else missing_zh,
+        next_step_zh=next_step_zh,
+    )
+
+
+def _newest_file(directory: Path, pattern: str) -> Path | None:
+    if not directory.exists():
+        return None
+    files = [path for path in directory.glob(pattern) if path.is_file()]
+    if not files:
+        return None
+    return max(files, key=lambda path: path.stat().st_mtime)
 
 
 @app.get("/v1/system/smoke-report", response_model=SmokeWorkflowReportResponse)
