@@ -412,8 +412,15 @@ class _CompanionHomeState extends State<CompanionHome> {
     if (snapshot.serverSequence > _syncCursor) {
       _syncCursor = snapshot.serverSequence;
     }
+    final syncedBacktest = latestSyncedBacktest(
+      strategyDraft: _strategyDraft,
+      backtestResults: snapshot.backtestResults,
+    );
     setState(() {
       _workspaceSnapshot = snapshot;
+      if (syncedBacktest != null) {
+        _backtestResult = syncedBacktest;
+      }
     });
   }
 
@@ -476,11 +483,18 @@ class _CompanionHomeState extends State<CompanionHome> {
       if (workspaceSnapshot.serverSequence > _syncCursor) {
         _syncCursor = workspaceSnapshot.serverSequence;
       }
+      final syncedBacktest = latestSyncedBacktest(
+        strategyDraft: _strategyDraft,
+        backtestResults: workspaceSnapshot.backtestResults,
+      );
       setState(() {
         _systemStatus = systemStatus;
         _newsFeed = newsFeed;
         _portfolio = portfolio;
         _workspaceSnapshot = workspaceSnapshot;
+        if (syncedBacktest != null) {
+          _backtestResult = syncedBacktest;
+        }
         _approvals = approvals;
         _killSwitch = killSwitch;
         _auditLogs = auditLogs;
@@ -855,9 +869,13 @@ class _CompanionHomeState extends State<CompanionHome> {
   }
 
   void _useSyncedStrategyDraft(StrategyDraft draft) {
+    final syncedBacktest = latestSyncedBacktest(
+      strategyDraft: draft,
+      backtestResults: _workspaceSnapshot?.backtestResults ?? const [],
+    );
     setState(() {
       _strategyDraft = draft;
-      _backtestResult = null;
+      _backtestResult = syncedBacktest;
       _paperOrder = null;
       _tabIndex = 2;
       _message = '已载入同步策略：${draft.name}。';
@@ -1058,6 +1076,7 @@ class _SyncStatusPanel extends StatelessWidget {
             metrics: [
               _Metric('自选股', '${current.watchlist.length} 个'),
               _Metric('策略草案', '${current.strategyDrafts.length} 个'),
+              _Metric('回测', '${current.backtestResults.length} 个'),
               _Metric('同步事件', '${current.events.length} 条'),
               _Metric('实时连接', _syncConnectionStatusZh(syncStatus)),
               _Metric('工作区', current.workspaceId),
@@ -1074,6 +1093,14 @@ class _SyncStatusPanel extends StatelessWidget {
             _InfoCard(
               text:
                   '最近推送：#${lastPushedEvent!.sequence} ${_syncEntityZh(lastPushedEvent!.entityType)} ${_syncEventActionZh(lastPushedEvent!.action)}。',
+              tone: _InfoTone.success,
+            ),
+          ],
+          if (current.backtestResults.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _InfoCard(
+              text:
+                  '最新回测：${current.backtestResults.first.symbol}，收益 ${_percent(current.backtestResults.first.totalReturn)}，最大回撤 ${_percent(current.backtestResults.first.maxDrawdown)}。',
               tone: _InfoTone.success,
             ),
           ],
@@ -1640,6 +1667,22 @@ bool _syncEventTouchesRiskCenter(SyncEvent event) {
   return event.entityType == 'approval_request' ||
       event.entityType == 'risk_decision' ||
       event.entityType == 'kill_switch';
+}
+
+@visibleForTesting
+BacktestResult? latestSyncedBacktest({
+  required StrategyDraft? strategyDraft,
+  required List<BacktestResult> backtestResults,
+}) {
+  if (backtestResults.isEmpty) return null;
+  final strategyVersionId = strategyDraft?.strategyVersionId.trim();
+  if (strategyVersionId != null && strategyVersionId.isNotEmpty) {
+    for (final result in backtestResults) {
+      if (result.strategyVersionId == strategyVersionId) return result;
+    }
+    return null;
+  }
+  return backtestResults.first;
 }
 
 class _BrandHeader extends StatelessWidget {

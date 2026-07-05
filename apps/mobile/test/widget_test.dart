@@ -61,5 +61,51 @@ void main() {
       paperTradeMarket(strategyDraft: draft, event: null, symbol: '0700.HK'),
       'HK',
     );
+
+    final olderBacktest = BacktestResult(
+      id: 'backtest_old',
+      strategyVersionId: 'strategy_other',
+      replayScenario: 'golden_news_sentiment_v1',
+      symbol: 'NVDA',
+      market: 'US',
+      initialCash: 100000,
+      finalEquity: 103000,
+      totalReturn: 0.03,
+      benchmarkReturn: 0.01,
+      maxDrawdown: 0.02,
+      winRate: 0.51,
+      tradeCount: 1,
+      riskNotesZh: const ['旧策略回测'],
+    );
+    final matchingBacktest = BacktestResult(
+      id: 'backtest_match',
+      strategyVersionId: 'strategy_synced',
+      replayScenario: 'golden_news_sentiment_v1',
+      symbol: '0700.HK',
+      market: 'HK',
+      initialCash: 100000,
+      finalEquity: 118000,
+      totalReturn: 0.18,
+      benchmarkReturn: 0.05,
+      maxDrawdown: 0.04,
+      winRate: 0.62,
+      tradeCount: 2,
+      riskNotesZh: const ['匹配同步策略'],
+    );
+
+    expect(
+      latestSyncedBacktest(
+        strategyDraft: draft,
+        backtestResults: [olderBacktest, matchingBacktest],
+      )?.id,
+      'backtest_match',
+    );
+    expect(
+      latestSyncedBacktest(
+        strategyDraft: draft,
+        backtestResults: [olderBacktest],
+      ),
+      isNull,
+    );
   });
 }

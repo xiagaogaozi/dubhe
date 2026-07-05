@@ -132,6 +132,8 @@ Authorization: Bearer dubhe_dev_xxx
 - `paper_orders`
 - `broker_orders`
 - `paper_portfolios`
+- `strategy_drafts`
+- `backtest_results`
 - `events`
 - `server_sequence`
 
@@ -217,4 +219,4 @@ $env:DUBHE_CORE_DB_PATH="D:\dubhe-data\dubhe-core.sqlite"
 - 将当前 SQLite schema 迁移到 PostgreSQL/TimescaleDB。
 - 增加正式 OIDC/企业身份、刷新令牌、真实 MFA、不可篡改审计存储和更完整的管理员 UI。
 - 将 WebSocket 内部实现迁移到 Redis/PostgreSQL pub/sub，减少 SQLite 轮询。
-- 将移动端审批请求、回测进度、风控告警都纳入同一同步事件流。
+- 将长任务回测进度、风控告警和移动端推送通知继续纳入同一同步事件流。

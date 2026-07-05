@@ -307,6 +307,7 @@ type WorkspaceSnapshot = {
   workspace: Workspace;
   watchlist: WatchlistItem[];
   strategy_drafts: StrategyDraft[];
+  backtest_results: BacktestResult[];
   events: SyncEvent[];
   server_sequence: number;
 };
@@ -510,6 +511,7 @@ function DubheWorkbench(): React.ReactElement {
     [newsEvents, selectedNewsId],
   );
   const workspaceStrategyDrafts = workspaceSnapshot?.strategy_drafts ?? [];
+  const workspaceBacktestResults = workspaceSnapshot?.backtest_results ?? [];
   const selectedMarketLabel = marketOptions.find((option) => option.value === market)?.label ?? market;
   const canManageRisk = session?.role === 'admin' || session?.role === 'risk_manager';
   const enabledAdapterCount = systemStatus?.news_adapters.filter((adapter) => adapter.enabled).length ?? 0;
@@ -927,7 +929,7 @@ function DubheWorkbench(): React.ReactElement {
     setStrategyWorkshopForm(strategySpecToWorkshopForm(draft.spec));
     setStrategyWorkshopSpec(draft.spec);
     setStrategyValidation({ valid: true, reasons_zh: [] });
-    setBacktestResult(null);
+    setBacktestResult(latestWorkspaceBacktest(draft, workspaceSnapshot?.backtest_results ?? []));
     setPaperOrder(null);
     if (workspace) {
       workspace.clear();
@@ -1018,6 +1020,10 @@ function DubheWorkbench(): React.ReactElement {
       activeSession.access_token,
     );
     setWorkspaceSnapshot(snapshot);
+    const syncedBacktest = latestWorkspaceBacktest(strategyDraft, snapshot.backtest_results);
+    if (syncedBacktest) {
+      setBacktestResult(syncedBacktest);
+    }
   }
 
   async function loadPortfolio(activeSession = session): Promise<void> {
@@ -1301,6 +1307,7 @@ function DubheWorkbench(): React.ReactElement {
                 <div style={styles.syncMetrics}>
                   <Metric label="自选股" value={`${workspaceSnapshot.watchlist.length}`} tone="neutral" compact />
                   <Metric label="策略草案" value={`${workspaceStrategyDrafts.length}`} tone="neutral" compact />
+                  <Metric label="回测" value={`${workspaceBacktestResults.length}`} tone="neutral" compact />
                   <Metric label="同步事件" value={`${workspaceSnapshot.events.length}`} tone="neutral" compact />
                   <Metric label="服务器序号" value={`${workspaceSnapshot.server_sequence}`} tone="positive" compact />
                   <Metric label="实时连接" value={syncConnectionStatus} tone={syncConnectionTone(syncConnectionStatus)} compact />
@@ -2072,6 +2079,15 @@ function paperTradeMarket(currentMarket: Market, orderSymbol: string, draft: Str
   if (draftMarket) return draftMarket;
   if (currentMarket !== 'GLOBAL') return currentMarket;
   return marketFromSymbol(orderSymbol);
+}
+
+function latestWorkspaceBacktest(draft: StrategyDraft | null, results: BacktestResult[]): BacktestResult | null {
+  if (results.length === 0) return null;
+  const strategyVersionId = draft?.strategy_version_id.trim();
+  if (strategyVersionId) {
+    return results.find((result) => result.strategy_version_id === strategyVersionId) ?? null;
+  }
+  return results[0];
 }
 
 function marketLabel(market: Market): string {

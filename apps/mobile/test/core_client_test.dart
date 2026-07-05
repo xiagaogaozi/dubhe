@@ -147,7 +147,25 @@ void main() {
                 "created_at": "2026-07-05T00:01:00Z"
               }
             ],
-            "backtest_results": [],
+            "backtest_results": [
+              {
+                "id": "backtest_1",
+                "strategy_version_id": "strategy_v_1",
+                "replay_scenario": "golden_news_sentiment_v1",
+                "symbol": "NVDA",
+                "market": "US",
+                "initial_cash": 100000,
+                "final_equity": 112400,
+                "total_return": 0.124,
+                "benchmark_return": 0.08,
+                "max_drawdown": 0.041,
+                "win_rate": 0.58,
+                "trade_count": 2,
+                "risk_notes_zh": ["仅用于纸面验证。"],
+                "equity_curve": [],
+                "generated_at": "2026-07-05T00:02:00Z"
+              }
+            ],
             "events": [
               {
                 "id": "sync_1",
@@ -178,6 +196,8 @@ void main() {
     expect(snapshot.watchlist.single.symbol, 'NVDA');
     expect(snapshot.strategyDrafts.single.name, 'Blockly 新闻情绪策略');
     expect(snapshot.strategyDrafts.single.spec.brokerPermissions, ['paper']);
+    expect(snapshot.backtestResults.single.strategyVersionId, 'strategy_v_1');
+    expect(snapshot.backtestResults.single.totalReturn, 0.124);
     expect(snapshot.events.single.entityType, 'watchlist_item');
   });
 

@@ -541,6 +541,7 @@ class WorkspaceSnapshot {
     required this.workspaceName,
     required this.watchlist,
     required this.strategyDrafts,
+    required this.backtestResults,
     required this.events,
     required this.serverSequence,
   });
@@ -549,6 +550,7 @@ class WorkspaceSnapshot {
   final String workspaceName;
   final List<WatchlistItem> watchlist;
   final List<StrategyDraft> strategyDrafts;
+  final List<BacktestResult> backtestResults;
   final List<SyncEvent> events;
   final int serverSequence;
 
@@ -563,6 +565,9 @@ class WorkspaceSnapshot {
       strategyDrafts: _mapList(
         json['strategy_drafts'],
       ).map(StrategyDraft.fromJson).toList(),
+      backtestResults: _mapList(
+        json['backtest_results'],
+      ).map(BacktestResult.fromJson).toList(),
       events: _mapList(json['events']).map(SyncEvent.fromJson).toList(),
       serverSequence: _int(json['server_sequence']),
     );
