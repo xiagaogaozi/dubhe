@@ -49,6 +49,11 @@ $entries = @(
         description = "Start Dubhe Core for phones on the same Wi-Fi and open Dubhe Desktop."
     },
     @{
+        name = "Build Dubhe User Kit"
+        file = Join-Path $repoRoot "Build-Dubhe-User-Kit.cmd"
+        description = "Gather installers, APKs, guides, checks, and this-PC launchers for internal users."
+    },
+    @{
         name = "Dubhe Mobile Guide"
         file = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
         description = "Open the Chinese phone/tablet install and connection guide."

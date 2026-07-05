@@ -14,6 +14,7 @@
 - 手机/平板可填写的 Core 地址候选：`{{LAN_CORE_URLS}}`
 - 普通启动入口：`{{START_CMD}}`
 - 手机局域网启动入口：`{{START_LAN_CMD}}`
+- 用户交付包入口：`{{USER_KIT_CMD}}`
 - 手机专项向导入口：`{{MOBILE_GUIDE_CMD}}`
 - 本机体检入口：`{{CHECK_CMD}}`
 - 主链路烟测入口：`{{SMOKE_CMD}}`
@@ -70,9 +71,10 @@ http://10.0.2.2:8000
 3. 双击 `Check-Dubhe.cmd`，确认安装包、配置和 Core 状态。
 4. 填完真实 AI/新闻源 key 后，双击 `Test-Dubhe-Services.cmd` 做 live 外部服务体检。
 5. 双击 `Check-Dubhe-Production.cmd` 查看商业生产上线阻断项。
-6. 桌面端登录本地账号，查看 “首次使用清单”。
-7. 如需手机/平板，双击 `Start-Dubhe-LAN.cmd`，再打开 `Open-Dubhe-Mobile-Guide.cmd`。
-8. 双击 `Smoke-Dubhe.cmd` 跑主链路烟测，确认新闻、AI、策略、回测、纸面交易和同步闭环可用。
+6. 需要把当前产物交给本机用户试用时，双击 `Build-Dubhe-User-Kit.cmd`。
+7. 桌面端登录本地账号，查看 “首次使用清单”。
+8. 如需手机/平板，双击 `Start-Dubhe-LAN.cmd`，再打开 `Open-Dubhe-Mobile-Guide.cmd`。
+9. 双击 `Smoke-Dubhe.cmd` 跑主链路烟测，确认新闻、AI、策略、回测、纸面交易和同步闭环可用。
 
 ## 跨端数据互通
 
