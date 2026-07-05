@@ -85,6 +85,17 @@ class CoreClient {
     return SystemStatus.fromJson(_map(json));
   }
 
+  Future<WorkspaceSnapshot> fetchWorkspaceSnapshot({
+    required String workspaceId,
+    int sinceSequence = 0,
+  }) async {
+    final json = await _getJson(
+      '/v1/workspaces/$workspaceId/snapshot',
+      queryParameters: {'since_sequence': '$sinceSequence'},
+    );
+    return WorkspaceSnapshot.fromJson(_map(json));
+  }
+
   Future<NewsAnalysis> analyzeNews(NewsEvent event) async {
     final json = await _postJson('/v1/news/analyze', event.toJson());
     return NewsAnalysis.fromJson(_map(json));
@@ -464,6 +475,81 @@ class NewsAdapterReadiness {
       configured: _bool(json['configured']),
       enabled: _bool(json['enabled']),
       messageZh: _string(json['message_zh']),
+    );
+  }
+}
+
+class WorkspaceSnapshot {
+  WorkspaceSnapshot({
+    required this.workspaceId,
+    required this.workspaceName,
+    required this.watchlist,
+    required this.events,
+    required this.serverSequence,
+  });
+
+  final String workspaceId;
+  final String workspaceName;
+  final List<WatchlistItem> watchlist;
+  final List<SyncEvent> events;
+  final int serverSequence;
+
+  factory WorkspaceSnapshot.fromJson(Map<String, dynamic> json) {
+    final workspace = _map(json['workspace']);
+    return WorkspaceSnapshot(
+      workspaceId: _string(workspace['id']),
+      workspaceName: _string(workspace['name']),
+      watchlist: _mapList(
+        json['watchlist'],
+      ).map(WatchlistItem.fromJson).toList(),
+      events: _mapList(json['events']).map(SyncEvent.fromJson).toList(),
+      serverSequence: _int(json['server_sequence']),
+    );
+  }
+}
+
+class WatchlistItem {
+  WatchlistItem({
+    required this.symbol,
+    required this.name,
+    required this.market,
+    required this.notesZh,
+  });
+
+  final String symbol;
+  final String name;
+  final String market;
+  final String notesZh;
+
+  factory WatchlistItem.fromJson(Map<String, dynamic> json) {
+    return WatchlistItem(
+      symbol: _string(json['symbol']),
+      name: _string(json['name']),
+      market: _string(json['market']),
+      notesZh: _string(json['notes_zh']),
+    );
+  }
+}
+
+class SyncEvent {
+  SyncEvent({
+    required this.sequence,
+    required this.entityType,
+    required this.action,
+    required this.createdAt,
+  });
+
+  final int sequence;
+  final String entityType;
+  final String action;
+  final String createdAt;
+
+  factory SyncEvent.fromJson(Map<String, dynamic> json) {
+    return SyncEvent(
+      sequence: _int(json['sequence']),
+      entityType: _string(json['entity_type']),
+      action: _string(json['action']),
+      createdAt: _string(json['created_at']),
     );
   }
 }

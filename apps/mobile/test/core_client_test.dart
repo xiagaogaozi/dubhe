@@ -86,6 +86,77 @@ void main() {
     expect(portfolio.positions.single.quantity, 1);
   });
 
+  test('workspace snapshot parses watchlist and sync events', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'dubhe_dev_token',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/workspaces/workspace_1/snapshot');
+        expect(request.url.queryParameters['since_sequence'], '0');
+        expect(request.headers['authorization'], 'Bearer dubhe_dev_token');
+        return http.Response(
+          '''
+          {
+            "workspace": {
+              "id": "workspace_1",
+              "owner_user_id": "user_1",
+              "name": "同步测试账户的默认工作区",
+              "created_at": "2026-07-05T00:00:00Z",
+              "updated_at": "2026-07-05T00:00:00Z"
+            },
+            "watchlist": [
+              {
+                "id": "watch_1",
+                "workspace_id": "workspace_1",
+                "symbol": "NVDA",
+                "name": "NVIDIA",
+                "market": "US",
+                "notes_zh": "AI 芯片龙头",
+                "added_at": "2026-07-05T00:00:00Z",
+                "updated_at": "2026-07-05T00:00:00Z"
+              }
+            ],
+            "news_events": [],
+            "analyses": [],
+            "risk_decisions": [],
+            "approval_requests": [],
+            "paper_orders": [],
+            "broker_orders": [],
+            "paper_portfolios": [],
+            "strategy_drafts": [],
+            "backtest_results": [],
+            "events": [
+              {
+                "id": "sync_1",
+                "workspace_id": "workspace_1",
+                "sequence": 1,
+                "entity_type": "watchlist_item",
+                "entity_id": "watch_1",
+                "action": "created",
+                "payload": {"symbol": "NVDA"},
+                "created_at": "2026-07-05T00:00:00Z"
+              }
+            ],
+            "server_sequence": 7
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final snapshot = await client.fetchWorkspaceSnapshot(
+      workspaceId: 'workspace_1',
+    );
+
+    expect(snapshot.workspaceName, '同步测试账户的默认工作区');
+    expect(snapshot.serverSequence, 7);
+    expect(snapshot.watchlist.single.symbol, 'NVDA');
+    expect(snapshot.events.single.entityType, 'watchlist_item');
+  });
+
   test('system status parses configuration readiness', () async {
     final client = CoreClient(
       baseUrl: 'http://127.0.0.1:8019',

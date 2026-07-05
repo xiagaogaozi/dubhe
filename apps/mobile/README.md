@@ -6,6 +6,7 @@ Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中
 
 - 复用 Dubhe Core 本地账号登录和开发期 MFA。
 - 保存用户最近使用的 Core 地址，方便真机、模拟器和局域网环境复用。
+- 查看 `/v1/workspaces/{workspace_id}/snapshot` 工作区快照、服务器同步序号和最近同步事件。
 - 拉取 `/v1/news/feed` 新闻源。
 - 调用 `/v1/news/analyze` 生成中文影响分析。
 - 调用 `/v1/strategy/drafts/from-analysis` 生成策略草案。

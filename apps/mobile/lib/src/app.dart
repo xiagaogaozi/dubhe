@@ -215,6 +215,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
+  WorkspaceSnapshot? _workspaceSnapshot;
   KillSwitchState? _killSwitch;
   List<AuditLogEntry> _auditLogs = const [];
   List<ApprovalRequest> _approvals = const [];
@@ -242,10 +243,14 @@ class _CompanionHomeState extends State<CompanionHome> {
         widget.client.fetchSystemStatus(),
         widget.client.fetchNewsFeed(live: false),
         widget.client.fetchPaperPortfolio(defaultPaperAccountId),
+        widget.client.fetchWorkspaceSnapshot(
+          workspaceId: widget.session.workspaceId,
+        ),
       ]);
       final systemStatus = coreResponses[0] as SystemStatus;
       final newsFeed = coreResponses[1] as NewsFeed;
       final portfolio = coreResponses[2] as PaperPortfolio;
+      final workspaceSnapshot = coreResponses[3] as WorkspaceSnapshot;
       var approvals = <ApprovalRequest>[];
       KillSwitchState? killSwitch;
       var auditLogs = <AuditLogEntry>[];
@@ -277,6 +282,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         _systemStatus = systemStatus;
         _newsFeed = newsFeed;
         _portfolio = portfolio;
+        _workspaceSnapshot = workspaceSnapshot;
         _approvals = approvals;
         _killSwitch = killSwitch;
         _auditLogs = auditLogs;
@@ -641,6 +647,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       _TodayPage(
         session: widget.session,
         systemStatus: _systemStatus,
+        workspaceSnapshot: _workspaceSnapshot,
         newsFeed: _newsFeed,
         portfolio: _portfolio,
         message: _message,
@@ -714,6 +721,7 @@ class _TodayPage extends StatelessWidget {
   const _TodayPage({
     required this.session,
     required this.systemStatus,
+    required this.workspaceSnapshot,
     required this.newsFeed,
     required this.portfolio,
     required this.message,
@@ -722,6 +730,7 @@ class _TodayPage extends StatelessWidget {
 
   final DeviceSession session;
   final SystemStatus? systemStatus;
+  final WorkspaceSnapshot? workspaceSnapshot;
   final NewsFeed? newsFeed;
   final PaperPortfolio? portfolio;
   final String? message;
@@ -756,6 +765,12 @@ class _TodayPage extends StatelessWidget {
             _Metric('USD 权益', _money('USD', usdEquity)),
             _Metric('待审批', session.canReviewApprovals ? '可查看' : '无权限'),
             _Metric(
+              '同步',
+              workspaceSnapshot == null
+                  ? '--'
+                  : '#${workspaceSnapshot!.serverSequence}',
+            ),
+            _Metric(
               '数据源',
               systemStatus == null
                   ? '--'
@@ -764,9 +779,64 @@ class _TodayPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
+        _SyncStatusPanel(snapshot: workspaceSnapshot),
         _SystemStatusPanel(status: systemStatus),
         _ProviderStatusList(statuses: newsFeed?.providerStatus ?? const []),
       ],
+    );
+  }
+}
+
+class _SyncStatusPanel extends StatelessWidget {
+  const _SyncStatusPanel({required this.snapshot});
+
+  final WorkspaceSnapshot? snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = snapshot;
+    if (current == null) {
+      return const _InfoCard(text: '同步状态尚未同步。');
+    }
+
+    final recentEvents = current.events.take(3).toList();
+    return _SectionCard(
+      title: '同步状态',
+      trailing: '序号 ${current.serverSequence}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(current.workspaceName),
+          const SizedBox(height: 12),
+          _MetricGrid(
+            metrics: [
+              _Metric('自选股', '${current.watchlist.length} 个'),
+              _Metric('同步事件', '${current.events.length} 条'),
+              _Metric('工作区', current.workspaceId),
+              _Metric(
+                '最新事件',
+                recentEvents.isEmpty
+                    ? '暂无'
+                    : _syncEventActionZh(recentEvents.first.action),
+              ),
+            ],
+          ),
+          if (recentEvents.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...recentEvents.map(
+              (event) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(
+                  '${_syncEntityZh(event.entityType)} ${_syncEventActionZh(event.action)}',
+                ),
+                subtitle: Text('序号 ${event.sequence}'),
+                trailing: Text(_shortTimestamp(event.createdAt)),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1234,6 +1304,30 @@ String _shortTimestamp(String value) {
     return value.substring(11, 16);
   }
   return value;
+}
+
+String _syncEntityZh(String entityType) {
+  const labels = {
+    'workspace': '工作区',
+    'watchlist_item': '自选股',
+    'news_event': '新闻',
+    'news_analysis': 'AI 分析',
+    'strategy_draft': '策略草案',
+    'backtest_result': '回测',
+    'risk_decision': '风控决定',
+    'approval_request': '审批',
+    'paper_order': '纸面订单',
+    'broker_order': '模拟券商订单',
+    'paper_portfolio': '纸面组合',
+  };
+  return labels[entityType] ?? entityType;
+}
+
+String _syncEventActionZh(String action) {
+  if (action == 'created') return '已创建';
+  if (action == 'updated') return '已更新';
+  if (action == 'deleted') return '已删除';
+  return action;
 }
 
 class _BrandHeader extends StatelessWidget {
