@@ -123,6 +123,14 @@ GET /v1/system/status
 
 该接口只返回 `configured: true/false`、中文说明和适配器启用状态，不会返回任何 API key 或 User-Agent 原始值。桌面端可用它展示“数据源配置 / 系统状态”面板。
 
+主链路烟测报告接口：
+
+```http
+GET /v1/system/smoke-report
+```
+
+该接口只读取 `.dubhe-run\smoke-core-workflow.json` 的最近一次结果，返回账号、新闻、AI、策略、回测、纸面交易和工作区同步 smoke 的通过/失败/未运行状态。它不启动子进程、不连接真实券商、不发送真实订单，供桌面端和移动端展示本机主链路健康度。
+
 首次使用清单接口：
 
 ```http

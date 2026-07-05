@@ -46,6 +46,24 @@
         }
       }
     },
+    "/v1/system/smoke-report": {
+      "get": {
+        "summary": "System Smoke Report",
+        "operationId": "system_smoke_report_v1_system_smoke_report_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmokeWorkflowReportResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/capabilities": {
       "get": {
         "summary": "Capabilities",
@@ -3853,6 +3871,133 @@
           "negative"
         ],
         "title": "Sentiment"
+      },
+      "SmokeWorkflowReportResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "default": "dubhe-core"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "zh-CN"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "missing"
+            ],
+            "title": "Status"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "core_url": {
+            "type": "string",
+            "title": "Core Url",
+            "default": ""
+          },
+          "market": {
+            "type": "string",
+            "title": "Market",
+            "default": ""
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "default": ""
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
+          },
+          "report_path": {
+            "type": "string",
+            "title": "Report Path",
+            "default": ""
+          },
+          "artifacts": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Artifacts"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/SmokeWorkflowStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "status",
+          "message_zh"
+        ],
+        "title": "SmokeWorkflowReportResponse"
+      },
+      "SmokeWorkflowStep": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "SmokeWorkflowStep"
       },
       "StorageRuntimeStatus": {
         "properties": {

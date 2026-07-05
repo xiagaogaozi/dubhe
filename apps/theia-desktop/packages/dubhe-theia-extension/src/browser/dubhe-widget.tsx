@@ -187,6 +187,32 @@ type OnboardingStepAction = {
   disabled?: boolean;
 };
 
+type SmokeWorkflowStatus = 'passed' | 'failed' | 'missing';
+
+type SmokeWorkflowStep = {
+  name: string;
+  status: 'passed' | 'failed';
+  duration_ms: number;
+  message: string;
+  data?: unknown;
+};
+
+type SmokeWorkflowReportResponse = {
+  service: string;
+  language: string;
+  available: boolean;
+  status: SmokeWorkflowStatus;
+  message_zh: string;
+  generated_at: string;
+  core_url: string;
+  market: string;
+  symbol: string;
+  failure?: string | null;
+  report_path: string;
+  artifacts: Record<string, unknown>;
+  steps: SmokeWorkflowStep[];
+};
+
 type NewsAnalysis = {
   id: string;
   news_event_id: string;
@@ -600,6 +626,7 @@ function DubheWorkbench(): React.ReactElement {
   const [providerStatus, setProviderStatus] = React.useState<NewsProviderStatus[]>([]);
   const [systemStatus, setSystemStatus] = React.useState<SystemStatusResponse | null>(null);
   const [onboardingChecklist, setOnboardingChecklist] = React.useState<OnboardingChecklistResponse | null>(null);
+  const [smokeReport, setSmokeReport] = React.useState<SmokeWorkflowReportResponse | null>(null);
   const [localConfig, setLocalConfig] = React.useState<LocalRuntimeConfigResponse | null>(null);
   const [localConfigForm, setLocalConfigForm] = React.useState<Record<string, string>>({});
   const [localConfigBusy, setLocalConfigBusy] = React.useState(false);
@@ -833,18 +860,21 @@ function DubheWorkbench(): React.ReactElement {
   async function checkHealth(): Promise<void> {
     setApiStatus('请求中');
     try {
-      const [, nextSystemStatus, nextChecklist] = await Promise.all([
+      const [, nextSystemStatus, nextChecklist, nextSmokeReport] = await Promise.all([
         getJson<Record<string, string>>(coreUrl, '/health'),
         getJson<SystemStatusResponse>(coreUrl, '/v1/system/status'),
         getJson<OnboardingChecklistResponse>(coreUrl, '/v1/onboarding/checklist', session?.access_token),
+        getJson<SmokeWorkflowReportResponse>(coreUrl, '/v1/system/smoke-report'),
       ]);
       setSystemStatus(nextSystemStatus);
       setOnboardingChecklist(nextChecklist);
+      setSmokeReport(nextSmokeReport);
       setApiStatus('已连接');
       appendLog('positive', 'Dubhe Core 健康检查和系统状态读取通过。');
     } catch (error) {
       setSystemStatus(null);
       setOnboardingChecklist(null);
+      setSmokeReport(null);
       setApiStatus('离线');
       appendLog('warning', `Core 暂不可用：${errorMessage(error)}。`);
     }
@@ -1298,6 +1328,17 @@ function DubheWorkbench(): React.ReactElement {
     } catch (error) {
       setOnboardingChecklist(null);
       appendLog('warning', `首次使用清单读取失败：${errorMessage(error)}。`);
+    }
+  }
+
+  async function loadSmokeReport(): Promise<void> {
+    try {
+      const report = await getJson<SmokeWorkflowReportResponse>(coreUrl, '/v1/system/smoke-report');
+      setSmokeReport(report);
+      appendLog(report.status === 'passed' ? 'positive' : 'warning', report.message_zh);
+    } catch (error) {
+      setSmokeReport(null);
+      appendLog('warning', `主链路烟测报告读取失败：${errorMessage(error)}。`);
     }
   }
 
@@ -2077,6 +2118,19 @@ function DubheWorkbench(): React.ReactElement {
               </div>
             ) : (
               <p style={styles.bodyText}>点击左侧“检查”后显示 Core、存储、认证和交易开关状态。</p>
+            )}
+          </SidePanel>
+
+          <SidePanel title="主链路烟测" meta={smokeReport ? smokeStatusLabel(smokeReport.status) : '待读取'}>
+            {smokeReport ? (
+              <SmokeWorkflowPanel report={smokeReport} onRefresh={() => void loadSmokeReport()} />
+            ) : (
+              <>
+                <p style={styles.bodyText}>连接 Core 后显示最近一次账号、新闻、AI、策略、回测、纸面交易和同步烟测结果。</p>
+                <button style={styles.fullWidthButtonInline} type="button" onClick={() => void loadSmokeReport()}>
+                  读取报告
+                </button>
+              </>
             )}
           </SidePanel>
 
@@ -3057,6 +3111,65 @@ function nextOnboardingStep(checklist: OnboardingChecklistResponse): OnboardingS
   );
 }
 
+function SmokeWorkflowPanel(props: {
+  report: SmokeWorkflowReportResponse;
+  onRefresh: () => void;
+}): React.ReactElement {
+  return (
+    <div style={styles.statusList}>
+      <div style={styles.statusRow}>
+        <div style={styles.statusRowHeader}>
+          <strong style={styles.statusName}>{props.report.available ? '最近一次烟测' : '尚无烟测报告'}</strong>
+          <span style={{ ...styles.miniPill, ...tonePillStyle(smokeTone(props.report.status)) }}>
+            {smokeStatusLabel(props.report.status)}
+          </span>
+        </div>
+        <p style={styles.statusMessage}>{props.report.message_zh}</p>
+        <p style={styles.configHint}>
+          {props.report.available
+            ? `${props.report.market || '--'} / ${props.report.symbol || '--'} · ${shortTime(props.report.generated_at)}`
+            : props.report.report_path}
+        </p>
+      </div>
+      <button style={styles.fullWidthButtonInline} type="button" onClick={props.onRefresh}>
+        刷新报告
+      </button>
+      {props.report.steps.length > 0 && (
+        <div style={styles.smokeStepList}>
+          {props.report.steps.slice(0, 8).map((step) => (
+            <div style={styles.smokeStepRow} key={`${step.name}-${step.duration_ms}`}>
+              <span style={{ ...styles.onboardingDot, ...smokeDotStyle(step.status) }} />
+              <div>
+                <div style={styles.statusRowHeader}>
+                  <strong style={styles.statusName}>{step.name}</strong>
+                  <span style={styles.smallMeta}>{step.duration_ms}ms</span>
+                </div>
+                <p style={styles.statusMessage}>{step.message || smokeStatusLabel(step.status)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function smokeTone(status: SmokeWorkflowStatus): Tone {
+  if (status === 'passed') return 'positive';
+  if (status === 'missing') return 'warning';
+  return 'negative';
+}
+
+function smokeStatusLabel(status: SmokeWorkflowStatus): string {
+  if (status === 'passed') return '通过';
+  if (status === 'missing') return '未运行';
+  return '失败';
+}
+
+function smokeDotStyle(status: SmokeWorkflowStep['status']): React.CSSProperties {
+  return status === 'passed' ? styles.onboardingDotComplete : styles.onboardingDotAction;
+}
+
 function onboardingTone(status: OnboardingStepStatus): Tone {
   if (status === 'complete') return 'positive';
   if (status === 'warning') return 'warning';
@@ -4022,6 +4135,18 @@ const styles = {
   onboardingStepList: {
     display: 'grid',
     gap: 9,
+  } as React.CSSProperties,
+  smokeStepList: {
+    display: 'grid',
+    gap: 8,
+    paddingTop: 8,
+    borderTop: '1px solid #e5ebe8',
+  } as React.CSSProperties,
+  smokeStepRow: {
+    display: 'grid',
+    gridTemplateColumns: '12px minmax(0, 1fr)',
+    gap: 8,
+    alignItems: 'start',
   } as React.CSSProperties,
   onboardingStep: {
     display: 'grid',

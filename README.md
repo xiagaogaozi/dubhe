@@ -72,6 +72,8 @@ cd D:\github\dubhe-main
 
 `smoke-core-workflow.ps1` 会在已运行的 Core 上执行主链路烟测：注册本地账号、读取首次使用清单、刷新 fixture 新闻、生成中文分析、询问 AI 分析师、生成策略草案、运行 deterministic replay 回测、提交 1 股纸面订单、验证组合入账和工作区同步。报告会写入 `.dubhe-run\smoke-core-workflow.json`；不会连接真实券商或发送真实订单。
 
+桌面端右侧“主链路烟测”和移动端“系统状态”都会读取 `/v1/system/smoke-report`，让用户直接看到最近一次 smoke 是否通过。
+
 如果体检提示 `/v1/system/status` 不可用，通常是旧 Core 进程还占着 8000 端口。可以显式重启 Core：
 
 ```powershell

@@ -295,6 +295,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
   OnboardingChecklist? _onboardingChecklist;
+  SmokeWorkflowReport? _smokeReport;
   LocalRuntimeConfig? _localConfig;
   Map<String, String> _localConfigForm = const {};
   WorkspaceSnapshot? _workspaceSnapshot;
@@ -522,6 +523,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         widget.client.fetchNewsFeed(live: false),
         widget.client.fetchPaperPortfolio(defaultPaperAccountId),
         widget.client.fetchOnboardingChecklist(),
+        widget.client.fetchSmokeWorkflowReport(),
         widget.client.fetchWorkspaceSnapshot(
           workspaceId: widget.session.workspaceId,
         ),
@@ -530,7 +532,8 @@ class _CompanionHomeState extends State<CompanionHome> {
       final newsFeed = coreResponses[1] as NewsFeed;
       final portfolio = coreResponses[2] as PaperPortfolio;
       final onboardingChecklist = coreResponses[3] as OnboardingChecklist;
-      final workspaceSnapshot = coreResponses[4] as WorkspaceSnapshot;
+      final smokeReport = coreResponses[4] as SmokeWorkflowReport;
+      final workspaceSnapshot = coreResponses[5] as WorkspaceSnapshot;
       var approvals = <ApprovalRequest>[];
       KillSwitchState? killSwitch;
       var auditLogs = <AuditLogEntry>[];
@@ -576,6 +579,7 @@ class _CompanionHomeState extends State<CompanionHome> {
       setState(() {
         _systemStatus = systemStatus;
         _onboardingChecklist = onboardingChecklist;
+        _smokeReport = smokeReport;
         _localConfig = localConfig;
         _localConfigForm = localConfig == null
             ? const {}
@@ -1198,6 +1202,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         session: widget.session,
         systemStatus: _systemStatus,
         onboardingChecklist: _onboardingChecklist,
+        smokeReport: _smokeReport,
         localConfig: _localConfig,
         localConfigForm: _localConfigForm,
         configBusy: _configBusy,
@@ -1293,6 +1298,7 @@ class _TodayPage extends StatelessWidget {
     required this.session,
     required this.systemStatus,
     required this.onboardingChecklist,
+    required this.smokeReport,
     required this.localConfig,
     required this.localConfigForm,
     required this.configBusy,
@@ -1313,6 +1319,7 @@ class _TodayPage extends StatelessWidget {
   final DeviceSession session;
   final SystemStatus? systemStatus;
   final OnboardingChecklist? onboardingChecklist;
+  final SmokeWorkflowReport? smokeReport;
   final LocalRuntimeConfig? localConfig;
   final Map<String, String> localConfigForm;
   final bool configBusy;
@@ -1386,6 +1393,7 @@ class _TodayPage extends StatelessWidget {
         _SystemStatusPanel(
           session: session,
           status: systemStatus,
+          smokeReport: smokeReport,
           localConfig: localConfig,
           localConfigForm: localConfigForm,
           configBusy: configBusy,
@@ -2225,6 +2233,13 @@ String _onboardingStatusZh(String status) {
   return status;
 }
 
+String _smokeStatusZh(String status) {
+  if (status == 'passed') return '通过';
+  if (status == 'missing') return '未运行';
+  if (status == 'failed') return '失败';
+  return status;
+}
+
 OnboardingStep? _nextOnboardingStep(OnboardingChecklist checklist) {
   for (final step in checklist.steps) {
     if (step.status == 'action_required') return step;
@@ -2500,6 +2515,7 @@ class _SystemStatusPanel extends StatelessWidget {
   const _SystemStatusPanel({
     required this.session,
     required this.status,
+    required this.smokeReport,
     required this.localConfig,
     required this.localConfigForm,
     required this.configBusy,
@@ -2510,6 +2526,7 @@ class _SystemStatusPanel extends StatelessWidget {
 
   final DeviceSession session;
   final SystemStatus? status;
+  final SmokeWorkflowReport? smokeReport;
   final LocalRuntimeConfig? localConfig;
   final Map<String, String> localConfigForm;
   final bool configBusy;
@@ -2542,6 +2559,8 @@ class _SystemStatusPanel extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _SmokeWorkflowSummary(report: smokeReport),
           const SizedBox(height: 12),
           _ConfigurationGuide(
             status: current,
@@ -2582,6 +2601,81 @@ class _SystemStatusPanel extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SmokeWorkflowSummary extends StatelessWidget {
+  const _SmokeWorkflowSummary({required this.report});
+
+  final SmokeWorkflowReport? report;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = report;
+    if (current == null) {
+      return const _InfoCard(text: '主链路烟测报告尚未同步。');
+    }
+    final scheme = Theme.of(context).colorScheme;
+    final color = current.passed
+        ? scheme.primary
+        : current.missing
+        ? scheme.tertiary
+        : scheme.error;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: color, width: 4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '主链路烟测',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(_smokeStatusZh(current.status)),
+                ),
+              ],
+            ),
+            Text(current.messageZh),
+            if (current.available) ...[
+              const SizedBox(height: 6),
+              Text(
+                '${current.market}/${current.symbol} · ${_shortTimestamp(current.generatedAt)}',
+              ),
+            ],
+            if (!current.available && current.reportPath.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(current.reportPath),
+            ],
+            ...current.steps
+                .take(5)
+                .map(
+                  (step) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: Icon(
+                      step.passed
+                          ? Icons.check_circle_outline
+                          : Icons.error_outline,
+                      color: step.passed ? scheme.primary : scheme.error,
+                    ),
+                    title: Text(step.name),
+                    subtitle: Text(step.message),
+                    trailing: Text('${step.durationMs}ms'),
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }

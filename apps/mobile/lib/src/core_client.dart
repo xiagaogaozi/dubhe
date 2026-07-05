@@ -86,6 +86,11 @@ class CoreClient {
     return SystemStatus.fromJson(_map(json));
   }
 
+  Future<SmokeWorkflowReport> fetchSmokeWorkflowReport() async {
+    final json = await _getJson('/v1/system/smoke-report');
+    return SmokeWorkflowReport.fromJson(_map(json));
+  }
+
   Future<LocalRuntimeConfig> fetchLocalRuntimeConfig() async {
     final json = await _getJson('/v1/runtime/local-config');
     return LocalRuntimeConfig.fromJson(_map(json));
@@ -651,6 +656,78 @@ class OnboardingStep {
       status: _string(json['status']),
       messageZh: _string(json['message_zh']),
       actionZh: _string(json['action_zh']),
+    );
+  }
+}
+
+class SmokeWorkflowReport {
+  SmokeWorkflowReport({
+    required this.available,
+    required this.status,
+    required this.messageZh,
+    required this.generatedAt,
+    required this.coreUrl,
+    required this.market,
+    required this.symbol,
+    required this.failure,
+    required this.reportPath,
+    required this.artifacts,
+    required this.steps,
+  });
+
+  final bool available;
+  final String status;
+  final String messageZh;
+  final String generatedAt;
+  final String coreUrl;
+  final String market;
+  final String symbol;
+  final String failure;
+  final String reportPath;
+  final Map<String, dynamic> artifacts;
+  final List<SmokeWorkflowStep> steps;
+
+  bool get passed => status == 'passed';
+  bool get missing => status == 'missing';
+
+  factory SmokeWorkflowReport.fromJson(Map<String, dynamic> json) {
+    return SmokeWorkflowReport(
+      available: _bool(json['available']),
+      status: _string(json['status']),
+      messageZh: _string(json['message_zh']),
+      generatedAt: _string(json['generated_at']),
+      coreUrl: _string(json['core_url']),
+      market: _string(json['market']),
+      symbol: _string(json['symbol']),
+      failure: _string(json['failure']),
+      reportPath: _string(json['report_path']),
+      artifacts: _map(json['artifacts']),
+      steps: _mapList(json['steps']).map(SmokeWorkflowStep.fromJson).toList(),
+    );
+  }
+}
+
+class SmokeWorkflowStep {
+  SmokeWorkflowStep({
+    required this.name,
+    required this.status,
+    required this.durationMs,
+    required this.message,
+  });
+
+  final String name;
+  final String status;
+  final int durationMs;
+  final String message;
+
+  bool get passed => status == 'passed';
+
+  factory SmokeWorkflowStep.fromJson(Map<String, dynamic> json) {
+    return SmokeWorkflowStep(
+      name: _string(json['name']),
+      status: _string(json['status']),
+      durationMs: _int(json['duration_ms']),
+      message: _string(json['message']),
     );
   }
 }

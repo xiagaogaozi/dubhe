@@ -43,6 +43,7 @@ from .models import (
     RiskDecision,
     RiskStatus,
     RuntimeConfigStatus,
+    SmokeWorkflowReportResponse,
     DeviceRegistrationRequest,
     DeviceSession,
     Market,
@@ -67,6 +68,7 @@ from .news_sources import fetch_news_feed
 from .risk import evaluate_order_intent
 from .runtime_config import local_runtime_config_response, update_local_runtime_config
 from .simulation import submit_paper_order
+from .smoke_report import read_smoke_workflow_report
 from .store import store
 from .strategy import validate_strategy_spec
 
@@ -262,6 +264,11 @@ def system_status() -> SystemStatusResponse:
             message_zh="纸面交易和模拟 broker 已启用；实盘交易保持关闭，需完成券商适配、签名、审批、审计和风控后才能开放。",
         ),
     )
+
+
+@app.get("/v1/system/smoke-report", response_model=SmokeWorkflowReportResponse)
+def system_smoke_report() -> SmokeWorkflowReportResponse:
+    return read_smoke_workflow_report()
 
 
 @app.get("/v1/capabilities")

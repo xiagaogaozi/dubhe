@@ -21,6 +21,7 @@ from dubhe_core.news_sources import (
     fetch_finnhub_company_news,
     fetch_news_feed,
 )
+from dubhe_core import smoke_report
 from dubhe_core.store import SQLiteStore
 
 client = TestClient(app)
@@ -221,6 +222,72 @@ def test_onboarding_checklist_guides_unauthenticated_and_logged_in_users() -> No
     assert logged_in_steps["paper_trading_ready"]["status"] == "complete"
     assert logged_in_steps["live_trading_guard"]["status"] == "complete"
     assert logged_in["complete_count"] > anonymous["complete_count"]
+
+
+def test_system_smoke_report_reads_latest_report(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "smoke-core-workflow.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-07-05T07:19:07Z",
+                "status": "passed",
+                "core_url": "http://127.0.0.1:8000",
+                "market": "US",
+                "symbol": "NVDA",
+                "failure": None,
+                "report_path": str(report_path),
+                "artifacts": {
+                    "strategy_version_id": "strategy_v_smoke",
+                    "paper_account_id": "smoke-paper",
+                    "workspace_sequence": 15,
+                },
+                "steps": [
+                    {
+                        "name": "Core 健康检查",
+                        "status": "passed",
+                        "duration_ms": 12,
+                        "message": "通过",
+                        "data": None,
+                    },
+                    {
+                        "name": "纸面组合入账",
+                        "status": "passed",
+                        "duration_ms": 22,
+                        "message": "通过",
+                        "data": None,
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(smoke_report, "default_smoke_report_path", lambda: report_path)
+
+    response = client.get("/v1/system/smoke-report")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["status"] == "passed"
+    assert "主链路烟测通过" in body["message_zh"]
+    assert body["symbol"] == "NVDA"
+    assert body["artifacts"]["paper_account_id"] == "smoke-paper"
+    assert [step["name"] for step in body["steps"]] == ["Core 健康检查", "纸面组合入账"]
+
+
+def test_system_smoke_report_handles_missing_report(monkeypatch, tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing-smoke.json"
+    monkeypatch.setattr(smoke_report, "default_smoke_report_path", lambda: missing_path)
+
+    response = client.get("/v1/system/smoke-report")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["status"] == "missing"
+    assert "尚未运行主链路烟测" in body["message_zh"]
+    assert body["report_path"] == str(missing_path)
 
 
 def test_local_desktop_cors_allows_random_theia_port() -> None:

@@ -426,6 +426,64 @@ void main() {
     expect(status.newsAdapters.last.labelZh, '本地演示新闻源');
   });
 
+  test('smoke workflow report parses status and steps', () async {
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/v1/system/smoke-report');
+        return http.Response(
+          '''
+          {
+            "service": "dubhe-core",
+            "language": "zh-CN",
+            "available": true,
+            "status": "passed",
+            "message_zh": "最近一次主链路烟测通过。",
+            "generated_at": "2026-07-05T07:19:07Z",
+            "core_url": "http://127.0.0.1:8000",
+            "market": "US",
+            "symbol": "NVDA",
+            "failure": null,
+            "report_path": "D:/github/dubhe-main/.dubhe-run/smoke-core-workflow.json",
+            "artifacts": {
+              "paper_account_id": "smoke-paper",
+              "workspace_sequence": 15
+            },
+            "steps": [
+              {
+                "name": "Core 健康检查",
+                "status": "passed",
+                "duration_ms": 12,
+                "message": "通过",
+                "data": null
+              },
+              {
+                "name": "纸面组合入账",
+                "status": "passed",
+                "duration_ms": 22,
+                "message": "通过",
+                "data": null
+              }
+            ]
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final report = await client.fetchSmokeWorkflowReport();
+    expect(report.available, isTrue);
+    expect(report.passed, isTrue);
+    expect(report.symbol, 'NVDA');
+    expect(report.artifacts['paper_account_id'], 'smoke-paper');
+    expect(report.steps, hasLength(2));
+    expect(report.steps.last.name, '纸面组合入账');
+    expect(report.steps.last.durationMs, 22);
+  });
+
   test('local runtime config reads and updates redacted items', () async {
     var requestIndex = 0;
     final client = CoreClient(

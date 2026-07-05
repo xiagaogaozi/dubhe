@@ -277,6 +277,30 @@ class OnboardingChecklistResponse(BaseModel):
     generated_at: datetime = Field(default_factory=utc_now)
 
 
+class SmokeWorkflowStep(BaseModel):
+    name: str
+    status: Literal["passed", "failed"]
+    duration_ms: int = 0
+    message: str = ""
+    data: Any | None = None
+
+
+class SmokeWorkflowReportResponse(BaseModel):
+    service: str = "dubhe-core"
+    language: str = "zh-CN"
+    available: bool
+    status: Literal["passed", "failed", "missing"]
+    message_zh: str
+    generated_at: datetime = Field(default_factory=utc_now)
+    core_url: str = ""
+    market: str = ""
+    symbol: str = ""
+    failure: str | None = None
+    report_path: str = ""
+    artifacts: dict[str, Any] = Field(default_factory=dict)
+    steps: list[SmokeWorkflowStep] = Field(default_factory=list)
+
+
 class StrategySpec(BaseModel):
     strategy_name: str = Field(min_length=1)
     market_scope: list[Market] = Field(min_length=1)
