@@ -1769,13 +1769,71 @@ class _OnboardingChecklistCard extends StatelessWidget {
     final actionLabel = nextStep == null
         ? null
         : _onboardingActionLabel(nextStep);
+    final remainingCount = (current.totalCount - current.completeCount)
+        .clamp(0, current.totalCount)
+        .toInt();
+    final progress = onboardingWizardPercent(
+      completeCount: current.completeCount,
+      totalCount: current.totalCount,
+    );
+    final scheme = Theme.of(context).colorScheme;
     return _SectionCard(
-      title: '首次使用清单',
+      title: '首次启动向导',
       trailing: '${current.completeCount}/${current.totalCount}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('下一步：${current.nextActionZh}'),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '当前阶段',
+                            style: Theme.of(context).textTheme.labelMedium,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            nextStep == null
+                                ? '已完成基础体验闭环'
+                                : onboardingWizardStageLabel(
+                                    stepId: nextStep.id,
+                                    fallback: nextStep.labelZh,
+                                  ),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Chip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text('$progress%'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                LinearProgressIndicator(value: progress / 100),
+                const SizedBox(height: 10),
+                Text(
+                  remainingCount > 0
+                      ? '还剩 $remainingCount 步。当前只需要处理：${current.nextActionZh}'
+                      : 'Core、账号、配置、新闻、AI、同步、纸面交易和实盘边界都已形成基础体验闭环。',
+                ),
+              ],
+            ),
+          ),
           if (nextStep != null && actionLabel != null) ...[
             const SizedBox(height: 8),
             FilledButton.icon(
@@ -2604,6 +2662,34 @@ String _onboardingStatusZh(String status) {
   if (status == 'warning') return '可优化';
   if (status == 'action_required') return '待操作';
   return status;
+}
+
+@visibleForTesting
+int onboardingWizardPercent({
+  required int completeCount,
+  required int totalCount,
+}) {
+  if (totalCount <= 0) return 0;
+  final value = (completeCount / totalCount * 100).round();
+  return value.clamp(0, 100).toInt();
+}
+
+@visibleForTesting
+String onboardingWizardStageLabel({
+  required String stepId,
+  required String fallback,
+}) {
+  return switch (stepId) {
+    'core_connected' => '连接电脑上的 Dubhe Core',
+    'account_login' => '创建或登录本地账号',
+    'runtime_config' => '配置 AI 模型和授权新闻源',
+    'news_ready' => '刷新 A股/港股/美股/全球新闻',
+    'ai_assistant_ready' => '让 AI 分析师解释当前新闻',
+    'workspace_sync' => '确认跨端工作区同步',
+    'paper_trading_ready' => '完成纸面交易验证',
+    'live_trading_guard' => '确认实盘交易风控边界',
+    _ => fallback,
+  };
 }
 
 String _smokeStatusZh(String status) {

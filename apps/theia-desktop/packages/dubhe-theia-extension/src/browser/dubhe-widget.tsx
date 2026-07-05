@@ -3427,11 +3427,30 @@ function OnboardingChecklistPanel(props: {
 }): React.ReactElement {
   const nextStep = nextOnboardingStep(props.checklist);
   const nextAction = nextStep ? props.actionForStep(nextStep) : null;
+  const percent = onboardingPercent(props.checklist);
+  const remainingCount = Math.max(0, props.checklist.total_count - props.checklist.complete_count);
   return (
     <div style={styles.onboardingBox}>
-      <div style={styles.onboardingProgress}>
-        <span>{props.checklist.complete_count}/{props.checklist.total_count}</span>
-        <strong>下一步：{props.checklist.next_action_zh}</strong>
+      <div style={styles.onboardingHero}>
+        <div style={styles.onboardingHeroTop}>
+          <div>
+            <span style={styles.smallMeta}>首次启动向导</span>
+            <strong style={styles.onboardingStageTitle}>
+              {nextStep ? onboardingStageLabel(nextStep) : '已完成基础体验闭环'}
+            </strong>
+          </div>
+          <span style={{ ...styles.miniPill, ...tonePillStyle(remainingCount > 0 ? 'warning' : 'positive') }}>
+            {percent}%
+          </span>
+        </div>
+        <div style={styles.onboardingProgressTrack} aria-label="首次启动完成度">
+          <span style={{ ...styles.onboardingProgressFill, width: `${percent}%` }} />
+        </div>
+        <p style={styles.statusMessage}>
+          {remainingCount > 0
+            ? `还剩 ${remainingCount} 步。当前只需要处理：${props.checklist.next_action_zh}`
+            : 'Core、账号、配置、新闻、AI、同步、纸面交易和实盘边界都已形成基础体验闭环。'}
+        </p>
         {nextStep && nextAction && (
           <button
             style={styles.onboardingPrimaryAction}
@@ -3483,6 +3502,23 @@ function nextOnboardingStep(checklist: OnboardingChecklistResponse): OnboardingS
     checklist.steps.find((step) => step.status === 'warning') ??
     null
   );
+}
+
+function onboardingPercent(checklist: OnboardingChecklistResponse): number {
+  if (checklist.total_count <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((checklist.complete_count / checklist.total_count) * 100)));
+}
+
+function onboardingStageLabel(step: OnboardingStep): string {
+  if (step.id === 'core_connected') return '连接电脑上的 Dubhe Core';
+  if (step.id === 'account_login') return '创建或登录本地账号';
+  if (step.id === 'runtime_config') return '配置 AI 模型和授权新闻源';
+  if (step.id === 'news_ready') return '刷新 A股/港股/美股/全球新闻';
+  if (step.id === 'ai_assistant_ready') return '让 AI 分析师解释当前新闻';
+  if (step.id === 'workspace_sync') return '确认跨端工作区同步';
+  if (step.id === 'paper_trading_ready') return '完成纸面交易验证';
+  if (step.id === 'live_trading_guard') return '确认实盘交易风控边界';
+  return step.label_zh;
 }
 
 function SmokeWorkflowPanel(props: {
@@ -4502,6 +4538,40 @@ const styles = {
   onboardingBox: {
     display: 'grid',
     gap: 10,
+  } as React.CSSProperties,
+  onboardingHero: {
+    display: 'grid',
+    gap: 9,
+    padding: 12,
+    border: '1px solid #dce6e1',
+    borderRadius: 8,
+    background: '#f8faf9',
+  } as React.CSSProperties,
+  onboardingHeroTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  } as React.CSSProperties,
+  onboardingStageTitle: {
+    display: 'block',
+    marginTop: 3,
+    color: '#17231f',
+    fontSize: 15,
+    lineHeight: 1.35,
+  } as React.CSSProperties,
+  onboardingProgressTrack: {
+    position: 'relative',
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    background: '#e5ede9',
+  } as React.CSSProperties,
+  onboardingProgressFill: {
+    position: 'absolute',
+    inset: '0 auto 0 0',
+    borderRadius: 999,
+    background: '#45a46f',
   } as React.CSSProperties,
   onboardingProgress: {
     display: 'grid',

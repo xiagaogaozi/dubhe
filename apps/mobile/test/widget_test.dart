@@ -39,6 +39,20 @@ void main() {
     expect(find.text('检查连接'), findsOneWidget);
   });
 
+  test('onboarding wizard labels progress and current stage', () {
+    expect(onboardingWizardPercent(completeCount: 3, totalCount: 8), 38);
+    expect(onboardingWizardPercent(completeCount: 20, totalCount: 8), 100);
+    expect(onboardingWizardPercent(completeCount: 0, totalCount: 0), 0);
+    expect(
+      onboardingWizardStageLabel(stepId: 'runtime_config', fallback: '运行配置'),
+      '配置 AI 模型和授权新闻源',
+    );
+    expect(
+      onboardingWizardStageLabel(stepId: 'unknown_step', fallback: '自定义步骤'),
+      '自定义步骤',
+    );
+  });
+
   test('paper trade fallback accepts synced strategy drafts', () {
     final draft = StrategyDraft(
       id: 'draft_synced',
