@@ -3074,6 +3074,14 @@ class _InstallPackagePanel extends StatelessWidget {
 
   final List<InstallPackageReadiness> packages;
 
+  Future<void> _copyPackagePath(BuildContext context, String path) async {
+    await Clipboard.setData(ClipboardData(text: path));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('安装包路径已复制')));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -3097,9 +3105,21 @@ class _InstallPackagePanel extends StatelessWidget {
                 Text('${item.messageZh}\n${item.nextStepZh}'),
                 if (item.localPath.isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  SelectableText(
-                    item.localPath,
-                    style: Theme.of(context).textTheme.bodySmall,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          item.localPath,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '复制路径',
+                        icon: const Icon(Icons.copy_all_outlined),
+                        onPressed: () =>
+                            _copyPackagePath(context, item.localPath),
+                      ),
+                    ],
                   ),
                 ],
               ],

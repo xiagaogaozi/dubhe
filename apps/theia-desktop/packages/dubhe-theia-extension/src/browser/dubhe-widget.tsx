@@ -865,6 +865,20 @@ function DubheWorkbench(): React.ReactElement {
     setLogs((current) => [createLog(tone, text), ...current].slice(0, 5));
   }
 
+  async function copyInstallPackagePath(item: InstallPackageStatus): Promise<void> {
+    const localPath = item.local_path?.trim();
+    if (!localPath) {
+      appendLog('warning', `${item.label_zh} 暂无可复制的本机路径。`);
+      return;
+    }
+    try {
+      await writeClipboardText(localPath);
+      appendLog('positive', `已复制 ${item.label_zh} 路径。`);
+    } catch (error) {
+      appendLog('negative', `复制路径失败：${errorMessage(error)}。`);
+    }
+  }
+
   function updateAuthField(field: keyof AuthForm, value: string): void {
     setAuthForm((current) => ({ ...current, [field]: value }));
   }
@@ -2235,12 +2249,10 @@ function DubheWorkbench(): React.ReactElement {
             {systemStatus ? (
               <div style={styles.statusList}>
                 {(systemStatus.install_packages ?? []).map((item) => (
-                  <StatusRow
+                  <InstallPackageRow
                     key={`${item.platform}-${item.artifact_type}`}
-                    label={item.label_zh}
-                    value={item.available ? packageSize(item.size_bytes) : '待构建'}
-                    tone={item.available ? 'positive' : 'warning'}
-                    message={packageMessage(item)}
+                    item={item}
+                    onCopyPath={copyInstallPackagePath}
                   />
                 ))}
               </div>
@@ -2972,6 +2984,33 @@ function StatusRow(props: { label: string; value: string; tone: Tone; message: s
   );
 }
 
+function InstallPackageRow(props: {
+  item: InstallPackageStatus;
+  onCopyPath: (item: InstallPackageStatus) => void;
+}): React.ReactElement {
+  const item = props.item;
+  const localPath = item.local_path?.trim() ?? '';
+  return (
+    <div style={styles.statusRow}>
+      <div style={styles.statusRowHeader}>
+        <strong style={styles.statusName}>{item.label_zh}</strong>
+        <span style={{ ...styles.miniPill, ...tonePillStyle(item.available ? 'positive' : 'warning') }}>
+          {item.available ? packageSize(item.size_bytes) : '待构建'}
+        </span>
+      </div>
+      <p style={styles.statusMessage}>{packageMessage(item)}</p>
+      {localPath ? (
+        <div style={styles.copyPathRow}>
+          <code style={styles.copyPathText}>{localPath}</code>
+          <button type="button" style={styles.copyPathButton} onClick={() => props.onCopyPath(item)}>
+            复制路径
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ConfigurationGuide(props: {
   systemStatus: SystemStatusResponse;
   session: DeviceSession | null;
@@ -3140,10 +3179,29 @@ function packageSize(bytes: number): string {
 function packageMessage(item: InstallPackageStatus): string {
   return [
     item.message_zh,
-    item.local_path ? `路径：${item.local_path}` : '',
     `构建方式：${item.build_channel_zh}`,
     `下一步：${item.next_step_zh}`,
   ].filter(Boolean).join(' ');
+}
+
+async function writeClipboardText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.setAttribute('readonly', 'true');
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error('剪贴板不可用');
+  }
 }
 
 function localConfigHint(item: LocalRuntimeConfigItem): string {
@@ -4204,6 +4262,34 @@ const styles = {
     fontSize: 11,
     lineHeight: 1.4,
     overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  copyPathRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 7,
+  } as React.CSSProperties,
+  copyPathText: {
+    minWidth: 0,
+    padding: '6px 7px',
+    borderRadius: 6,
+    background: '#eef2ef',
+    color: '#40534a',
+    fontFamily: 'Consolas, "SFMono-Regular", monospace',
+    fontSize: 11,
+    lineHeight: 1.4,
+    overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  copyPathButton: {
+    padding: '6px 8px',
+    border: '1px solid #cdd8d3',
+    borderRadius: 8,
+    background: '#ffffff',
+    color: '#174a3a',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 800,
   } as React.CSSProperties,
   onboardingBox: {
     display: 'grid',
