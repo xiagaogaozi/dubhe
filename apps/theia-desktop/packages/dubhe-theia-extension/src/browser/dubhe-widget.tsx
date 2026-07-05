@@ -16,6 +16,8 @@ const DEVICE_SESSION_STORAGE_KEY = 'dubhe.theia.deviceSession';
 const CORE_URL_STORAGE_KEY = 'dubhe.theia.coreUrl';
 const STRATEGY_WORKSHOP_STORAGE_KEY = 'dubhe.theia.strategyWorkshop';
 const DEFAULT_PAPER_ACCOUNT_ID = 'demo_account';
+const CONFIGURE_COMMAND_LABEL = 'Configure-Dubhe.cmd';
+const LOCAL_CONFIG_FILE_LABEL = 'config\\dubhe.local.env';
 
 type ApiStatus = '未连接' | '请求中' | '已连接' | '离线';
 type AuthMode = 'register' | 'login';
@@ -1872,26 +1874,33 @@ function DubheWorkbench(): React.ReactElement {
 
           <SidePanel title="数据源配置" meta={systemStatus ? `${missingConfigCount} 项待配置` : adapterStatusMeta}>
             {systemStatus ? (
-              <div style={styles.statusList}>
-                {systemStatus.config_items.map((item) => (
-                  <StatusRow
-                    key={item.key}
-                    label={item.label_zh}
-                    value={item.configured ? '已配置' : '未配置'}
-                    tone={item.configured ? 'positive' : 'warning'}
-                    message={item.message_zh}
-                  />
-                ))}
-                {systemStatus.news_adapters.map((adapter) => (
-                  <StatusRow
-                    key={adapter.provider}
-                    label={adapter.label_zh}
-                    value={adapter.enabled ? '可用' : '跳过'}
-                    tone={adapter.enabled ? 'positive' : 'warning'}
-                    message={adapter.message_zh}
-                  />
-                ))}
-              </div>
+              <>
+                <ConfigurationGuide
+                  systemStatus={systemStatus}
+                  busy={isBusy}
+                  onRefresh={() => void checkHealth()}
+                />
+                <div style={styles.statusList}>
+                  {systemStatus.config_items.map((item) => (
+                    <StatusRow
+                      key={item.key}
+                      label={item.label_zh}
+                      value={item.configured ? '已配置' : '未配置'}
+                      tone={item.configured ? 'positive' : 'warning'}
+                      message={item.message_zh}
+                    />
+                  ))}
+                  {systemStatus.news_adapters.map((adapter) => (
+                    <StatusRow
+                      key={adapter.provider}
+                      label={adapter.label_zh}
+                      value={adapter.enabled ? '可用' : '跳过'}
+                      tone={adapter.enabled ? 'positive' : 'warning'}
+                      message={adapter.message_zh}
+                    />
+                  ))}
+                </div>
+              </>
             ) : (
               <p style={styles.bodyText}>尚未读取 Core 配置体检。</p>
             )}
@@ -2611,6 +2620,59 @@ function StatusRow(props: { label: string; value: string; tone: Tone; message: s
         <span style={{ ...styles.miniPill, ...tonePillStyle(props.tone) }}>{props.value}</span>
       </div>
       <p style={styles.statusMessage}>{props.message}</p>
+    </div>
+  );
+}
+
+function ConfigurationGuide(props: {
+  systemStatus: SystemStatusResponse;
+  busy: boolean;
+  onRefresh: () => void;
+}): React.ReactElement {
+  const missingItems = props.systemStatus.config_items.filter((item) => !item.configured);
+  const licensedNewsReady = props.systemStatus.news_adapters.some((adapter) => adapter.requires_license && adapter.enabled);
+  const llmReady = Boolean(props.systemStatus.llm?.enabled);
+  const ready = missingItems.length === 0;
+  const tone: Tone = ready ? 'positive' : 'warning';
+
+  return (
+    <div style={{ ...styles.configGuide, ...styles.configGuideTone[tone] }}>
+      <div style={styles.configGuideHeader}>
+        <strong style={styles.statusName}>{ready ? '核心配置已读取' : '需要本机配置'}</strong>
+        <span style={{ ...styles.miniPill, ...tonePillStyle(tone) }}>
+          {ready ? '可用' : `${missingItems.length} 项待填`}
+        </span>
+      </div>
+      <p style={styles.statusMessage}>
+        {ready
+          ? 'Core 已读取当前运行配置。AI、新闻源和交易功能仍会继续遵守只读建议、许可范围和实盘风控边界。'
+          : `双击 ${CONFIGURE_COMMAND_LABEL}，在 ${LOCAL_CONFIG_FILE_LABEL} 填写自己的模型或新闻源 key；保存后重启 Dubhe Core，再重新检查。`}
+      </p>
+      <div style={styles.configSignalRow}>
+        <span style={{ ...styles.chatCitation, ...tonePillStyle(llmReady ? 'positive' : 'warning') }}>
+          AI {llmReady ? '已接入' : '本地兜底'}
+        </span>
+        <span style={{ ...styles.chatCitation, ...tonePillStyle(licensedNewsReady ? 'positive' : 'warning') }}>
+          授权新闻 {licensedNewsReady ? '已接入' : '未接入'}
+        </span>
+      </div>
+      {!ready && (
+        <>
+          <div style={styles.configStepList}>
+            <span style={styles.configStep}>1. 双击仓库根目录的 {CONFIGURE_COMMAND_LABEL}</span>
+            <span style={styles.configStep}>2. 删除需要项目前面的 #，填写自己的 key</span>
+            <span style={styles.configStep}>3. 保存文件，重启 Dubhe，再点重新检查</span>
+          </div>
+          <div style={styles.configKeyList}>
+            {missingItems.slice(0, 6).map((item) => (
+              <span style={styles.configKeyPill} key={item.key}>{item.key}</span>
+            ))}
+          </div>
+        </>
+      )}
+      <button style={styles.inlineTextButton} type="button" onClick={props.onRefresh} disabled={props.busy}>
+        重新检查配置
+      </button>
     </div>
   );
 }
@@ -3404,6 +3466,64 @@ const styles = {
     color: '#65786f',
     fontSize: 12,
     lineHeight: 1.45,
+    overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  configGuide: {
+    marginTop: 10,
+    padding: '2px 0 2px 10px',
+    borderLeft: '3px solid #d6a23d',
+  } as React.CSSProperties,
+  configGuideTone: {
+    positive: {
+      borderLeftColor: '#45a46f',
+    } as React.CSSProperties,
+    warning: {
+      borderLeftColor: '#d6a23d',
+    } as React.CSSProperties,
+    negative: {
+      borderLeftColor: '#c6503c',
+    } as React.CSSProperties,
+    neutral: {
+      borderLeftColor: '#7391c8',
+    } as React.CSSProperties,
+  },
+  configGuideHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  } as React.CSSProperties,
+  configSignalRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  } as React.CSSProperties,
+  configStepList: {
+    display: 'grid',
+    gap: 5,
+    marginTop: 9,
+  } as React.CSSProperties,
+  configStep: {
+    color: '#40534a',
+    fontSize: 12,
+    lineHeight: 1.45,
+    overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  configKeyList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 8,
+  } as React.CSSProperties,
+  configKeyPill: {
+    padding: '4px 6px',
+    borderRadius: 6,
+    background: '#eef2ef',
+    color: '#40534a',
+    fontFamily: 'Consolas, "SFMono-Regular", monospace',
+    fontSize: 11,
+    fontWeight: 800,
     overflowWrap: 'anywhere',
   } as React.CSSProperties,
   miniPill: {
