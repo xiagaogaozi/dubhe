@@ -149,6 +149,16 @@ type InstallPackageStatus = {
   next_step_zh: string;
 };
 
+type LocalLauncherStatus = {
+  id: string;
+  label_zh: string;
+  description_zh: string;
+  local_path: string;
+  available: boolean;
+  message_zh: string;
+  next_step_zh: string;
+};
+
 type ExternalServiceCheck = {
   service: string;
   label_zh: string;
@@ -207,6 +217,7 @@ type SystemStatusResponse = {
   news_adapters: NewsAdapterRuntimeStatus[];
   news_coverage?: NewsMarketCoverageStatus[];
   install_packages?: InstallPackageStatus[];
+  local_launchers?: LocalLauncherStatus[];
   llm?: LLMRuntimeStatus;
   trading: TradingRuntimeStatus;
   generated_at: string;
@@ -915,18 +926,31 @@ function DubheWorkbench(): React.ReactElement {
     setLogs((current) => [createLog(tone, text), ...current].slice(0, 5));
   }
 
+  async function copyLocalPath(label: string, localPath: string | null | undefined): Promise<void> {
+    const normalizedPath = localPath?.trim();
+    if (!normalizedPath) {
+      appendLog('warning', `${label} 暂无可复制的本机路径。`);
+      return;
+    }
+    try {
+      await writeClipboardText(normalizedPath);
+      appendLog('positive', `已复制 ${label} 路径。`);
+    } catch (error) {
+      appendLog('negative', `复制路径失败：${errorMessage(error)}。`);
+    }
+  }
+
   async function copyInstallPackagePath(item: InstallPackageStatus): Promise<void> {
+    await copyLocalPath(item.label_zh, item.local_path);
+  }
+
+  async function copyLocalLauncherPath(item: LocalLauncherStatus): Promise<void> {
     const localPath = item.local_path?.trim();
     if (!localPath) {
       appendLog('warning', `${item.label_zh} 暂无可复制的本机路径。`);
       return;
     }
-    try {
-      await writeClipboardText(localPath);
-      appendLog('positive', `已复制 ${item.label_zh} 路径。`);
-    } catch (error) {
-      appendLog('negative', `复制路径失败：${errorMessage(error)}。`);
-    }
+    await copyLocalPath(item.label_zh, localPath);
   }
 
   function updateAuthField(field: keyof AuthForm, value: string): void {
@@ -2424,6 +2448,25 @@ function DubheWorkbench(): React.ReactElement {
             )}
           </SidePanel>
 
+          <SidePanel
+            title="本机双击入口"
+            meta={systemStatus ? launcherSummary(systemStatus.local_launchers ?? []) : '待检查'}
+          >
+            {systemStatus ? (
+              <div style={styles.statusList}>
+                {(systemStatus.local_launchers ?? []).map((item) => (
+                  <LocalLauncherRow
+                    key={item.id}
+                    item={item}
+                    onCopyPath={copyLocalLauncherPath}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p style={styles.bodyText}>连接 Core 后显示启动、配置、体检、打包和指南入口。</p>
+            )}
+          </SidePanel>
+
           <SidePanel title="新闻源状态" meta={liveNews ? 'live' : 'fixture'}>
             {providerStatus.length > 0 ? (
               providerStatus.slice(0, 4).map((status) => (
@@ -3174,6 +3217,33 @@ function InstallPackageRow(props: {
   );
 }
 
+function LocalLauncherRow(props: {
+  item: LocalLauncherStatus;
+  onCopyPath: (item: LocalLauncherStatus) => void;
+}): React.ReactElement {
+  const item = props.item;
+  const localPath = item.local_path?.trim() ?? '';
+  return (
+    <div style={styles.statusRow}>
+      <div style={styles.statusRowHeader}>
+        <strong style={styles.statusName}>{item.label_zh}</strong>
+        <span style={{ ...styles.miniPill, ...tonePillStyle(item.available ? 'positive' : 'warning') }}>
+          {item.available ? '可双击' : '缺失'}
+        </span>
+      </div>
+      <p style={styles.statusMessage}>{launcherMessage(item)}</p>
+      {localPath ? (
+        <div style={styles.copyPathRow}>
+          <code style={styles.copyPathText}>{localPath}</code>
+          <button type="button" style={styles.copyPathButton} onClick={() => props.onCopyPath(item)}>
+            复制路径
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ConfigurationGuide(props: {
   systemStatus: SystemStatusResponse;
   session: DeviceSession | null;
@@ -3379,6 +3449,12 @@ function packageSummary(packages: InstallPackageStatus[]): string {
   return `${readyCount}/${packages.length}`;
 }
 
+function launcherSummary(launchers: LocalLauncherStatus[]): string {
+  if (launchers.length === 0) return '待检查';
+  const readyCount = launchers.filter((item) => item.available).length;
+  return `${readyCount}/${launchers.length}`;
+}
+
 function packageSize(bytes: number): string {
   if (!bytes || bytes <= 0) return '未生成';
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -3388,6 +3464,14 @@ function packageMessage(item: InstallPackageStatus): string {
   return [
     item.message_zh,
     `构建方式：${item.build_channel_zh}`,
+    `下一步：${item.next_step_zh}`,
+  ].filter(Boolean).join(' ');
+}
+
+function launcherMessage(item: LocalLauncherStatus): string {
+  return [
+    item.description_zh,
+    item.message_zh,
     `下一步：${item.next_step_zh}`,
   ].filter(Boolean).join(' ');
 }

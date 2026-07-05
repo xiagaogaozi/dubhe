@@ -221,6 +221,16 @@ class InstallPackageStatus(BaseModel):
     next_step_zh: str
 
 
+class LocalLauncherStatus(BaseModel):
+    id: str
+    label_zh: str
+    description_zh: str
+    local_path: str
+    available: bool
+    message_zh: str
+    next_step_zh: str
+
+
 class ExternalServiceCheck(BaseModel):
     service: str
     label_zh: str
@@ -279,6 +289,7 @@ class SystemStatusResponse(BaseModel):
     news_adapters: list[NewsAdapterRuntimeStatus] = Field(default_factory=list)
     news_coverage: list[NewsMarketCoverageStatus] = Field(default_factory=list)
     install_packages: list[InstallPackageStatus] = Field(default_factory=list)
+    local_launchers: list[LocalLauncherStatus] = Field(default_factory=list)
     llm: LLMRuntimeStatus
     trading: TradingRuntimeStatus
     generated_at: datetime = Field(default_factory=utc_now)

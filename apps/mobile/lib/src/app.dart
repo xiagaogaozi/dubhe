@@ -3203,6 +3203,10 @@ class _SystemStatusPanel extends StatelessWidget {
             const Divider(height: 24),
             _InstallPackagePanel(packages: current.installPackages),
           ],
+          if (current.localLaunchers.isNotEmpty) ...[
+            const Divider(height: 24),
+            _LocalLauncherPanel(launchers: current.localLaunchers),
+          ],
           const Divider(height: 24),
           Text('配置项', style: Theme.of(context).textTheme.titleSmall),
           ...current.configItems.map(
@@ -3461,6 +3465,71 @@ class _InstallPackagePanel extends StatelessWidget {
                   ? _packageSize(item.sizeBytes)
                   : item.buildChannelZh,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LocalLauncherPanel extends StatelessWidget {
+  const _LocalLauncherPanel({required this.launchers});
+
+  final List<LocalLauncherReadiness> launchers;
+
+  Future<void> _copyLauncherPath(BuildContext context, String path) async {
+    await Clipboard.setData(ClipboardData(text: path));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('本机入口路径已复制')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('本机双击入口', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        ...launchers.map(
+          (item) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            leading: Icon(
+              item.available
+                  ? Icons.touch_app_outlined
+                  : Icons.error_outline,
+            ),
+            title: Text(item.labelZh),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item.descriptionZh}\n${item.messageZh}\n下一步：${item.nextStepZh}',
+                ),
+                if (item.localPath.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          item.localPath,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '复制路径',
+                        icon: const Icon(Icons.copy_all_outlined),
+                        onPressed: () =>
+                            _copyLauncherPath(context, item.localPath),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+            trailing: Text(item.available ? '可双击' : '缺失'),
           ),
         ),
       ],

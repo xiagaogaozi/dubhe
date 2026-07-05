@@ -488,6 +488,26 @@ void main() {
                 "next_step_zh": "在 macOS + Xcode 中构建。"
               }
             ],
+            "local_launchers": [
+              {
+                "id": "start-local",
+                "label_zh": "启动 Dubhe（本机）",
+                "description_zh": "打开本机 Core 与桌面客户端。",
+                "local_path": "D:/github/dubhe-main/Start-Dubhe.cmd",
+                "available": true,
+                "message_zh": "双击即可启动本机 Dubhe。",
+                "next_step_zh": "如果无法启动，先运行检查。"
+              },
+              {
+                "id": "build-user-kit",
+                "label_zh": "生成小白用户包",
+                "description_zh": "整理安装包、指南和检查报告。",
+                "local_path": "D:/github/dubhe-main/Build-Dubhe-User-Kit.cmd",
+                "available": false,
+                "message_zh": "未找到 Build-Dubhe-User-Kit.cmd。",
+                "next_step_zh": "请确认仓库根目录。"
+              }
+            ],
             "trading": {
               "paper_broker_enabled": true,
               "live_trading_enabled": false,
@@ -536,6 +556,13 @@ void main() {
     expect(status.installPackages.first.sizeBytes, 115711072);
     expect(status.installPackages.last.platform, 'ios');
     expect(status.installPackages.last.available, isFalse);
+    expect(status.localLaunchers, hasLength(2));
+    expect(status.localLaunchers.first.id, 'start-local');
+    expect(status.localLaunchers.first.available, isTrue);
+    expect(
+      status.localLaunchers.last.localPath,
+      'D:/github/dubhe-main/Build-Dubhe-User-Kit.cmd',
+    );
   });
 
   test('external service checks parse readiness and live query', () async {

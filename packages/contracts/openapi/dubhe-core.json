@@ -3188,6 +3188,49 @@
         ],
         "title": "LLMRuntimeStatus"
       },
+      "LocalLauncherStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "description_zh": {
+            "type": "string",
+            "title": "Description Zh"
+          },
+          "local_path": {
+            "type": "string",
+            "title": "Local Path"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label_zh",
+          "description_zh",
+          "local_path",
+          "available",
+          "message_zh",
+          "next_step_zh"
+        ],
+        "title": "LocalLauncherStatus"
+      },
       "LocalRuntimeConfigItem": {
         "properties": {
           "key": {
@@ -4775,6 +4818,13 @@
             },
             "type": "array",
             "title": "Install Packages"
+          },
+          "local_launchers": {
+            "items": {
+              "$ref": "#/components/schemas/LocalLauncherStatus"
+            },
+            "type": "array",
+            "title": "Local Launchers"
           },
           "llm": {
             "$ref": "#/components/schemas/LLMRuntimeStatus"

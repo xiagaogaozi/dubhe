@@ -90,6 +90,8 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     )
     android_apk.parent.mkdir(parents=True, exist_ok=True)
     android_apk.write_bytes(b"apk")
+    (tmp_path / "Build-Dubhe-User-Kit.cmd").write_bytes(b"echo user kit")
+    (tmp_path / "Start-Dubhe.cmd").write_bytes(b"echo start")
 
     response = client.get("/v1/system/status")
 
@@ -131,6 +133,12 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     assert packages[("android", "debug-apk")]["size_bytes"] == 3
     assert packages[("macos", "dmg-or-zip")]["available"] is False
     assert packages[("ios", "runner-app")]["available"] is False
+
+    launchers = {item["id"]: item for item in body["local_launchers"]}
+    assert launchers["build-user-kit"]["available"] is True
+    assert launchers["build-user-kit"]["local_path"].endswith("Build-Dubhe-User-Kit.cmd")
+    assert launchers["start-local"]["available"] is True
+    assert launchers["configure"]["available"] is False
 
 
 def test_system_status_reports_configured_keys_without_leaking_values(

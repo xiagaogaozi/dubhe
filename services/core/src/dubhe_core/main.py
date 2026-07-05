@@ -30,6 +30,7 @@ from .models import (
     InstallPackageStatus,
     KillSwitchState,
     KillSwitchUpdateRequest,
+    LocalLauncherStatus,
     LocalRuntimeConfigResponse,
     LocalRuntimeConfigUpdateRequest,
     NewsAnalysis,
@@ -267,6 +268,7 @@ def system_status() -> SystemStatusResponse:
         news_adapters=news_adapters,
         news_coverage=build_news_coverage(news_adapters),
         install_packages=build_install_package_status(repo_root()),
+        local_launchers=build_local_launcher_status(repo_root()),
         llm=llm_status,
         trading=TradingRuntimeStatus(
             paper_broker_enabled=True,
@@ -437,6 +439,142 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             next_step_zh="在 macOS + Xcode 或 docs/ci/mobile.yml 的 iOS job 中构建，并补齐 Bundle ID、证书和描述文件。",
         ),
     ]
+
+
+def build_local_launcher_status(root: Path) -> list[LocalLauncherStatus]:
+    launchers = [
+        (
+            "start-local",
+            "启动 Dubhe（本机）",
+            "打开本机 Core 与桌面客户端，适合只在当前 Windows 电脑上体验。",
+            "Start-Dubhe.cmd",
+            "双击即可启动本机 Dubhe。",
+            "如果无法启动，先双击 Check-Dubhe.cmd 检查本机环境。",
+        ),
+        (
+            "start-lan",
+            "启动 Dubhe（局域网）",
+            "让手机或同一局域网设备连接这台电脑上的 Core。",
+            "Start-Dubhe-LAN.cmd",
+            "双击后按窗口里的局域网地址连接手机端。",
+            "如果手机无法连接，请确认手机和电脑在同一 Wi-Fi，并检查防火墙提示。",
+        ),
+        (
+            "configure",
+            "配置 AI 与新闻源",
+            "打开本机配置文件，填写 AI 模型、新闻 API Key 等必要配置。",
+            "Configure-Dubhe.cmd",
+            "双击即可打开本机配置文件。",
+            "填写后重新启动 Dubhe，再点击系统体检。",
+        ),
+        (
+            "check-local",
+            "检查本机环境",
+            "检查 Node、Python、Flutter、依赖和基础目录是否可用。",
+            "Check-Dubhe.cmd",
+            "双击即可执行本机环境检查。",
+            "按检查报告补齐缺失工具后再重新运行。",
+        ),
+        (
+            "smoke",
+            "运行主链路烟测",
+            "自动跑新闻、AI 兜底、策略草稿、回测、纸面交易等核心链路。",
+            "Smoke-Dubhe.cmd",
+            "双击即可运行主链路烟测。",
+            "烟测失败时先查看窗口最后几行错误，再运行 Test-Dubhe-Services.cmd。",
+        ),
+        (
+            "test-services",
+            "运行服务端测试",
+            "执行 Core 服务测试，确认 API、数据和交易兜底链路没有被改坏。",
+            "Test-Dubhe-Services.cmd",
+            "双击即可运行服务端测试。",
+            "测试失败时暂时不要交给普通用户试用，先修复失败项。",
+        ),
+        (
+            "production-check",
+            "检查生产门禁",
+            "检查外部服务、四端安装包、授权数据、审计和实盘前置条件。",
+            "Check-Dubhe-Production.cmd",
+            "双击即可查看生产门禁报告。",
+            "所有阻塞项处理完之前，只能作为演示或内测版本使用。",
+        ),
+        (
+            "build-user-kit",
+            "生成小白用户包",
+            "把安装包、检查报告、指南和本机启动入口整理成一个可分发压缩包。",
+            "Build-Dubhe-User-Kit.cmd",
+            "双击即可生成用户包。",
+            "生成前先确认安装包状态和生产门禁结果。",
+        ),
+        (
+            "install-guide",
+            "打开安装指南",
+            "打开 Windows/macOS/Android/iOS 的安装和分发说明。",
+            "Open-Dubhe-Install-Guide.cmd",
+            "双击即可打开安装指南。",
+            "给测试用户发包前，先按指南确认对应平台限制。",
+        ),
+        (
+            "mobile-guide",
+            "打开移动端指南",
+            "打开 Android/iOS 连接 Core、局域网地址和常见问题说明。",
+            "Open-Dubhe-Mobile-Guide.cmd",
+            "双击即可打开移动端指南。",
+            "手机连接失败时优先按指南检查 Core 地址和网络。",
+        ),
+        (
+            "stop-core",
+            "停止 Dubhe Core",
+            "关闭本机后台 Core 服务，适合重启配置或释放端口。",
+            "Stop-Dubhe-Core.cmd",
+            "双击即可停止本机 Core 服务。",
+            "停止后需要重新双击 Start-Dubhe.cmd 或 Start-Dubhe-LAN.cmd 启动。",
+        ),
+    ]
+
+    return [
+        _local_launcher(
+            root=root,
+            launcher_id=launcher_id,
+            label_zh=label_zh,
+            description_zh=description_zh,
+            filename=filename,
+            ready_zh=ready_zh,
+            next_step_zh=next_step_zh,
+        )
+        for (
+            launcher_id,
+            label_zh,
+            description_zh,
+            filename,
+            ready_zh,
+            next_step_zh,
+        ) in launchers
+    ]
+
+
+def _local_launcher(
+    *,
+    root: Path,
+    launcher_id: str,
+    label_zh: str,
+    description_zh: str,
+    filename: str,
+    ready_zh: str,
+    next_step_zh: str,
+) -> LocalLauncherStatus:
+    path = root / filename
+    available = path.is_file()
+    return LocalLauncherStatus(
+        id=launcher_id,
+        label_zh=label_zh,
+        description_zh=description_zh,
+        local_path=str(path),
+        available=available,
+        message_zh=ready_zh if available else f"未找到 {filename}。",
+        next_step_zh=next_step_zh if available else "请确认当前 Core 指向正确的 Dubhe 仓库根目录。",
+    )
 
 
 def _install_package(

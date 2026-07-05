@@ -526,6 +526,7 @@ class SystemStatus {
     required this.newsAdapters,
     required this.newsCoverage,
     required this.installPackages,
+    required this.localLaunchers,
   });
 
   final String service;
@@ -541,6 +542,7 @@ class SystemStatus {
   final List<NewsAdapterReadiness> newsAdapters;
   final List<NewsMarketCoverage> newsCoverage;
   final List<InstallPackageReadiness> installPackages;
+  final List<LocalLauncherReadiness> localLaunchers;
 
   int get missingConfigCount =>
       configItems.where((item) => !item.configured).length;
@@ -578,6 +580,9 @@ class SystemStatus {
       installPackages: _mapList(
         json['install_packages'],
       ).map(InstallPackageReadiness.fromJson).toList(),
+      localLaunchers: _mapList(
+        json['local_launchers'],
+      ).map(LocalLauncherReadiness.fromJson).toList(),
     );
   }
 }
@@ -1104,6 +1109,38 @@ class InstallPackageReadiness {
       localPath: _string(json['local_path']),
       sizeBytes: _int(json['size_bytes']),
       buildChannelZh: _string(json['build_channel_zh']),
+      messageZh: _string(json['message_zh']),
+      nextStepZh: _string(json['next_step_zh']),
+    );
+  }
+}
+
+class LocalLauncherReadiness {
+  LocalLauncherReadiness({
+    required this.id,
+    required this.labelZh,
+    required this.descriptionZh,
+    required this.localPath,
+    required this.available,
+    required this.messageZh,
+    required this.nextStepZh,
+  });
+
+  final String id;
+  final String labelZh;
+  final String descriptionZh;
+  final String localPath;
+  final bool available;
+  final String messageZh;
+  final String nextStepZh;
+
+  factory LocalLauncherReadiness.fromJson(Map<String, dynamic> json) {
+    return LocalLauncherReadiness(
+      id: _string(json['id']),
+      labelZh: _string(json['label_zh']),
+      descriptionZh: _string(json['description_zh']),
+      localPath: _string(json['local_path']),
+      available: _bool(json['available']),
       messageZh: _string(json['message_zh']),
       nextStepZh: _string(json['next_step_zh']),
     );
