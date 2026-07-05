@@ -420,7 +420,9 @@ void main() {
     expect(status.llm.displayName, '本地兜底');
     expect(status.missingConfigCount, 1);
     expect(status.enabledAdapterCount, 1);
+    expect(status.enabledLicensedAdapterCount, 0);
     expect(status.configItems.first.key, 'FINNHUB_API_KEY');
+    expect(status.newsAdapters.first.requiresLicense, isTrue);
     expect(status.newsAdapters.last.labelZh, '本地演示新闻源');
   });
 

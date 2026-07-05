@@ -484,6 +484,10 @@ class SystemStatus {
   int get enabledAdapterCount =>
       newsAdapters.where((adapter) => adapter.enabled).length;
 
+  int get enabledLicensedAdapterCount => newsAdapters
+      .where((adapter) => adapter.requiresLicense && adapter.enabled)
+      .length;
+
   factory SystemStatus.fromJson(Map<String, dynamic> json) {
     final storage = _map(json['storage']);
     final auth = _map(json['auth']);
@@ -571,6 +575,7 @@ class NewsAdapterReadiness {
     required this.labelZh,
     required this.configured,
     required this.enabled,
+    required this.requiresLicense,
     required this.messageZh,
   });
 
@@ -578,6 +583,7 @@ class NewsAdapterReadiness {
   final String labelZh;
   final bool configured;
   final bool enabled;
+  final bool requiresLicense;
   final String messageZh;
 
   factory NewsAdapterReadiness.fromJson(Map<String, dynamic> json) {
@@ -586,6 +592,7 @@ class NewsAdapterReadiness {
       labelZh: _string(json['label_zh']),
       configured: _bool(json['configured']),
       enabled: _bool(json['enabled']),
+      requiresLicense: _bool(json['requires_license']),
       messageZh: _string(json['message_zh']),
     );
   }

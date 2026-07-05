@@ -12,6 +12,8 @@ const defaultCoreUrl = String.fromEnvironment(
   'DUBHE_CORE_URL',
   defaultValue: 'http://127.0.0.1:8000',
 );
+const _configureCommandLabel = 'Configure-Dubhe.cmd';
+const _localConfigFileLabel = r'config\dubhe.local.env';
 
 class DubheCompanionApp extends StatelessWidget {
   const DubheCompanionApp({super.key});
@@ -2219,6 +2221,8 @@ class _SystemStatusPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          _ConfigurationGuide(status: current),
+          const SizedBox(height: 12),
           Text(current.tradingMessageZh),
           const SizedBox(height: 8),
           Text(current.llm.messageZh),
@@ -2248,6 +2252,108 @@ class _SystemStatusPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ConfigurationGuide extends StatelessWidget {
+  const _ConfigurationGuide({required this.status});
+
+  final SystemStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final missingItems = status.configItems
+        .where((item) => !item.configured)
+        .toList(growable: false);
+    final ready = missingItems.isEmpty;
+    final licensedNewsReady = status.enabledLicensedAdapterCount > 0;
+    final scheme = Theme.of(context).colorScheme;
+    final borderColor = ready ? scheme.primary : scheme.tertiary;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: borderColor, width: 4)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ready ? '核心配置已读取' : '需要本机配置',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(ready ? '可用' : '${missingItems.length} 项待填'),
+                ),
+              ],
+            ),
+            Text(
+              ready
+                  ? 'Core 已读取当前运行配置；AI、新闻源和交易能力仍会遵守只读建议、许可范围和实盘风控边界。'
+                  : '在运行 Core 的电脑上双击 $_configureCommandLabel，在 $_localConfigFileLabel 填写自己的模型或新闻源 key；保存后重启 Dubhe Core，再回到手机端同步状态。',
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _ReadinessChip(
+                  label: status.llm.enabled ? 'AI 已接入' : 'AI 本地兜底',
+                  ok: status.llm.enabled,
+                ),
+                _ReadinessChip(
+                  label: licensedNewsReady ? '授权新闻已接入' : '授权新闻未接入',
+                  ok: licensedNewsReady,
+                ),
+              ],
+            ),
+            if (!ready) ...[
+              const SizedBox(height: 8),
+              const Text('1. 在运行 Core 的电脑上双击 Configure-Dubhe.cmd'),
+              const Text('2. 删除需要项目前面的 #，填写自己的 key'),
+              const Text('3. 保存文件，重启 Dubhe Core，再重新同步'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: missingItems
+                    .take(6)
+                    .map(
+                      (item) => Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(item.key),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadinessChip extends StatelessWidget {
+  const _ReadinessChip({required this.label, required this.ok});
+
+  final String label;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      backgroundColor: ok ? scheme.primaryContainer : scheme.tertiaryContainer,
+      label: Text(label),
     );
   }
 }
