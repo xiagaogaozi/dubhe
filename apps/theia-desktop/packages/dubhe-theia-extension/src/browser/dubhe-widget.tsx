@@ -14,6 +14,7 @@ const DEFAULT_CORE_URL = 'http://127.0.0.1:8000';
 const PROTOTYPE_URL = 'http://127.0.0.1:5173';
 const DEVICE_SESSION_STORAGE_KEY = 'dubhe.theia.deviceSession';
 const CORE_URL_STORAGE_KEY = 'dubhe.theia.coreUrl';
+const STRATEGY_WORKSHOP_STORAGE_KEY = 'dubhe.theia.strategyWorkshop';
 const DEFAULT_PAPER_ACCOUNT_ID = 'demo_account';
 
 type ApiStatus = '未连接' | '请求中' | '已连接' | '离线';
@@ -163,6 +164,12 @@ type StrategyWorkshopForm = {
   includeNews: boolean;
   includeMarketBars: boolean;
   paperOnly: boolean;
+};
+
+type StrategyWorkshopStorage = {
+  form: StrategyWorkshopForm;
+  blocklyState: typeof defaultStrategyBlocklyState;
+  savedAt: string;
 };
 
 type StrategyDraft = {
@@ -477,9 +484,10 @@ function DubheWorkbench(): React.ReactElement {
   const [systemStatus, setSystemStatus] = React.useState<SystemStatusResponse | null>(null);
   const [analysis, setAnalysis] = React.useState<NewsAnalysis | null>(null);
   const [strategyDraft, setStrategyDraft] = React.useState<StrategyDraft | null>(null);
-  const [strategyWorkshopForm, setStrategyWorkshopForm] = React.useState<StrategyWorkshopForm>(defaultStrategyWorkshopForm);
+  const [strategyWorkshopForm, setStrategyWorkshopForm] = React.useState<StrategyWorkshopForm>(() => readStoredStrategyWorkshop()?.form ?? defaultStrategyWorkshopForm);
   const [strategyWorkshopSpec, setStrategyWorkshopSpec] = React.useState<StrategySpec | null>(null);
   const [strategyValidation, setStrategyValidation] = React.useState<StrategyValidationResult | null>(null);
+  const [strategyWorkshopSavedAt, setStrategyWorkshopSavedAt] = React.useState<string | null>(() => readStoredStrategyWorkshop()?.savedAt ?? null);
   const [backtestResult, setBacktestResult] = React.useState<BacktestResult | null>(null);
   const [paperOrder, setPaperOrder] = React.useState<PaperOrder | null>(null);
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
@@ -536,7 +544,7 @@ function DubheWorkbench(): React.ReactElement {
       },
     });
     blocklyWorkspaceRef.current = workspace;
-    Blockly.serialization.workspaces.load(defaultStrategyBlocklyState, workspace);
+    Blockly.serialization.workspaces.load(readStoredStrategyWorkshop()?.blocklyState ?? defaultStrategyBlocklyState, workspace);
     window.setTimeout(() => Blockly.svgResize(workspace), 0);
 
     const resetValidation = (event: Blockly.Events.Abstract) => {
@@ -829,6 +837,37 @@ function DubheWorkbench(): React.ReactElement {
     setStrategyWorkshopForm((current) => ({ ...current, [field]: value }));
     setStrategyValidation(null);
     setStrategyWorkshopSpec(null);
+  }
+
+  function saveStrategyWorkshopTemplate(): void {
+    const workspace = blocklyWorkspaceRef.current;
+    if (!workspace) {
+      appendLog('warning', '策略工坊尚未准备好，稍后再保存。');
+      return;
+    }
+    const savedAt = new Date().toISOString();
+    const snapshot: StrategyWorkshopStorage = {
+      form: strategyWorkshopForm,
+      blocklyState: Blockly.serialization.workspaces.save(workspace) as typeof defaultStrategyBlocklyState,
+      savedAt,
+    };
+    localStorage.setItem(STRATEGY_WORKSHOP_STORAGE_KEY, JSON.stringify(snapshot));
+    setStrategyWorkshopSavedAt(savedAt);
+    appendLog('positive', '策略工坊模板已保存到本机。');
+  }
+
+  function resetStrategyWorkshopTemplate(): void {
+    const workspace = blocklyWorkspaceRef.current;
+    setStrategyWorkshopForm(defaultStrategyWorkshopForm);
+    setStrategyWorkshopSpec(null);
+    setStrategyValidation(null);
+    setStrategyWorkshopSavedAt(null);
+    localStorage.removeItem(STRATEGY_WORKSHOP_STORAGE_KEY);
+    if (workspace) {
+      workspace.clear();
+      Blockly.serialization.workspaces.load(defaultStrategyBlocklyState, workspace);
+    }
+    appendLog('warning', '策略工坊已恢复默认模板。');
   }
 
   async function validateWorkshopStrategy(): Promise<void> {
@@ -1398,7 +1437,9 @@ function DubheWorkbench(): React.ReactElement {
                   <h3 style={styles.panelHeading}>策略工坊</h3>
                   <p style={styles.bodyText}>拖动或改写中文积木，Dubhe 会生成可校验的策略规格；通过前不会进入回测或交易。</p>
                 </div>
-                <span style={styles.smallMeta}>Blockly · Core 校验</span>
+                <span style={styles.smallMeta}>
+                  {strategyWorkshopSavedAt ? `已保存 ${shortTime(strategyWorkshopSavedAt)}` : 'Blockly · Core 校验'}
+                </span>
               </header>
               <div style={styles.strategyWorkshopGrid}>
                 <div ref={blocklyContainerRef} style={styles.blocklySurface} aria-label="Blockly 策略积木画布" />
@@ -1480,6 +1521,12 @@ function DubheWorkbench(): React.ReactElement {
                     </button>
                     <button style={styles.secondaryButton} type="button" disabled={!strategyValidation?.valid} onClick={useWorkshopStrategyDraft}>
                       设为草案
+                    </button>
+                    <button style={styles.secondaryButton} type="button" onClick={saveStrategyWorkshopTemplate}>
+                      保存模板
+                    </button>
+                    <button style={styles.secondaryButton} type="button" onClick={resetStrategyWorkshopTemplate}>
+                      恢复默认
                     </button>
                   </div>
                   <div style={styles.validationBox}>
@@ -1787,6 +1834,37 @@ function readStoredSession(): DeviceSession | null {
     localStorage.removeItem(DEVICE_SESSION_STORAGE_KEY);
     return null;
   }
+}
+
+function readStoredStrategyWorkshop(): StrategyWorkshopStorage | null {
+  try {
+    const raw = localStorage.getItem(STRATEGY_WORKSHOP_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StrategyWorkshopStorage>;
+    const form = coerceStrategyWorkshopForm(parsed.form);
+    const blocklyState = parsed.blocklyState && typeof parsed.blocklyState === 'object'
+      ? parsed.blocklyState
+      : defaultStrategyBlocklyState;
+    const savedAt = typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date().toISOString();
+    return form ? { form, blocklyState, savedAt } : null;
+  } catch {
+    localStorage.removeItem(STRATEGY_WORKSHOP_STORAGE_KEY);
+    return null;
+  }
+}
+
+function coerceStrategyWorkshopForm(value: unknown): StrategyWorkshopForm | null {
+  if (!value || typeof value !== 'object') return null;
+  const form = value as Partial<StrategyWorkshopForm>;
+  return {
+    strategyName: typeof form.strategyName === 'string' && form.strategyName.trim() ? form.strategyName : defaultStrategyWorkshopForm.strategyName,
+    timeframe: typeof form.timeframe === 'string' && form.timeframe.trim() ? form.timeframe : defaultStrategyWorkshopForm.timeframe,
+    rebalanceRule: typeof form.rebalanceRule === 'string' && form.rebalanceRule.trim() ? form.rebalanceRule : defaultStrategyWorkshopForm.rebalanceRule,
+    maxOrderNotional: Number(form.maxOrderNotional) > 0 ? Number(form.maxOrderNotional) : defaultStrategyWorkshopForm.maxOrderNotional,
+    includeNews: typeof form.includeNews === 'boolean' ? form.includeNews : defaultStrategyWorkshopForm.includeNews,
+    includeMarketBars: typeof form.includeMarketBars === 'boolean' ? form.includeMarketBars : defaultStrategyWorkshopForm.includeMarketBars,
+    paperOnly: typeof form.paperOnly === 'boolean' ? form.paperOnly : defaultStrategyWorkshopForm.paperOnly,
+  };
 }
 
 function normalizeCoreUrl(value: string): string {
