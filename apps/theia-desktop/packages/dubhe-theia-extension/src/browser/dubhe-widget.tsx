@@ -138,6 +138,30 @@ type SystemStatusResponse = {
   generated_at: string;
 };
 
+type LocalRuntimeConfigItem = {
+  key: string;
+  label_zh: string;
+  description_zh: string;
+  configured: boolean;
+  secret: boolean;
+  source: 'local_file' | 'process_env' | 'missing';
+  masked_value?: string | null;
+  restart_required: boolean;
+};
+
+type LocalRuntimeConfigResponse = {
+  editable: boolean;
+  exists: boolean;
+  path: string;
+  items: LocalRuntimeConfigItem[];
+  message_zh: string;
+  generated_at: string;
+};
+
+type LocalRuntimeConfigUpdateRequest = {
+  values: Record<string, string>;
+};
+
 type NewsAnalysis = {
   id: string;
   news_event_id: string;
@@ -550,6 +574,9 @@ function DubheWorkbench(): React.ReactElement {
   const [selectedNewsId, setSelectedNewsId] = React.useState(fallbackNewsEvent.id);
   const [providerStatus, setProviderStatus] = React.useState<NewsProviderStatus[]>([]);
   const [systemStatus, setSystemStatus] = React.useState<SystemStatusResponse | null>(null);
+  const [localConfig, setLocalConfig] = React.useState<LocalRuntimeConfigResponse | null>(null);
+  const [localConfigForm, setLocalConfigForm] = React.useState<Record<string, string>>({});
+  const [localConfigBusy, setLocalConfigBusy] = React.useState(false);
   const [analysis, setAnalysis] = React.useState<NewsAnalysis | null>(null);
   const [strategyDraft, setStrategyDraft] = React.useState<StrategyDraft | null>(null);
   const [strategyWorkshopForm, setStrategyWorkshopForm] = React.useState<StrategyWorkshopForm>(() => readStoredStrategyWorkshop()?.form ?? defaultStrategyWorkshopForm);
@@ -646,6 +673,8 @@ function DubheWorkbench(): React.ReactElement {
       setAuditLogs([]);
       setPortfolio(null);
       setWorkspaceSnapshot(null);
+      setLocalConfig(null);
+      setLocalConfigForm({});
       setLastSyncEvent(null);
       setSyncConnectionStatus('未连接');
       syncCursorRef.current = 0;
@@ -836,6 +865,8 @@ function DubheWorkbench(): React.ReactElement {
       setSession(null);
       setPortfolio(null);
       setWorkspaceSnapshot(null);
+      setLocalConfig(null);
+      setLocalConfigForm({});
       setAssistantMessages(assistantWelcomeMessages);
       setLastSyncEvent(null);
       setSyncConnectionStatus('未连接');
@@ -1130,6 +1161,7 @@ function DubheWorkbench(): React.ReactElement {
         loadWorkspaceSnapshot(activeSession),
         loadPortfolio(activeSession),
         loadRiskControls(activeSession),
+        loadLocalConfig(activeSession),
       ]);
     } catch (error) {
       appendLog('warning', `会话数据同步失败：${errorMessage(error)}。`);
@@ -1198,6 +1230,77 @@ function DubheWorkbench(): React.ReactElement {
       setRiskMessage(`风控中心同步失败：${errorMessage(error)}。`);
     } finally {
       setRiskBusy(false);
+    }
+  }
+
+  async function loadLocalConfig(activeSession = session): Promise<void> {
+    if (!activeSession || activeSession.role !== 'admin') {
+      setLocalConfig(null);
+      setLocalConfigForm({});
+      return;
+    }
+    setLocalConfigBusy(true);
+    try {
+      const nextConfig = await getJson<LocalRuntimeConfigResponse>(
+        coreUrl,
+        '/v1/runtime/local-config',
+        activeSession.access_token,
+      );
+      setLocalConfig(nextConfig);
+      setLocalConfigForm(localConfigFormFromResponse(nextConfig));
+    } catch (error) {
+      setLocalConfig(null);
+      setLocalConfigForm({});
+      appendLog('warning', `本地配置读取失败：${errorMessage(error)}。`);
+    } finally {
+      setLocalConfigBusy(false);
+    }
+  }
+
+  function updateLocalConfigField(key: string, value: string): void {
+    setLocalConfigForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function saveLocalConfig(): Promise<void> {
+    if (!session || session.role !== 'admin') {
+      appendLog('warning', '只有管理员可以修改本地运行配置。');
+      return;
+    }
+    if (!localConfig) {
+      appendLog('warning', '请先读取本地配置状态。');
+      return;
+    }
+
+    const values: Record<string, string> = {};
+    for (const item of localConfig.items) {
+      const nextValue = localConfigForm[item.key] ?? '';
+      if (item.secret) {
+        if (nextValue.trim()) values[item.key] = nextValue;
+      } else if (nextValue.trim() || item.configured) {
+        values[item.key] = nextValue;
+      }
+    }
+    if (Object.keys(values).length === 0) {
+      appendLog('warning', '没有需要保存的配置值。');
+      return;
+    }
+
+    setLocalConfigBusy(true);
+    try {
+      const nextConfig = await putJson<LocalRuntimeConfigResponse, LocalRuntimeConfigUpdateRequest>(
+        coreUrl,
+        '/v1/runtime/local-config',
+        { values },
+        session.access_token,
+      );
+      setLocalConfig(nextConfig);
+      setLocalConfigForm(localConfigFormFromResponse(nextConfig));
+      await checkHealth();
+      appendLog('positive', '本地配置已保存并应用到当前 Core；数据库路径变更需重启后生效。');
+    } catch (error) {
+      appendLog('negative', `本地配置保存失败：${errorMessage(error)}。`);
+    } finally {
+      setLocalConfigBusy(false);
     }
   }
 
@@ -1877,8 +1980,15 @@ function DubheWorkbench(): React.ReactElement {
               <>
                 <ConfigurationGuide
                   systemStatus={systemStatus}
+                  session={session}
+                  localConfig={localConfig}
+                  localConfigForm={localConfigForm}
                   busy={isBusy}
+                  configBusy={localConfigBusy}
                   onRefresh={() => void checkHealth()}
+                  onReloadConfig={() => void loadLocalConfig(session)}
+                  onSaveConfig={() => void saveLocalConfig()}
+                  onConfigFieldChange={updateLocalConfigField}
                 />
                 <div style={styles.statusList}>
                   {systemStatus.config_items.map((item) => (
@@ -2141,6 +2251,10 @@ async function postJson<T>(baseUrl: string, path: string, body: unknown, accessT
   return requestJson<T>(baseUrl, path, { method: 'POST', body, accessToken });
 }
 
+async function putJson<T, B>(baseUrl: string, path: string, body: B, accessToken?: string): Promise<T> {
+  return requestJson<T>(baseUrl, path, { method: 'PUT', body, accessToken });
+}
+
 async function requestJson<T>(
   baseUrl: string,
   path: string,
@@ -2353,6 +2467,7 @@ function auditActionLabel(action: string): string {
     'assistant.chat_requested': 'AI 分析师对话',
     'risk.kill_switch_updated': '急停更新',
     'risk.order_evaluated': '订单风控评估',
+    'runtime.local_config_updated': '本地配置更新',
     'simulation.paper_order_submitted': '纸面订单',
   };
   return labels[action] ?? action;
@@ -2626,14 +2741,22 @@ function StatusRow(props: { label: string; value: string; tone: Tone; message: s
 
 function ConfigurationGuide(props: {
   systemStatus: SystemStatusResponse;
+  session: DeviceSession | null;
+  localConfig: LocalRuntimeConfigResponse | null;
+  localConfigForm: Record<string, string>;
   busy: boolean;
+  configBusy: boolean;
   onRefresh: () => void;
+  onReloadConfig: () => void;
+  onSaveConfig: () => void;
+  onConfigFieldChange: (key: string, value: string) => void;
 }): React.ReactElement {
   const missingItems = props.systemStatus.config_items.filter((item) => !item.configured);
   const licensedNewsReady = props.systemStatus.news_adapters.some((adapter) => adapter.requires_license && adapter.enabled);
   const llmReady = Boolean(props.systemStatus.llm?.enabled);
   const ready = missingItems.length === 0;
   const tone: Tone = ready ? 'positive' : 'warning';
+  const canEditConfig = props.session?.role === 'admin';
 
   return (
     <div style={{ ...styles.configGuide, ...styles.configGuideTone[tone] }}>
@@ -2673,8 +2796,80 @@ function ConfigurationGuide(props: {
       <button style={styles.inlineTextButton} type="button" onClick={props.onRefresh} disabled={props.busy}>
         重新检查配置
       </button>
+      <div style={styles.localConfigBox}>
+        <div style={styles.configGuideHeader}>
+          <strong style={styles.statusName}>图形化配置</strong>
+          <span style={styles.smallMeta}>{props.localConfig?.exists ? '已创建' : '未创建'}</span>
+        </div>
+        <p style={styles.statusMessage}>
+          {canEditConfig
+            ? props.localConfig?.message_zh ?? '点击读取后可直接在工作台里保存模型和新闻源配置。'
+            : '管理员登录后可在这里直接保存本机模型和新闻源配置。'}
+        </p>
+        {props.localConfig?.path && <p style={styles.configPath}>{props.localConfig.path}</p>}
+        {canEditConfig && (
+          <div style={styles.localConfigActions}>
+            <button
+              style={styles.inlineTextButton}
+              type="button"
+              onClick={props.onReloadConfig}
+              disabled={props.configBusy}
+            >
+              读取配置
+            </button>
+          </div>
+        )}
+        {canEditConfig && props.localConfig && (
+          <form
+            style={styles.localConfigForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              props.onSaveConfig();
+            }}
+          >
+            {props.localConfig.items.map((item) => (
+              <label style={styles.configField} key={item.key}>
+                <span style={styles.configFieldTopLine}>
+                  <span style={styles.configFieldLabel}>{item.label_zh}</span>
+                  <span style={{ ...styles.miniPill, ...tonePillStyle(item.configured ? 'positive' : 'warning') }}>
+                    {item.configured ? sourceLabel(item.source) : '未配置'}
+                  </span>
+                </span>
+                <input
+                  style={styles.configInput}
+                  type={item.secret ? 'password' : 'text'}
+                  value={props.localConfigForm[item.key] ?? ''}
+                  placeholder={item.secret && item.configured ? '已配置，留空保持不变' : item.key}
+                  onChange={(event) => props.onConfigFieldChange(item.key, event.target.value)}
+                  disabled={props.configBusy}
+                />
+                <span style={styles.configHint}>
+                  {item.description_zh}{item.restart_required ? ' 修改后需要重启 Core。' : ''}
+                </span>
+              </label>
+            ))}
+            <button style={styles.fullWidthButtonInline} type="submit" disabled={props.configBusy}>
+              {props.configBusy ? '保存中' : '保存到本机配置'}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
+}
+
+function localConfigFormFromResponse(response: LocalRuntimeConfigResponse): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const item of response.items) {
+    values[item.key] = item.secret ? '' : item.masked_value ?? '';
+  }
+  return values;
+}
+
+function sourceLabel(source: LocalRuntimeConfigItem['source']): string {
+  if (source === 'local_file') return '本机文件';
+  if (source === 'process_env') return '环境变量';
+  return '未配置';
 }
 
 function StepPill(props: { label: string; done: boolean }): React.ReactElement {
@@ -3524,6 +3719,66 @@ const styles = {
     fontFamily: 'Consolas, "SFMono-Regular", monospace',
     fontSize: 11,
     fontWeight: 800,
+    overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  localConfigBox: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTop: '1px solid #e5ebe8',
+  } as React.CSSProperties,
+  localConfigActions: {
+    display: 'flex',
+    gap: 10,
+    marginTop: 4,
+  } as React.CSSProperties,
+  localConfigForm: {
+    display: 'grid',
+    gap: 10,
+    marginTop: 10,
+  } as React.CSSProperties,
+  configField: {
+    display: 'grid',
+    gap: 5,
+  } as React.CSSProperties,
+  configFieldTopLine: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  } as React.CSSProperties,
+  configFieldLabel: {
+    minWidth: 0,
+    color: '#26362f',
+    fontSize: 12,
+    fontWeight: 800,
+    lineHeight: 1.35,
+  } as React.CSSProperties,
+  configInput: {
+    width: '100%',
+    boxSizing: 'border-box',
+    border: '1px solid #d8e2dc',
+    borderRadius: 8,
+    padding: '8px 9px',
+    color: '#1f2f28',
+    background: '#ffffff',
+    fontSize: 12,
+    outline: 'none',
+  } as React.CSSProperties,
+  configHint: {
+    color: '#65786f',
+    fontSize: 11,
+    lineHeight: 1.4,
+    overflowWrap: 'anywhere',
+  } as React.CSSProperties,
+  configPath: {
+    margin: '6px 0 0',
+    padding: '6px 7px',
+    borderRadius: 6,
+    background: '#eef2ef',
+    color: '#40534a',
+    fontFamily: 'Consolas, "SFMono-Regular", monospace',
+    fontSize: 11,
+    lineHeight: 1.4,
     overflowWrap: 'anywhere',
   } as React.CSSProperties,
   miniPill: {

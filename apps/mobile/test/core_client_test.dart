@@ -426,6 +426,72 @@ void main() {
     expect(status.newsAdapters.last.labelZh, '本地演示新闻源');
   });
 
+  test('local runtime config reads and updates redacted items', () async {
+    var requestIndex = 0;
+    final client = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'device-token',
+      client: MockClient((request) async {
+        expect(request.url.path, '/v1/runtime/local-config');
+        expect(request.headers['authorization'], 'Bearer device-token');
+        requestIndex += 1;
+        if (requestIndex == 1) {
+          expect(request.method, 'GET');
+        } else {
+          expect(request.method, 'PUT');
+          expect(request.body, contains('"DUBHE_LLM_MODEL":"gpt-test"'));
+        }
+        return http.Response(
+          '''
+          {
+            "editable": true,
+            "exists": true,
+            "path": "D:/github/dubhe-main/config/dubhe.local.env",
+            "items": [
+              {
+                "key": "DUBHE_LLM_MODEL",
+                "label_zh": "AI 模型名称",
+                "description_zh": "模型名",
+                "configured": true,
+                "secret": false,
+                "source": "local_file",
+                "masked_value": "gpt-test",
+                "restart_required": false
+              },
+              {
+                "key": "FINNHUB_API_KEY",
+                "label_zh": "Finnhub 授权新闻 Key",
+                "description_zh": "密钥",
+                "configured": true,
+                "secret": true,
+                "source": "local_file",
+                "masked_value": "••••oken",
+                "restart_required": false
+              }
+            ],
+            "message_zh": "本地配置文件可编辑；已读取 2/2 项。",
+            "generated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final config = await client.fetchLocalRuntimeConfig();
+    expect(config.exists, isTrue);
+    expect(config.items.first.maskedValue, 'gpt-test');
+    expect(config.items.last.secret, isTrue);
+    expect(config.items.last.maskedValue, '••••oken');
+
+    final updated = await client.updateLocalRuntimeConfig(
+      values: const {'DUBHE_LLM_MODEL': 'gpt-test'},
+    );
+    expect(updated.messageZh, contains('本地配置文件可编辑'));
+    expect(requestIndex, 2);
+  });
+
   test(
     'assistant chat sends portfolio research context and parses guidance',
     () async {

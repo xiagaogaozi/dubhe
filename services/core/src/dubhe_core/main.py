@@ -26,6 +26,8 @@ from .models import (
     DeviceRevocation,
     KillSwitchState,
     KillSwitchUpdateRequest,
+    LocalRuntimeConfigResponse,
+    LocalRuntimeConfigUpdateRequest,
     NewsAnalysis,
     NewsAdapterRuntimeStatus,
     NewsEvent,
@@ -60,6 +62,7 @@ from .models import (
 from .llm import llm_runtime_status
 from .news_sources import fetch_news_feed
 from .risk import evaluate_order_intent
+from .runtime_config import local_runtime_config_response, update_local_runtime_config
 from .simulation import submit_paper_order
 from .store import store
 from .strategy import validate_strategy_spec
@@ -289,6 +292,7 @@ def capabilities() -> dict[str, object]:
             "audit_log",
             "workspace_sync_websocket",
             "openai_compatible_llm_router",
+            "local_runtime_config_editor",
         ],
         "live_trading": "disabled_until_risk_approval_flow_exists",
     }
@@ -338,6 +342,48 @@ def require_admin_session(
 ) -> DeviceSession:
     require_roles(session, {UserRole.ADMIN})
     return session
+
+
+@app.get("/v1/runtime/local-config", response_model=LocalRuntimeConfigResponse)
+def get_local_runtime_config_endpoint(
+    _session: DeviceSession = Depends(require_admin_session),
+) -> LocalRuntimeConfigResponse:
+    try:
+        return local_runtime_config_response()
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.put("/v1/runtime/local-config", response_model=LocalRuntimeConfigResponse)
+def update_local_runtime_config_endpoint(
+    request: LocalRuntimeConfigUpdateRequest,
+    session: DeviceSession = Depends(require_admin_session),
+) -> LocalRuntimeConfigResponse:
+    try:
+        response = update_local_runtime_config(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="本地配置文件写入失败。") from exc
+
+    updated_keys = sorted(key for key, value in request.values.items() if value.strip())
+    cleared_keys = sorted(
+        set(request.clear_keys) | {key for key, value in request.values.items() if not value.strip()}
+    )
+    store.append_audit_log(
+        actor_session=session,
+        action="runtime.local_config_updated",
+        target_type="runtime_config",
+        target_id=response.path,
+        summary_zh="本地运行配置已更新；敏感值已脱敏处理。",
+        metadata={
+            "updated_keys": updated_keys,
+            "cleared_keys": cleared_keys,
+            "config_path": response.path,
+            "secrets_redacted": True,
+        },
+    )
+    return response
 
 
 @app.post("/v1/auth/devices/register", response_model=DeviceSession)

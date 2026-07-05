@@ -93,6 +93,8 @@ $env:DUBHE_LLM_BASE_URL="https://api.openai.com/v1"
 
 如果不想手动设置环境变量，可以双击仓库根目录的 `Configure-Dubhe.cmd`，在本机配置文件中启用同名配置项；Core 启动脚本会自动加载它。
 
+管理员也可以通过桌面端或移动端的“系统状态 / 数据源配置”图形化编辑本机配置。底层接口为 `GET/PUT /v1/runtime/local-config`，需要设备 Bearer token 且仅限管理员；接口只返回脱敏状态，不回传真实 API key，更新动作会写入审计日志。
+
 纸面卖出会先校验当前持仓；空仓或超持仓卖出会被拦截，不会生成模拟券商回报，也不会写出负持仓。
 
 生产版必须替换为正式 OIDC/企业身份、真实 MFA、刷新令牌、密码策略、不可篡改审计存储和更完整的管理员 UI。当前 PBKDF2 密码哈希、本地 MFA 和 SQLite 审计日志只用于最小可运行链路。
@@ -110,6 +112,8 @@ $env:DUBHE_SEC_USER_AGENT="Dubhe/0.1 your-email@example.com"
 未配置 key 时，对应 provider 会返回中文 `skipped` 状态，并自动回退到 SEC/GDELT 或本地 fixture，不会导致客户端崩溃。商业源的正文存储、二次展示和 AI 处理范围必须以供应商合同为准；Core 当前只标准化标题、来源、URL、时间、标的、事件类型和 license flags。
 
 Windows 本地运行时也可以通过 `Configure-Dubhe.cmd` 填写这些 key。真实配置保存在 `config\dubhe.local.env`，该文件已被 Git 忽略；仓库只提交无密钥的 `config\dubhe.local.env.example` 模板。
+
+图形化配置和 `Configure-Dubhe.cmd` 使用同一个 `config\dubhe.local.env` 文件。模型和新闻源 key 保存后会同步到当前 Core 进程；`DUBHE_CORE_DB_PATH` 这类启动期配置保存后需要重启 Core 才能生效。
 
 配置体检接口：
 

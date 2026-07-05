@@ -210,6 +210,49 @@ class SystemStatusResponse(BaseModel):
     generated_at: datetime = Field(default_factory=utc_now)
 
 
+class LocalRuntimeConfigItem(BaseModel):
+    key: str
+    label_zh: str
+    description_zh: str
+    configured: bool
+    secret: bool
+    source: Literal["local_file", "process_env", "missing"] = "missing"
+    masked_value: str | None = None
+    restart_required: bool = False
+
+
+class LocalRuntimeConfigResponse(BaseModel):
+    editable: bool
+    exists: bool
+    path: str
+    items: list[LocalRuntimeConfigItem] = Field(default_factory=list)
+    message_zh: str
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
+class LocalRuntimeConfigUpdateRequest(BaseModel):
+    values: dict[str, str] = Field(default_factory=dict)
+    clear_keys: list[str] = Field(default_factory=list)
+
+    @field_validator("values")
+    @classmethod
+    def reject_multiline_values(cls, values: dict[str, str]) -> dict[str, str]:
+        for key, value in values.items():
+            if "\n" in key or "\r" in key:
+                raise ValueError("配置项名称不能包含换行。")
+            if "\n" in value or "\r" in value:
+                raise ValueError(f"{key} 的配置值不能包含换行。")
+        return values
+
+    @field_validator("clear_keys")
+    @classmethod
+    def reject_multiline_clear_keys(cls, keys: list[str]) -> list[str]:
+        for key in keys:
+            if "\n" in key or "\r" in key:
+                raise ValueError("配置项名称不能包含换行。")
+        return keys
+
+
 class StrategySpec(BaseModel):
     strategy_name: str = Field(min_length=1)
     market_scope: list[Market] = Field(min_length=1)

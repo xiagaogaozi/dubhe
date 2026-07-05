@@ -86,6 +86,18 @@ class CoreClient {
     return SystemStatus.fromJson(_map(json));
   }
 
+  Future<LocalRuntimeConfig> fetchLocalRuntimeConfig() async {
+    final json = await _getJson('/v1/runtime/local-config');
+    return LocalRuntimeConfig.fromJson(_map(json));
+  }
+
+  Future<LocalRuntimeConfig> updateLocalRuntimeConfig({
+    required Map<String, String> values,
+  }) async {
+    final json = await _putJson('/v1/runtime/local-config', {'values': values});
+    return LocalRuntimeConfig.fromJson(_map(json));
+  }
+
   Future<WorkspaceSnapshot> fetchWorkspaceSnapshot({
     required String workspaceId,
     int sinceSequence = 0,
@@ -343,6 +355,15 @@ class CoreClient {
     return _decodeOrThrow(response);
   }
 
+  Future<dynamic> _putJson(String path, Map<String, dynamic> body) async {
+    final response = await _client.put(
+      _uri(path),
+      headers: _headers(),
+      body: jsonEncode(body),
+    );
+    return _decodeOrThrow(response);
+  }
+
   dynamic _decodeOrThrow(http.Response response) {
     final body = response.bodyBytes.isEmpty
         ? null
@@ -390,6 +411,8 @@ class DeviceSession {
   final String deviceName;
 
   bool get canReviewApprovals => role == 'admin' || role == 'risk_manager';
+
+  bool get canEditRuntimeConfig => role == 'admin';
 
   String get roleZh {
     if (role == 'admin') return '管理员';
@@ -508,6 +531,69 @@ class SystemStatus {
       newsAdapters: _mapList(
         json['news_adapters'],
       ).map(NewsAdapterReadiness.fromJson).toList(),
+    );
+  }
+}
+
+class LocalRuntimeConfig {
+  LocalRuntimeConfig({
+    required this.editable,
+    required this.exists,
+    required this.path,
+    required this.items,
+    required this.messageZh,
+  });
+
+  final bool editable;
+  final bool exists;
+  final String path;
+  final List<LocalRuntimeConfigItem> items;
+  final String messageZh;
+
+  factory LocalRuntimeConfig.fromJson(Map<String, dynamic> json) {
+    return LocalRuntimeConfig(
+      editable: _bool(json['editable']),
+      exists: _bool(json['exists']),
+      path: _string(json['path']),
+      items: _mapList(
+        json['items'],
+      ).map(LocalRuntimeConfigItem.fromJson).toList(),
+      messageZh: _string(json['message_zh']),
+    );
+  }
+}
+
+class LocalRuntimeConfigItem {
+  LocalRuntimeConfigItem({
+    required this.key,
+    required this.labelZh,
+    required this.descriptionZh,
+    required this.configured,
+    required this.secret,
+    required this.source,
+    required this.maskedValue,
+    required this.restartRequired,
+  });
+
+  final String key;
+  final String labelZh;
+  final String descriptionZh;
+  final bool configured;
+  final bool secret;
+  final String source;
+  final String maskedValue;
+  final bool restartRequired;
+
+  factory LocalRuntimeConfigItem.fromJson(Map<String, dynamic> json) {
+    return LocalRuntimeConfigItem(
+      key: _string(json['key']),
+      labelZh: _string(json['label_zh']),
+      descriptionZh: _string(json['description_zh']),
+      configured: _bool(json['configured']),
+      secret: _bool(json['secret']),
+      source: _string(json['source']),
+      maskedValue: _string(json['masked_value']),
+      restartRequired: _bool(json['restart_required']),
     );
   }
 }

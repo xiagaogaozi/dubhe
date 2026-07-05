@@ -66,6 +66,106 @@
         }
       }
     },
+    "/v1/runtime/local-config": {
+      "get": {
+        "summary": "Get Local Runtime Config Endpoint",
+        "operationId": "get_local_runtime_config_endpoint_v1_runtime_local_config_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalRuntimeConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Local Runtime Config Endpoint",
+        "operationId": "update_local_runtime_config_endpoint_v1_runtime_local_config_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalRuntimeConfigUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalRuntimeConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/devices/register": {
       "post": {
         "summary": "Register Device Endpoint",
@@ -2785,6 +2885,125 @@
           "message_zh"
         ],
         "title": "LLMRuntimeStatus"
+      },
+      "LocalRuntimeConfigItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label_zh": {
+            "type": "string",
+            "title": "Label Zh"
+          },
+          "description_zh": {
+            "type": "string",
+            "title": "Description Zh"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "secret": {
+            "type": "boolean",
+            "title": "Secret"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "local_file",
+              "process_env",
+              "missing"
+            ],
+            "title": "Source",
+            "default": "missing"
+          },
+          "masked_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Masked Value"
+          },
+          "restart_required": {
+            "type": "boolean",
+            "title": "Restart Required",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label_zh",
+          "description_zh",
+          "configured",
+          "secret"
+        ],
+        "title": "LocalRuntimeConfigItem"
+      },
+      "LocalRuntimeConfigResponse": {
+        "properties": {
+          "editable": {
+            "type": "boolean",
+            "title": "Editable"
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LocalRuntimeConfigItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "editable",
+          "exists",
+          "path",
+          "message_zh"
+        ],
+        "title": "LocalRuntimeConfigResponse"
+      },
+      "LocalRuntimeConfigUpdateRequest": {
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Values"
+          },
+          "clear_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Clear Keys"
+          }
+        },
+        "type": "object",
+        "title": "LocalRuntimeConfigUpdateRequest"
       },
       "Market": {
         "type": "string",

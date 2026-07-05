@@ -124,6 +124,80 @@ def test_system_status_reports_configured_keys_without_leaking_values(monkeypatc
     assert "llm-super-secret-token" not in payload
 
 
+def test_local_runtime_config_editor_writes_file_without_leaking_secrets(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    for key in [
+        "DUBHE_REPO_ROOT",
+        "DUBHE_LLM_MODEL",
+        "DUBHE_LLM_BASE_URL",
+        "DUBHE_LLM_API_KEY",
+        "FINNHUB_API_KEY",
+        "ALPHA_VANTAGE_API_KEY",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("DUBHE_REPO_ROOT", str(tmp_path))
+
+    unauthorized = client.get("/v1/runtime/local-config")
+    assert unauthorized.status_code == 401
+
+    session = register_test_device(f"local-config-admin-{uuid4().hex[:8]}")
+    initial = client.get("/v1/runtime/local-config", headers=auth_headers(session))
+    assert initial.status_code == 200
+    assert initial.json()["exists"] is False
+
+    response = client.put(
+        "/v1/runtime/local-config",
+        headers=auth_headers(session),
+        json={
+            "values": {
+                "DUBHE_LLM_MODEL": "gpt-test",
+                "DUBHE_LLM_BASE_URL": "http://127.0.0.1:4000/v1",
+                "FINNHUB_API_KEY": "finnhub-secret-token",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["exists"] is True
+    assert Path(body["path"]) == tmp_path / "config" / "dubhe.local.env"
+    assert "finnhub-secret-token" not in response.text
+    items_by_key = {item["key"]: item for item in body["items"]}
+    assert items_by_key["DUBHE_LLM_MODEL"]["masked_value"] == "gpt-test"
+    assert items_by_key["FINNHUB_API_KEY"]["configured"] is True
+    assert items_by_key["FINNHUB_API_KEY"]["masked_value"] == "••••oken"
+    assert os.environ["FINNHUB_API_KEY"] == "finnhub-secret-token"
+
+    config_text = (tmp_path / "config" / "dubhe.local.env").read_text(encoding="utf-8")
+    assert "DUBHE_LLM_MODEL=gpt-test" in config_text
+    assert "FINNHUB_API_KEY=finnhub-secret-token" in config_text
+
+    audit_response = client.get("/v1/audit/logs", headers=auth_headers(session))
+    assert audit_response.status_code == 200
+    assert "runtime.local_config_updated" in audit_response.text
+    assert "finnhub-secret-token" not in audit_response.text
+
+    clear_response = client.put(
+        "/v1/runtime/local-config",
+        headers=auth_headers(session),
+        json={
+            "clear_keys": [
+                "DUBHE_LLM_MODEL",
+                "DUBHE_LLM_BASE_URL",
+                "FINNHUB_API_KEY",
+            ],
+        },
+    )
+    assert clear_response.status_code == 200
+    assert "FINNHUB_API_KEY" not in os.environ
+    assert "DUBHE_LLM_MODEL" not in os.environ
+    assert "DUBHE_LLM_BASE_URL" not in os.environ
+    cleared_items = {item["key"]: item for item in clear_response.json()["items"]}
+    assert cleared_items["FINNHUB_API_KEY"]["configured"] is False
+
+
 def test_local_desktop_cors_allows_random_theia_port() -> None:
     response = client.options(
         "/health",

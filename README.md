@@ -55,6 +55,8 @@ cd D:\github\dubhe-main
 
 第一次接入真实 AI 模型或授权新闻源时，建议先双击 `Configure-Dubhe.cmd`。它会从 `config/dubhe.local.env.example` 创建只保存在本机的 `config/dubhe.local.env`，用记事本打开后，把需要启用的行前面的 `# ` 删除并填写自己的 key。保存后重新启动 Dubhe，`start-local-dubhe.ps1`、`services/core/scripts/run.ps1` 和体检脚本都会自动读取这个本地配置文件；真实 key 已加入 `.gitignore`，不会被提交。
 
+管理员登录桌面端或移动端后，也可以在“系统状态 / 数据源配置”里直接保存本地运行配置。客户端只显示脱敏状态，真实 API key 不会从 Core 回传；保存后模型和新闻源配置会立即应用到当前 Core，数据库路径变更仍需重启 Core。
+
 命令行启动方式：
 
 ```powershell

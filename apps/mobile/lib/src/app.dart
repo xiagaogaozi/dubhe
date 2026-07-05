@@ -294,6 +294,8 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperOrder? _paperOrder;
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
+  LocalRuntimeConfig? _localConfig;
+  Map<String, String> _localConfigForm = const {};
   WorkspaceSnapshot? _workspaceSnapshot;
   _MobileSyncConnectionStatus _syncStatus =
       _MobileSyncConnectionStatus.disconnected;
@@ -309,6 +311,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   KillSwitchState? _killSwitch;
   List<AuditLogEntry> _auditLogs = const [];
   List<ApprovalRequest> _approvals = const [];
+  bool _configBusy = false;
   bool _assistantBusy = false;
   String _assistantQuestion = '这条新闻会影响哪些股票？';
   List<_AssistantChatMessage> _assistantMessages = _assistantWelcomeMessages;
@@ -528,7 +531,15 @@ class _CompanionHomeState extends State<CompanionHome> {
       var approvals = <ApprovalRequest>[];
       KillSwitchState? killSwitch;
       var auditLogs = <AuditLogEntry>[];
+      LocalRuntimeConfig? localConfig;
       String? approvalMessage;
+      if (widget.session.canEditRuntimeConfig) {
+        try {
+          localConfig = await widget.client.fetchLocalRuntimeConfig();
+        } on DubheApiException catch (error) {
+          _message = error.message;
+        }
+      }
       if (widget.session.canReviewApprovals) {
         try {
           final riskResponses = await Future.wait<dynamic>([
@@ -561,6 +572,10 @@ class _CompanionHomeState extends State<CompanionHome> {
       );
       setState(() {
         _systemStatus = systemStatus;
+        _localConfig = localConfig;
+        _localConfigForm = localConfig == null
+            ? const {}
+            : _localConfigFormFromConfig(localConfig);
         _newsFeed = newsFeed;
         _portfolio = portfolio;
         _workspaceSnapshot = workspaceSnapshot;
@@ -1006,6 +1021,98 @@ class _CompanionHomeState extends State<CompanionHome> {
     }
   }
 
+  Future<void> _reloadLocalConfig() async {
+    if (!widget.session.canEditRuntimeConfig) {
+      setState(() {
+        _message = '只有管理员可以修改本地运行配置。';
+      });
+      return;
+    }
+    setState(() {
+      _configBusy = true;
+      _message = null;
+    });
+    try {
+      final config = await widget.client.fetchLocalRuntimeConfig();
+      if (!mounted) return;
+      setState(() {
+        _localConfig = config;
+        _localConfigForm = _localConfigFormFromConfig(config);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error is DubheApiException ? error.message : '本地配置读取失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _configBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveLocalConfig() async {
+    final config = _localConfig;
+    if (!widget.session.canEditRuntimeConfig || config == null) {
+      setState(() {
+        _message = '管理员读取配置后才能保存。';
+      });
+      return;
+    }
+    final values = <String, String>{};
+    for (final item in config.items) {
+      final nextValue = _localConfigForm[item.key] ?? '';
+      if (item.secret) {
+        if (nextValue.trim().isNotEmpty) values[item.key] = nextValue;
+      } else if (nextValue.trim().isNotEmpty || item.configured) {
+        values[item.key] = nextValue;
+      }
+    }
+    if (values.isEmpty) {
+      setState(() {
+        _message = '没有需要保存的配置值。';
+      });
+      return;
+    }
+
+    setState(() {
+      _configBusy = true;
+      _message = null;
+    });
+    try {
+      final nextConfig = await widget.client.updateLocalRuntimeConfig(
+        values: values,
+      );
+      final nextStatus = await widget.client.fetchSystemStatus();
+      if (!mounted) return;
+      setState(() {
+        _localConfig = nextConfig;
+        _localConfigForm = _localConfigFormFromConfig(nextConfig);
+        _systemStatus = nextStatus;
+        _message = '本地配置已保存并应用到当前 Core；数据库路径变更需重启后生效。';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error is DubheApiException ? error.message : '本地配置保存失败。';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _configBusy = false;
+        });
+      }
+    }
+  }
+
+  void _updateLocalConfigField(String key, String value) {
+    setState(() {
+      _localConfigForm = {..._localConfigForm, key: value};
+    });
+  }
+
   void _useSyncedStrategyDraft(StrategyDraft draft) {
     final syncedBacktest = latestSyncedBacktest(
       strategyDraft: draft,
@@ -1026,6 +1133,9 @@ class _CompanionHomeState extends State<CompanionHome> {
       _TodayPage(
         session: widget.session,
         systemStatus: _systemStatus,
+        localConfig: _localConfig,
+        localConfigForm: _localConfigForm,
+        configBusy: _configBusy,
         workspaceSnapshot: _workspaceSnapshot,
         syncStatus: _syncStatus,
         lastPushedSyncEvent: _lastPushedSyncEvent,
@@ -1033,6 +1143,9 @@ class _CompanionHomeState extends State<CompanionHome> {
         portfolio: _portfolio,
         message: _message,
         loading: _loading,
+        onReloadLocalConfig: _reloadLocalConfig,
+        onSaveLocalConfig: _saveLocalConfig,
+        onLocalConfigChanged: _updateLocalConfigField,
         onUseStrategyDraft: _useSyncedStrategyDraft,
       ),
       _NewsPage(newsFeed: _newsFeed),
@@ -1113,6 +1226,9 @@ class _TodayPage extends StatelessWidget {
   const _TodayPage({
     required this.session,
     required this.systemStatus,
+    required this.localConfig,
+    required this.localConfigForm,
+    required this.configBusy,
     required this.workspaceSnapshot,
     required this.syncStatus,
     required this.lastPushedSyncEvent,
@@ -1120,11 +1236,17 @@ class _TodayPage extends StatelessWidget {
     required this.portfolio,
     required this.message,
     required this.loading,
+    required this.onReloadLocalConfig,
+    required this.onSaveLocalConfig,
+    required this.onLocalConfigChanged,
     required this.onUseStrategyDraft,
   });
 
   final DeviceSession session;
   final SystemStatus? systemStatus;
+  final LocalRuntimeConfig? localConfig;
+  final Map<String, String> localConfigForm;
+  final bool configBusy;
   final WorkspaceSnapshot? workspaceSnapshot;
   final _MobileSyncConnectionStatus syncStatus;
   final SyncEvent? lastPushedSyncEvent;
@@ -1132,6 +1254,9 @@ class _TodayPage extends StatelessWidget {
   final PaperPortfolio? portfolio;
   final String? message;
   final bool loading;
+  final VoidCallback onReloadLocalConfig;
+  final VoidCallback onSaveLocalConfig;
+  final void Function(String key, String value) onLocalConfigChanged;
   final ValueChanged<StrategyDraft> onUseStrategyDraft;
 
   @override
@@ -1184,7 +1309,16 @@ class _TodayPage extends StatelessWidget {
           lastPushedEvent: lastPushedSyncEvent,
           onUseStrategyDraft: onUseStrategyDraft,
         ),
-        _SystemStatusPanel(status: systemStatus),
+        _SystemStatusPanel(
+          session: session,
+          status: systemStatus,
+          localConfig: localConfig,
+          localConfigForm: localConfigForm,
+          configBusy: configBusy,
+          onReloadLocalConfig: onReloadLocalConfig,
+          onSaveLocalConfig: onSaveLocalConfig,
+          onLocalConfigChanged: onLocalConfigChanged,
+        ),
         _ProviderStatusList(statuses: newsFeed?.providerStatus ?? const []),
       ],
     );
@@ -2191,9 +2325,25 @@ class _ProviderStatusList extends StatelessWidget {
 }
 
 class _SystemStatusPanel extends StatelessWidget {
-  const _SystemStatusPanel({required this.status});
+  const _SystemStatusPanel({
+    required this.session,
+    required this.status,
+    required this.localConfig,
+    required this.localConfigForm,
+    required this.configBusy,
+    required this.onReloadLocalConfig,
+    required this.onSaveLocalConfig,
+    required this.onLocalConfigChanged,
+  });
 
+  final DeviceSession session;
   final SystemStatus? status;
+  final LocalRuntimeConfig? localConfig;
+  final Map<String, String> localConfigForm;
+  final bool configBusy;
+  final VoidCallback onReloadLocalConfig;
+  final VoidCallback onSaveLocalConfig;
+  final void Function(String key, String value) onLocalConfigChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2221,7 +2371,16 @@ class _SystemStatusPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _ConfigurationGuide(status: current),
+          _ConfigurationGuide(
+            status: current,
+            session: session,
+            localConfig: localConfig,
+            localConfigForm: localConfigForm,
+            configBusy: configBusy,
+            onReloadLocalConfig: onReloadLocalConfig,
+            onSaveLocalConfig: onSaveLocalConfig,
+            onLocalConfigChanged: onLocalConfigChanged,
+          ),
           const SizedBox(height: 12),
           Text(current.tradingMessageZh),
           const SizedBox(height: 8),
@@ -2257,9 +2416,25 @@ class _SystemStatusPanel extends StatelessWidget {
 }
 
 class _ConfigurationGuide extends StatelessWidget {
-  const _ConfigurationGuide({required this.status});
+  const _ConfigurationGuide({
+    required this.status,
+    required this.session,
+    required this.localConfig,
+    required this.localConfigForm,
+    required this.configBusy,
+    required this.onReloadLocalConfig,
+    required this.onSaveLocalConfig,
+    required this.onLocalConfigChanged,
+  });
 
   final SystemStatus status;
+  final DeviceSession session;
+  final LocalRuntimeConfig? localConfig;
+  final Map<String, String> localConfigForm;
+  final bool configBusy;
+  final VoidCallback onReloadLocalConfig;
+  final VoidCallback onSaveLocalConfig;
+  final void Function(String key, String value) onLocalConfigChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2270,6 +2445,7 @@ class _ConfigurationGuide extends StatelessWidget {
     final licensedNewsReady = status.enabledLicensedAdapterCount > 0;
     final scheme = Theme.of(context).colorScheme;
     final borderColor = ready ? scheme.primary : scheme.tertiary;
+    final canEdit = session.canEditRuntimeConfig;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -2297,6 +2473,8 @@ class _ConfigurationGuide extends StatelessWidget {
             Text(
               ready
                   ? 'Core 已读取当前运行配置；AI、新闻源和交易能力仍会遵守只读建议、许可范围和实盘风控边界。'
+                  : canEdit
+                  ? '可以直接在手机端把配置保存到运行 Core 的电脑；密钥不会从 Core 回传到手机。'
                   : '在运行 Core 的电脑上双击 $_configureCommandLabel，在 $_localConfigFileLabel 填写自己的模型或新闻源 key；保存后重启 Dubhe Core，再回到手机端同步状态。',
             ),
             const SizedBox(height: 8),
@@ -2334,11 +2512,84 @@ class _ConfigurationGuide extends StatelessWidget {
                     .toList(),
               ),
             ],
+            const Divider(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '图形化配置',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                if (canEdit)
+                  TextButton.icon(
+                    onPressed: configBusy ? null : onReloadLocalConfig,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('读取'),
+                  ),
+              ],
+            ),
+            Text(
+              canEdit
+                  ? localConfig?.messageZh ?? '点击读取后，可直接保存 Core 电脑上的模型和新闻源配置。'
+                  : '管理员登录后可直接在这里保存 Core 电脑上的运行配置。',
+            ),
+            if (localConfig != null && localConfig!.path.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              SelectableText(
+                localConfig!.path,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (canEdit && localConfig != null) ...[
+              const SizedBox(height: 8),
+              ...localConfig!.items.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: TextFormField(
+                    key: ValueKey(
+                      '${item.key}:${item.configured}:${item.maskedValue}',
+                    ),
+                    obscureText: item.secret,
+                    enabled: !configBusy,
+                    initialValue: localConfigForm[item.key] ?? '',
+                    onChanged: (value) => onLocalConfigChanged(item.key, value),
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      labelText: item.labelZh,
+                      helperText:
+                          '${item.descriptionZh}${item.restartRequired ? ' 修改后需要重启 Core。' : ''}',
+                      suffixText: item.configured
+                          ? _localConfigSourceZh(item.source)
+                          : '未配置',
+                    ),
+                  ),
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: configBusy ? null : onSaveLocalConfig,
+                icon: Icon(configBusy ? Icons.hourglass_top : Icons.save),
+                label: Text(configBusy ? '保存中' : '保存到 Core 电脑'),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+Map<String, String> _localConfigFormFromConfig(LocalRuntimeConfig config) {
+  return {
+    for (final item in config.items)
+      item.key: item.secret ? '' : item.maskedValue,
+  };
+}
+
+String _localConfigSourceZh(String source) {
+  if (source == 'local_file') return '本机文件';
+  if (source == 'process_env') return '环境变量';
+  return '未配置';
 }
 
 class _ReadinessChip extends StatelessWidget {
