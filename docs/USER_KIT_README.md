@@ -7,7 +7,7 @@
 ## 最快使用顺序
 
 1. 双击 `00-Start-Dubhe-This-PC.cmd`，启动 Dubhe Core 和桌面端。
-2. 第一次使用真实 AI 或新闻源时，双击 `01-Configure-Dubhe-This-PC.cmd` 填写 key。
+2. 第一次使用真实 AI 或新闻源时，双击 `01-Configure-Dubhe-This-PC.cmd`，按中文向导填写 key；不知道的项目直接回车即可。
 3. 双击 `02-Check-Dubhe-This-PC.cmd` 做本机体检。
 4. 需要手机连接时，双击 `03-Start-Dubhe-LAN-This-PC.cmd`，再看 `03-Guides\mobile-quick-start.txt`。
 5. 填完 key 后，双击 `04-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。

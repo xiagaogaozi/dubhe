@@ -67,7 +67,7 @@ http://10.0.2.2:8000
 
 ## 第一次使用顺序
 
-1. 双击 `Configure-Dubhe.cmd`，填写 AI 模型和授权新闻源 key。
+1. 双击 `Configure-Dubhe.cmd`，按中文向导填写 AI 模型和授权新闻源 key；不知道的项目直接回车即可。
 2. 双击 `Start-Dubhe.cmd`，启动 Core 和桌面端。
 3. 双击 `Check-Dubhe.cmd`，确认安装包、配置和 Core 状态。
 4. 填完真实 AI/新闻源 key 后，双击 `Test-Dubhe-Services.cmd` 做 live 外部服务体检。

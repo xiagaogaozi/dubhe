@@ -20,6 +20,8 @@
 4. 在手机登录页点击 “检查连接”。成功后地址会保存。
 5. 安装上方 APK 路径里的 `app-debug.apk`，然后注册或登录本地账号。
 
+第一次使用真实 AI 或授权新闻源时，先在电脑上双击 `Configure-Dubhe.cmd`，按中文向导填写 key；不知道的项目直接回车即可。保存后重新启动 Dubhe Core，再回到手机端同步状态。
+
 如果 APK 路径后面显示 `(not built yet)`，说明这台电脑还没有生成 Android 调试包。开发者可以在 `apps/mobile` 下执行：
 
 ```powershell

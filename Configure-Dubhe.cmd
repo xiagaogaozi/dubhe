@@ -4,7 +4,7 @@ set "DUBHE_ROOT=%~dp0"
 echo Dubhe local configuration
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%DUBHE_ROOT%scripts\configure-local-dubhe.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%DUBHE_ROOT%scripts\configure-local-dubhe.ps1" -Guided
 set "DUBHE_EXIT=%ERRORLEVEL%"
 
 echo.
