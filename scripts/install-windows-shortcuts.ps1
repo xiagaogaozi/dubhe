@@ -79,6 +79,11 @@ $entries = @(
         description = "Live-check configured AI and financial news services through Dubhe Core."
     },
     @{
+        name = "Check Dubhe Production"
+        file = Join-Path $repoRoot "Check-Dubhe-Production.cmd"
+        description = "Check whether Dubhe is ready for real commercial production use."
+    },
+    @{
         name = "Stop Dubhe Core"
         file = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
         description = "Stop local Dubhe Core backend service."

@@ -45,6 +45,7 @@ from .models import (
     PaperOrder,
     PaperOrderStatus,
     PaperPortfolioSnapshot,
+    ProductionReadinessResponse,
     RiskDecision,
     RiskStatus,
     RuntimeConfigStatus,
@@ -70,6 +71,7 @@ from .models import (
 )
 from .llm import llm_runtime_status
 from .news_sources import fetch_news_feed
+from .production_readiness import production_readiness_response
 from .risk import evaluate_order_intent
 from .runtime_config import local_runtime_config_response, repo_root, update_local_runtime_config
 from .simulation import submit_paper_order
@@ -482,6 +484,11 @@ def system_external_checks(
     live: bool = Query(default=False),
 ) -> ExternalServiceCheckResponse:
     return external_service_checks(live=live)
+
+
+@app.get("/v1/system/production-readiness", response_model=ProductionReadinessResponse)
+def system_production_readiness() -> ProductionReadinessResponse:
+    return production_readiness_response()
 
 
 @app.get("/v1/capabilities")

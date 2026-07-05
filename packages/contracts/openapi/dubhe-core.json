@@ -104,6 +104,24 @@
         }
       }
     },
+    "/v1/system/production-readiness": {
+      "get": {
+        "summary": "System Production Readiness",
+        "operationId": "system_production_readiness_v1_system_production_readiness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductionReadinessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/capabilities": {
       "get": {
         "summary": "Capabilities",
@@ -4071,6 +4089,127 @@
           "account_id"
         ],
         "title": "PaperPortfolioSnapshot"
+      },
+      "ProductionReadinessItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "category_zh": {
+            "type": "string",
+            "title": "Category Zh"
+          },
+          "requirement_zh": {
+            "type": "string",
+            "title": "Requirement Zh"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "title": "Status"
+          },
+          "blocking": {
+            "type": "boolean",
+            "title": "Blocking"
+          },
+          "evidence_zh": {
+            "type": "string",
+            "title": "Evidence Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category_zh",
+          "requirement_zh",
+          "status",
+          "blocking",
+          "evidence_zh",
+          "next_step_zh"
+        ],
+        "title": "ProductionReadinessItem"
+      },
+      "ProductionReadinessResponse": {
+        "properties": {
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "default": "dubhe-core"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "zh-CN"
+          },
+          "production_ready": {
+            "type": "boolean",
+            "title": "Production Ready"
+          },
+          "overall_status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_ready"
+            ],
+            "title": "Overall Status"
+          },
+          "pass_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Pass Count"
+          },
+          "warning_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Warning Count"
+          },
+          "blocking_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Blocking Count"
+          },
+          "total_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Count"
+          },
+          "message_zh": {
+            "type": "string",
+            "title": "Message Zh"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductionReadinessItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "production_ready",
+          "overall_status",
+          "pass_count",
+          "warning_count",
+          "blocking_count",
+          "total_count",
+          "message_zh"
+        ],
+        "title": "ProductionReadinessResponse"
       },
       "ProviderStatus": {
         "type": "string",

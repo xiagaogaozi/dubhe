@@ -125,6 +125,8 @@ GET /v1/system/status
 
 `GET /v1/system/external-checks?live=false` 只做配置层体检；`live=true` 会对已配置的 AI 模型、Finnhub、Alpha Vantage、SEC EDGAR 和 GDELT 发起最小连接检查，并返回每项的 `ok/skipped/unavailable`、中文原因和下一步建议。该接口不会回传任何密钥；live 模式可能消耗极少量模型调用或新闻供应商请求额度。
 
+`GET /v1/system/production-readiness` 返回更严格的商业生产门禁：授权新闻覆盖、AI 模型、生产身份、云同步/数据库、不可篡改审计、真实券商、实盘开关和四端签名发布。只要仍存在阻断项，`production_ready` 会保持 `false`；这用于防止本地演示能力被误认为可直接生产上线。
+
 主链路烟测报告接口：
 
 ```http

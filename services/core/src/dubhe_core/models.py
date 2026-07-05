@@ -245,6 +245,30 @@ class ExternalServiceCheckResponse(BaseModel):
     generated_at: datetime = Field(default_factory=utc_now)
 
 
+class ProductionReadinessItem(BaseModel):
+    id: str
+    category_zh: str
+    requirement_zh: str
+    status: Literal["pass", "warn", "fail"]
+    blocking: bool
+    evidence_zh: str
+    next_step_zh: str
+
+
+class ProductionReadinessResponse(BaseModel):
+    service: str = "dubhe-core"
+    language: str = "zh-CN"
+    production_ready: bool
+    overall_status: Literal["ready", "not_ready"]
+    pass_count: int = Field(ge=0)
+    warning_count: int = Field(ge=0)
+    blocking_count: int = Field(ge=0)
+    total_count: int = Field(ge=0)
+    message_zh: str
+    items: list[ProductionReadinessItem] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
 class SystemStatusResponse(BaseModel):
     service: str = "dubhe-core"
     version: str = "0.1.0"

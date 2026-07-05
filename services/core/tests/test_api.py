@@ -291,6 +291,37 @@ def test_external_service_checks_live_uses_injected_fetchers(monkeypatch) -> Non
     assert all(item.live_checked for item in response.checks)
 
 
+def test_production_readiness_reports_blockers_without_secret_leaks(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("DUBHE_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("DUBHE_LLM_MODEL", "gpt-test")
+    monkeypatch.setenv("DUBHE_LLM_BASE_URL", "https://llm.example.com/v1")
+    monkeypatch.setenv("DUBHE_LLM_API_KEY", "llm-production-secret")
+    monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-production-secret")
+
+    response = client.get("/v1/system/production-readiness")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["production_ready"] is False
+    assert body["overall_status"] == "not_ready"
+    assert body["blocking_count"] > 0
+    items = {item["id"]: item for item in body["items"]}
+    assert items["llm_configured"]["status"] == "warn"
+    assert items["licensed_news_a_share"]["status"] == "fail"
+    assert items["licensed_news_a_share"]["blocking"] is True
+    assert items["production_identity"]["status"] == "fail"
+    assert items["production_storage"]["status"] == "fail"
+    assert items["live_broker_adapter"]["status"] == "fail"
+    assert items["live_trading_guard"]["status"] == "pass"
+    assert items["package_macos"]["blocking"] is True
+    assert items["package_ios"]["blocking"] is True
+    assert "llm-production-secret" not in response.text
+    assert "finnhub-production-secret" not in response.text
+
+
 def test_local_runtime_config_editor_writes_file_without_leaking_secrets(
     monkeypatch,
     tmp_path: Path,

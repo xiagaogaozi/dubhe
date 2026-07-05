@@ -18,6 +18,7 @@
 - 本机体检入口：`{{CHECK_CMD}}`
 - 主链路烟测入口：`{{SMOKE_CMD}}`
 - 外部服务体检入口：`{{SERVICE_CHECK_CMD}}`
+- 生产就绪门禁入口：`{{PRODUCTION_CHECK_CMD}}`
 - 本机配置入口：`{{CONFIGURE_CMD}}`
 
 ## 怎么选安装方式
@@ -68,9 +69,10 @@ http://10.0.2.2:8000
 2. 双击 `Start-Dubhe.cmd`，启动 Core 和桌面端。
 3. 双击 `Check-Dubhe.cmd`，确认安装包、配置和 Core 状态。
 4. 填完真实 AI/新闻源 key 后，双击 `Test-Dubhe-Services.cmd` 做 live 外部服务体检。
-5. 桌面端登录本地账号，查看 “首次使用清单”。
-6. 如需手机/平板，双击 `Start-Dubhe-LAN.cmd`，再打开 `Open-Dubhe-Mobile-Guide.cmd`。
-7. 双击 `Smoke-Dubhe.cmd` 跑主链路烟测，确认新闻、AI、策略、回测、纸面交易和同步闭环可用。
+5. 双击 `Check-Dubhe-Production.cmd` 查看商业生产上线阻断项。
+6. 桌面端登录本地账号，查看 “首次使用清单”。
+7. 如需手机/平板，双击 `Start-Dubhe-LAN.cmd`，再打开 `Open-Dubhe-Mobile-Guide.cmd`。
+8. 双击 `Smoke-Dubhe.cmd` 跑主链路烟测，确认新闻、AI、策略、回测、纸面交易和同步闭环可用。
 
 ## 跨端数据互通
 
