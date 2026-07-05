@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -94,6 +95,37 @@ class CoreClient {
       queryParameters: {'since_sequence': '$sinceSequence'},
     );
     return WorkspaceSnapshot.fromJson(_map(json));
+  }
+
+  Future<WorkspaceSyncConnection> connectWorkspaceSyncEvents({
+    required String workspaceId,
+    int sinceSequence = 0,
+  }) async {
+    final socket = await WebSocket.connect(
+      workspaceSyncEventsUri(
+        workspaceId: workspaceId,
+        sinceSequence: sinceSequence,
+      ).toString(),
+    );
+    return WorkspaceSyncConnection(socket);
+  }
+
+  Uri workspaceSyncEventsUri({
+    required String workspaceId,
+    int sinceSequence = 0,
+  }) {
+    final token = accessToken;
+    if (token == null || token.isEmpty) {
+      throw DubheApiException(401, '请先登录 Dubhe Core。');
+    }
+    final uri = _uri(
+      '/v1/workspaces/$workspaceId/sync-events/ws',
+      queryParameters: {
+        'access_token': token,
+        'since_sequence': '$sinceSequence',
+      },
+    );
+    return uri.replace(scheme: uri.scheme == 'https' ? 'wss' : 'ws');
   }
 
   Future<NewsAnalysis> analyzeNews(NewsEvent event) async {
@@ -295,6 +327,19 @@ class CoreClient {
     }
     throw DubheApiException(response.statusCode, message);
   }
+}
+
+class WorkspaceSyncConnection {
+  WorkspaceSyncConnection(this._socket);
+
+  final WebSocket _socket;
+
+  Stream<SyncEvent> get events => _socket.expand((message) {
+    final event = SyncEvent.tryParseMessage(message);
+    return event == null ? const <SyncEvent>[] : [event];
+  });
+
+  Future<void> close() => _socket.close();
 }
 
 class DeviceSession {
@@ -551,6 +596,15 @@ class SyncEvent {
       action: _string(json['action']),
       createdAt: _string(json['created_at']),
     );
+  }
+
+  static SyncEvent? tryParseMessage(dynamic message) {
+    try {
+      final raw = message is List<int> ? utf8.decode(message) : '$message';
+      return SyncEvent.fromJson(_map(jsonDecode(raw)));
+    } catch (_) {
+      return null;
+    }
   }
 }
 

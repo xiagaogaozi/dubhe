@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -191,6 +193,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
 enum _AuthMode { register, login }
 
+enum _MobileSyncConnectionStatus {
+  disconnected,
+  connecting,
+  live,
+  reconnecting,
+  offline,
+}
+
 class CompanionHome extends StatefulWidget {
   const CompanionHome({required this.client, required this.session, super.key});
 
@@ -216,6 +226,15 @@ class _CompanionHomeState extends State<CompanionHome> {
   PaperPortfolio? _portfolio;
   SystemStatus? _systemStatus;
   WorkspaceSnapshot? _workspaceSnapshot;
+  _MobileSyncConnectionStatus _syncStatus =
+      _MobileSyncConnectionStatus.disconnected;
+  SyncEvent? _lastPushedSyncEvent;
+  WorkspaceSyncConnection? _syncConnection;
+  StreamSubscription<SyncEvent>? _syncSubscription;
+  Timer? _syncReconnectTimer;
+  int _syncCursor = 0;
+  int _syncRetryCount = 0;
+  int _syncConnectGeneration = 0;
   KillSwitchState? _killSwitch;
   List<AuditLogEntry> _auditLogs = const [];
   List<ApprovalRequest> _approvals = const [];
@@ -223,13 +242,128 @@ class _CompanionHomeState extends State<CompanionHome> {
   @override
   void initState() {
     super.initState();
-    _refresh();
+    unawaited(_refresh().whenComplete(_connectWorkspaceSync));
   }
 
   @override
   void dispose() {
+    _syncConnectGeneration += 1;
+    _closeWorkspaceSync();
     widget.client.close();
     super.dispose();
+  }
+
+  Future<void> _connectWorkspaceSync() async {
+    if (!mounted) return;
+    final generation = ++_syncConnectGeneration;
+    _closeWorkspaceSync();
+    setState(() {
+      _syncStatus = _syncRetryCount == 0
+          ? _MobileSyncConnectionStatus.connecting
+          : _MobileSyncConnectionStatus.reconnecting;
+    });
+
+    try {
+      final connection = await widget.client.connectWorkspaceSyncEvents(
+        workspaceId: widget.session.workspaceId,
+        sinceSequence: _syncCursor,
+      );
+      if (!mounted || generation != _syncConnectGeneration) {
+        unawaited(connection.close());
+        return;
+      }
+      _syncConnection = connection;
+      _syncSubscription = connection.events.listen(
+        _handleSyncEvent,
+        onError: (_) => _scheduleWorkspaceSyncReconnect(generation),
+        onDone: () => _scheduleWorkspaceSyncReconnect(generation),
+      );
+      _syncRetryCount = 0;
+      setState(() {
+        _syncStatus = _MobileSyncConnectionStatus.live;
+      });
+    } catch (_) {
+      if (!mounted || generation != _syncConnectGeneration) return;
+      setState(() {
+        _syncStatus = _MobileSyncConnectionStatus.offline;
+      });
+      _scheduleWorkspaceSyncReconnect(generation);
+    }
+  }
+
+  void _closeWorkspaceSync() {
+    _syncReconnectTimer?.cancel();
+    _syncReconnectTimer = null;
+    unawaited(_syncSubscription?.cancel());
+    _syncSubscription = null;
+    unawaited(_syncConnection?.close());
+    _syncConnection = null;
+  }
+
+  void _scheduleWorkspaceSyncReconnect(int generation) {
+    if (generation != _syncConnectGeneration) return;
+    if (!mounted || _syncReconnectTimer != null) return;
+    _syncRetryCount += 1;
+    setState(() {
+      _syncStatus = _MobileSyncConnectionStatus.reconnecting;
+    });
+    final seconds = _syncRetryCount > 15 ? 15 : _syncRetryCount;
+    _syncReconnectTimer = Timer(Duration(seconds: seconds), () {
+      _syncReconnectTimer = null;
+      unawaited(_connectWorkspaceSync());
+    });
+  }
+
+  void _handleSyncEvent(SyncEvent event) {
+    if (event.sequence > _syncCursor) {
+      _syncCursor = event.sequence;
+    }
+    if (!mounted) return;
+    setState(() {
+      _lastPushedSyncEvent = event;
+    });
+    unawaited(_refreshFromSyncEvent(event));
+  }
+
+  Future<void> _refreshFromSyncEvent(SyncEvent event) async {
+    try {
+      final refreshes = <Future<void>>[_refreshWorkspaceSnapshotFromSync()];
+      if (_syncEventTouchesPortfolio(event)) {
+        refreshes.add(_refreshPortfolioFromSync());
+      }
+      if (_syncEventTouchesRiskCenter(event)) {
+        refreshes.add(_refreshRiskControls(markBusy: false));
+      }
+      await Future.wait(refreshes);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error is DubheApiException ? error.message : '实时同步刷新失败。';
+      });
+    }
+  }
+
+  Future<void> _refreshWorkspaceSnapshotFromSync() async {
+    final snapshot = await widget.client.fetchWorkspaceSnapshot(
+      workspaceId: widget.session.workspaceId,
+    );
+    if (!mounted) return;
+    if (snapshot.serverSequence > _syncCursor) {
+      _syncCursor = snapshot.serverSequence;
+    }
+    setState(() {
+      _workspaceSnapshot = snapshot;
+    });
+  }
+
+  Future<void> _refreshPortfolioFromSync() async {
+    final portfolio = await widget.client.fetchPaperPortfolio(
+      defaultPaperAccountId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _portfolio = portfolio;
+    });
   }
 
   Future<void> _refresh() async {
@@ -278,6 +412,9 @@ class _CompanionHomeState extends State<CompanionHome> {
       }
 
       if (!mounted) return;
+      if (workspaceSnapshot.serverSequence > _syncCursor) {
+        _syncCursor = workspaceSnapshot.serverSequence;
+      }
       setState(() {
         _systemStatus = systemStatus;
         _newsFeed = newsFeed;
@@ -648,6 +785,8 @@ class _CompanionHomeState extends State<CompanionHome> {
         session: widget.session,
         systemStatus: _systemStatus,
         workspaceSnapshot: _workspaceSnapshot,
+        syncStatus: _syncStatus,
+        lastPushedSyncEvent: _lastPushedSyncEvent,
         newsFeed: _newsFeed,
         portfolio: _portfolio,
         message: _message,
@@ -722,6 +861,8 @@ class _TodayPage extends StatelessWidget {
     required this.session,
     required this.systemStatus,
     required this.workspaceSnapshot,
+    required this.syncStatus,
+    required this.lastPushedSyncEvent,
     required this.newsFeed,
     required this.portfolio,
     required this.message,
@@ -731,6 +872,8 @@ class _TodayPage extends StatelessWidget {
   final DeviceSession session;
   final SystemStatus? systemStatus;
   final WorkspaceSnapshot? workspaceSnapshot;
+  final _MobileSyncConnectionStatus syncStatus;
+  final SyncEvent? lastPushedSyncEvent;
   final NewsFeed? newsFeed;
   final PaperPortfolio? portfolio;
   final String? message;
@@ -767,7 +910,7 @@ class _TodayPage extends StatelessWidget {
             _Metric(
               '同步',
               workspaceSnapshot == null
-                  ? '--'
+                  ? _syncConnectionStatusZh(syncStatus)
                   : '#${workspaceSnapshot!.serverSequence}',
             ),
             _Metric(
@@ -779,7 +922,11 @@ class _TodayPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _SyncStatusPanel(snapshot: workspaceSnapshot),
+        _SyncStatusPanel(
+          snapshot: workspaceSnapshot,
+          syncStatus: syncStatus,
+          lastPushedEvent: lastPushedSyncEvent,
+        ),
         _SystemStatusPanel(status: systemStatus),
         _ProviderStatusList(statuses: newsFeed?.providerStatus ?? const []),
       ],
@@ -788,15 +935,21 @@ class _TodayPage extends StatelessWidget {
 }
 
 class _SyncStatusPanel extends StatelessWidget {
-  const _SyncStatusPanel({required this.snapshot});
+  const _SyncStatusPanel({
+    required this.snapshot,
+    required this.syncStatus,
+    required this.lastPushedEvent,
+  });
 
   final WorkspaceSnapshot? snapshot;
+  final _MobileSyncConnectionStatus syncStatus;
+  final SyncEvent? lastPushedEvent;
 
   @override
   Widget build(BuildContext context) {
     final current = snapshot;
     if (current == null) {
-      return const _InfoCard(text: '同步状态尚未同步。');
+      return _InfoCard(text: '同步状态：${_syncConnectionStatusZh(syncStatus)}。');
     }
 
     final recentEvents = current.events.take(3).toList();
@@ -812,6 +965,7 @@ class _SyncStatusPanel extends StatelessWidget {
             metrics: [
               _Metric('自选股', '${current.watchlist.length} 个'),
               _Metric('同步事件', '${current.events.length} 条'),
+              _Metric('实时连接', _syncConnectionStatusZh(syncStatus)),
               _Metric('工作区', current.workspaceId),
               _Metric(
                 '最新事件',
@@ -821,6 +975,14 @@ class _SyncStatusPanel extends StatelessWidget {
               ),
             ],
           ),
+          if (lastPushedEvent != null) ...[
+            const SizedBox(height: 12),
+            _InfoCard(
+              text:
+                  '最近推送：#${lastPushedEvent!.sequence} ${_syncEntityZh(lastPushedEvent!.entityType)} ${_syncEventActionZh(lastPushedEvent!.action)}。',
+              tone: _InfoTone.success,
+            ),
+          ],
           if (recentEvents.isNotEmpty) ...[
             const SizedBox(height: 12),
             ...recentEvents.map(
@@ -1316,6 +1478,7 @@ String _syncEntityZh(String entityType) {
     'backtest_result': '回测',
     'risk_decision': '风控决定',
     'approval_request': '审批',
+    'kill_switch': '急停开关',
     'paper_order': '纸面订单',
     'broker_order': '模拟券商订单',
     'paper_portfolio': '纸面组合',
@@ -1328,6 +1491,28 @@ String _syncEventActionZh(String action) {
   if (action == 'updated') return '已更新';
   if (action == 'deleted') return '已删除';
   return action;
+}
+
+String _syncConnectionStatusZh(_MobileSyncConnectionStatus status) {
+  return switch (status) {
+    _MobileSyncConnectionStatus.disconnected => '未连接',
+    _MobileSyncConnectionStatus.connecting => '连接中',
+    _MobileSyncConnectionStatus.live => '实时同步',
+    _MobileSyncConnectionStatus.reconnecting => '重连中',
+    _MobileSyncConnectionStatus.offline => '离线',
+  };
+}
+
+bool _syncEventTouchesPortfolio(SyncEvent event) {
+  return event.entityType == 'paper_order' ||
+      event.entityType == 'broker_order' ||
+      event.entityType == 'paper_portfolio';
+}
+
+bool _syncEventTouchesRiskCenter(SyncEvent event) {
+  return event.entityType == 'approval_request' ||
+      event.entityType == 'risk_decision' ||
+      event.entityType == 'kill_switch';
 }
 
 class _BrandHeader extends StatelessWidget {
@@ -1431,7 +1616,7 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-enum _InfoTone { normal, danger }
+enum _InfoTone { normal, success, danger }
 
 class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.text, this.tone = _InfoTone.normal});
@@ -1442,10 +1627,13 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final color = switch (tone) {
+      _InfoTone.danger => scheme.errorContainer,
+      _InfoTone.success => scheme.primaryContainer,
+      _InfoTone.normal => scheme.secondaryContainer,
+    };
     return Card(
-      color: tone == _InfoTone.danger
-          ? scheme.errorContainer
-          : scheme.secondaryContainer,
+      color: color,
       child: Padding(padding: const EdgeInsets.all(14), child: Text(text)),
     );
   }

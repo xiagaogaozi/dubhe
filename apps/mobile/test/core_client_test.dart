@@ -157,6 +157,73 @@ void main() {
     expect(snapshot.events.single.entityType, 'watchlist_item');
   });
 
+  test('workspace sync websocket uri uses ws scheme and token cursor', () {
+    final httpClient = CoreClient(
+      baseUrl: 'http://127.0.0.1:8019',
+      accessToken: 'dubhe_dev_token',
+    );
+    final httpsClient = CoreClient(
+      baseUrl: 'https://core.example.com',
+      accessToken: 'secure_token',
+    );
+
+    final localUri = httpClient.workspaceSyncEventsUri(
+      workspaceId: 'workspace_1',
+      sinceSequence: 7,
+    );
+    final secureUri = httpsClient.workspaceSyncEventsUri(
+      workspaceId: 'workspace_2',
+      sinceSequence: 11,
+    );
+
+    expect(localUri.scheme, 'ws');
+    expect(localUri.path, '/v1/workspaces/workspace_1/sync-events/ws');
+    expect(localUri.queryParameters['access_token'], 'dubhe_dev_token');
+    expect(localUri.queryParameters['since_sequence'], '7');
+    expect(secureUri.scheme, 'wss');
+    expect(secureUri.path, '/v1/workspaces/workspace_2/sync-events/ws');
+    expect(secureUri.queryParameters['access_token'], 'secure_token');
+
+    httpClient.close();
+    httpsClient.close();
+  });
+
+  test(
+    'sync event parser accepts websocket messages and ignores malformed data',
+    () {
+      final event = SyncEvent.tryParseMessage(
+        jsonEncode({
+          'id': 'sync_2',
+          'workspace_id': 'workspace_1',
+          'sequence': 8,
+          'entity_type': 'paper_portfolio',
+          'entity_id': 'demo_account',
+          'action': 'updated',
+          'payload': {'account_id': 'demo_account'},
+          'created_at': '2026-07-05T00:01:00Z',
+        }),
+      );
+      final binaryEvent = SyncEvent.tryParseMessage(
+        utf8.encode(
+          jsonEncode({
+            'sequence': 9,
+            'entity_type': 'approval_request',
+            'action': 'created',
+            'created_at': '2026-07-05T00:02:00Z',
+          }),
+        ),
+      );
+
+      expect(event, isNotNull);
+      expect(event!.sequence, 8);
+      expect(event.entityType, 'paper_portfolio');
+      expect(event.action, 'updated');
+      expect(binaryEvent, isNotNull);
+      expect(binaryEvent!.entityType, 'approval_request');
+      expect(SyncEvent.tryParseMessage('not-json'), isNull);
+    },
+  );
+
   test('system status parses configuration readiness', () async {
     final client = CoreClient(
       baseUrl: 'http://127.0.0.1:8019',
