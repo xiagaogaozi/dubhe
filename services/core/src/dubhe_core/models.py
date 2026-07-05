@@ -196,6 +196,8 @@ class AuthRuntimeStatus(BaseModel):
 
 class TradingRuntimeStatus(BaseModel):
     paper_broker_enabled: bool
+    paper_broker_adapter: str = "simulated_paper"
+    paper_broker_configured: bool = True
     live_trading_enabled: bool
     message_zh: str
 

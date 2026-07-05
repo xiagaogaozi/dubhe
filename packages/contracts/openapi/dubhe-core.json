@@ -5216,6 +5216,16 @@
             "type": "boolean",
             "title": "Paper Broker Enabled"
           },
+          "paper_broker_adapter": {
+            "type": "string",
+            "title": "Paper Broker Adapter",
+            "default": "simulated_paper"
+          },
+          "paper_broker_configured": {
+            "type": "boolean",
+            "title": "Paper Broker Configured",
+            "default": true
+          },
           "live_trading_enabled": {
             "type": "boolean",
             "title": "Live Trading Enabled"

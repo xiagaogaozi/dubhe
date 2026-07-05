@@ -22,6 +22,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 
 同步接口说明见 [Dubhe Sync Backend](../../docs/SYNC_BACKEND.md)。
 数据源说明见 [Data Sources](../../docs/DATA_SOURCES.md)。
+券商适配器边界见 [Broker Adapters](../../docs/BROKER_ADAPTERS.md)。
 
 ## 本地数据
 

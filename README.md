@@ -66,6 +66,8 @@ cd D:\github\dubhe-main
 
 第一次接入真实 AI 模型或授权新闻源时，建议先双击 `Configure-Dubhe.cmd`。它会用中文向导询问模型名、AI Key、新闻源 Key 和 SEC 联系方式；不知道的项目直接回车即可，真实 key 只会写入本机 `config/dubhe.local.env`。向导结束后仍会打开记事本，方便高级用户复查或手动编辑。保存后重新启动 Dubhe，`start-local-dubhe.ps1`、`services/core/scripts/run.ps1` 和体检脚本都会自动读取这个本地配置文件；真实 key 已加入 `.gitignore`，不会被提交。
 
+如果要做券商沙盒 UAT，可以在 `Configure-Dubhe.cmd` 里把 `DUBHE_PAPER_BROKER` 设为 `alpaca`，并填写 Alpaca paper Key；默认仍是本地模拟 broker，不会发送真实订单。券商适配边界见 [Broker Adapters](docs/BROKER_ADAPTERS.md)。
+
 管理员登录桌面端或移动端后，也可以在“系统状态 / 数据源配置”里直接保存本地运行配置。客户端只显示脱敏状态，真实 API key 不会从 Core 回传；保存后模型和新闻源配置会立即应用到当前 Core，数据库路径变更仍需重启 Core。
 
 把这台电脑交给非技术用户试用前，可以双击 `Accept-Dubhe.cmd`。它会自动确保 Core 运行，依次跑本机体检、本地审计链验证、主链路 smoke 和外部 AI/新闻源状态检查，并把结果写入 `.dubhe-run\local-acceptance.txt` 和 `.dubhe-run\local-acceptance.json`。没有填写授权 key 时，验收会显示“需配置”，但不会把本地演示链路判为失败；需要强制外部服务全部通过时，可用命令行加 `-RequireExternalServices`。
@@ -103,7 +105,7 @@ cd D:\github\dubhe-main
 
 `verify-audit-chain.ps1` 会读取 `/v1/audit/chain/verify`，验证本地 SQLite 审计日志的序号和 SHA-256 哈希链；验证失败会返回非零退出码，并把报告写入 `.dubhe-run\audit-chain-verification.txt` 和 `.dubhe-run\audit-chain-verification.json`。
 
-`test-external-services.ps1 -Live` 会读取 `/v1/system/external-checks?live=true`，验证 AI 模型、Finnhub、Alpha Vantage、SEC EDGAR 和 GDELT 的连接状态；未配置的服务会显示跳过，不会泄露任何 key。
+`test-external-services.ps1 -Live` 会读取 `/v1/system/external-checks?live=true`，验证 AI 模型、Finnhub、Alpha Vantage、SEC EDGAR、GDELT 和 Alpaca paper 券商沙盒的连接状态；未配置的服务会显示跳过，不会泄露任何 key。
 
 `check-production-readiness.ps1` 会读取 `/v1/system/production-readiness`，输出生产门禁项；只要还有阻断项就返回非零退出码，后续可以直接接入 CI 或发布流程。
 

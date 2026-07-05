@@ -340,7 +340,10 @@ if ($coreReady) {
     $envItems = @(
         @{ key = "FINNHUB_API_KEY"; label = "Finnhub 授权新闻源 Key" },
         @{ key = "ALPHA_VANTAGE_API_KEY"; label = "Alpha Vantage 新闻情绪 Key" },
-        @{ key = "DUBHE_SEC_USER_AGENT"; label = "SEC EDGAR User-Agent" }
+        @{ key = "DUBHE_SEC_USER_AGENT"; label = "SEC EDGAR User-Agent" },
+        @{ key = "DUBHE_PAPER_BROKER"; label = "Paper broker 适配器" },
+        @{ key = "ALPACA_PAPER_API_KEY_ID"; label = "Alpaca Paper Key ID" },
+        @{ key = "ALPACA_PAPER_SECRET_KEY"; label = "Alpaca Paper Secret" }
     )
     foreach ($item in $envItems) {
         $configured = -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($item.key))

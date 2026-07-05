@@ -146,6 +146,30 @@ function Invoke-GuidedConfig {
             label = "6. SEC EDGAR User-Agent"
             hint = "建议填写产品名和邮箱，例如 Dubhe/0.1 your-email@example.com。"
             secret = $false
+        },
+        @{
+            key = "DUBHE_PAPER_BROKER"
+            label = "7. Paper broker 适配器"
+            hint = "本地演示保持 simulated_paper；准备 Alpaca paper 沙盒 UAT 时填写 alpaca。"
+            secret = $false
+        },
+        @{
+            key = "ALPACA_PAPER_API_KEY_ID"
+            label = "8. Alpaca Paper Key ID"
+            hint = "只填写 Alpaca paper trading 的 Key ID，不要填写真实 live 交易 key。"
+            secret = $true
+        },
+        @{
+            key = "ALPACA_PAPER_SECRET_KEY"
+            label = "9. Alpaca Paper Secret"
+            hint = "Alpaca paper trading 的 Secret；保存后可运行 Test-Dubhe-Services.cmd 做 live 检查。"
+            secret = $true
+        },
+        @{
+            key = "ALPACA_PAPER_BASE_URL"
+            label = "10. Alpaca Paper 地址"
+            hint = "通常保持 https://paper-api.alpaca.markets；使用代理网关时再修改。"
+            secret = $false
         }
     )
 

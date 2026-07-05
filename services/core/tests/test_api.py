@@ -232,6 +232,10 @@ def test_external_service_checks_skip_missing_configuration(monkeypatch) -> None
         "DUBHE_LLM_MODEL",
         "DUBHE_LLM_BASE_URL",
         "DUBHE_LLM_API_KEY",
+        "DUBHE_PAPER_BROKER",
+        "ALPACA_PAPER_API_KEY_ID",
+        "ALPACA_PAPER_SECRET_KEY",
+        "ALPACA_PAPER_BASE_URL",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -246,6 +250,7 @@ def test_external_service_checks_skip_missing_configuration(monkeypatch) -> None
     assert checks["finnhub_company_news"]["configured"] is False
     assert checks["alpha_vantage_news_sentiment"]["configured"] is False
     assert checks["gdelt_doc"]["configured"] is True
+    assert checks["alpaca_paper_broker"]["configured"] is False
 
 
 def test_external_service_checks_report_configured_without_live_calls(monkeypatch) -> None:
@@ -254,6 +259,12 @@ def test_external_service_checks_report_configured_without_live_calls(monkeypatc
     monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-secret")
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-secret")
     monkeypatch.setenv("DUBHE_SEC_USER_AGENT", "Dubhe Test tests@example.com")
+    monkeypatch.setenv("DUBHE_PAPER_BROKER", "alpaca")
+    monkeypatch.setenv("ALPACA_PAPER_API_KEY_ID", "alpaca-key-id")
+    monkeypatch.setenv("ALPACA_PAPER_SECRET_KEY", "alpaca-secret")
+    monkeypatch.setenv("DUBHE_PAPER_BROKER", "alpaca")
+    monkeypatch.setenv("ALPACA_PAPER_API_KEY_ID", "alpaca-key-id")
+    monkeypatch.setenv("ALPACA_PAPER_SECRET_KEY", "alpaca-secret")
 
     response = client.get("/v1/system/external-checks?live=false")
 
@@ -266,8 +277,11 @@ def test_external_service_checks_report_configured_without_live_calls(monkeypatc
     assert checks["finnhub_company_news"]["configured"] is True
     assert checks["alpha_vantage_news_sentiment"]["configured"] is True
     assert checks["sec_edgar"]["configured"] is True
+    assert checks["alpaca_paper_broker"]["configured"] is True
+    assert checks["alpaca_paper_broker"]["live_checked"] is False
     assert "finnhub-secret" not in response.text
     assert "alpha-secret" not in response.text
+    assert "alpaca-secret" not in response.text
 
 
 def test_external_service_checks_live_uses_injected_fetchers(monkeypatch) -> None:
@@ -276,6 +290,9 @@ def test_external_service_checks_live_uses_injected_fetchers(monkeypatch) -> Non
     monkeypatch.setenv("FINNHUB_API_KEY", "finnhub-secret")
     monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "alpha-secret")
     monkeypatch.setenv("DUBHE_SEC_USER_AGENT", "Dubhe Test tests@example.com")
+    monkeypatch.setenv("DUBHE_PAPER_BROKER", "alpaca")
+    monkeypatch.setenv("ALPACA_PAPER_API_KEY_ID", "alpaca-key-id")
+    monkeypatch.setenv("ALPACA_PAPER_SECRET_KEY", "alpaca-secret")
 
     def fake_fetcher(url: str, _headers: dict[str, str], _timeout: float) -> Any:
         if "finnhub.io" in url:
@@ -328,6 +345,7 @@ def test_external_service_checks_live_uses_injected_fetchers(monkeypatch) -> Non
     response = external_service_checks(
         live=True,
         fetcher=fake_fetcher,
+        alpaca_checker=lambda: (ProviderStatus.OK, "Alpaca paper live 检查通过。"),
         llm_checker=lambda: (ProviderStatus.OK, "AI 模型 live 检查通过。"),
     )
 
@@ -1633,6 +1651,93 @@ def test_paper_order_submits_to_simulated_broker() -> None:
         headers=auth_headers(session),
     ).json()
     assert any(item["account_id"] == "acct_fixture" for item in snapshot["paper_portfolios"])
+
+
+def test_paper_order_can_submit_to_alpaca_paper_adapter(monkeypatch) -> None:
+    monkeypatch.setenv("DUBHE_PAPER_BROKER", "alpaca")
+    monkeypatch.setenv("ALPACA_PAPER_API_KEY_ID", "alpaca-key-id")
+    monkeypatch.setenv("ALPACA_PAPER_SECRET_KEY", "alpaca-secret")
+
+    calls: list[dict[str, Any]] = []
+
+    class FakeAlpacaResponse:
+        def __enter__(self) -> "FakeAlpacaResponse":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "id": "alpaca_order_1",
+                    "client_order_id": "dubhe_paper_1",
+                    "status": "accepted",
+                    "symbol": "NVDA",
+                    "qty": "2",
+                    "filled_qty": "0",
+                    "type": "market",
+                    "side": "buy",
+                    "time_in_force": "day",
+                    "submitted_at": "2026-07-05T12:00:00Z",
+                    "updated_at": "2026-07-05T12:00:01Z",
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request: Any, timeout: float) -> FakeAlpacaResponse:
+        headers = {key.lower(): value for key, value in request.header_items()}
+        calls.append(
+            {
+                "url": request.full_url,
+                "timeout": timeout,
+                "headers": headers,
+                "body": json.loads(request.data.decode("utf-8")),
+            }
+        )
+        return FakeAlpacaResponse()
+
+    monkeypatch.setattr("dubhe_core.alpaca_broker.urllib.request.urlopen", fake_urlopen)
+
+    session = register_test_device(
+        account_key="alpaca-paper-fixture",
+        account_name="Alpaca paper 测试账户",
+    )
+    response = client.post(
+        "/v1/simulation/paper-orders",
+        headers=auth_headers(session),
+        json={
+            "account_id": "alpaca_fixture",
+            "strategy_version_id": "strategy_v1",
+            "market": "US",
+            "symbol": "NVDA",
+            "side": "buy",
+            "order_type": "market",
+            "quantity": 2,
+            "estimated_price": 1000,
+            "currency": "USD",
+            "created_by": "strategy",
+            "destination": "paper",
+            "rationale_zh": "测试 Alpaca paper 沙盒下单。",
+            "source_refs": ["analysis_fixture"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    broker_order = body["broker_order"]
+    assert body["message_zh"] == "纸面订单已提交到 Alpaca paper 沙盒。该环境不是真实实盘，但会连接券商 paper API。"
+    assert broker_order["adapter"] == "alpaca_paper"
+    assert broker_order["status"] == "accepted"
+    assert broker_order["raw_response"]["real_broker"] is True
+    assert broker_order["raw_response"]["paper_trading"] is True
+    assert broker_order["raw_response"]["alpaca_order"]["id"] == "alpaca_order_1"
+    assert "alpaca-secret" not in response.text
+    assert calls[0]["url"] == "https://paper-api.alpaca.markets/v2/orders"
+    assert calls[0]["headers"]["apca-api-key-id"] == "alpaca-key-id"
+    assert calls[0]["headers"]["apca-api-secret-key"] == "alpaca-secret"
+    assert calls[0]["body"]["symbol"] == "NVDA"
+    assert calls[0]["body"]["qty"] == "2"
+    assert calls[0]["body"]["type"] == "market"
 
 
 def test_paper_sell_blocks_when_position_is_insufficient() -> None:

@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, W
 from fastapi.middleware.cors import CORSMiddleware
 
 from .analysis import analyze_news
+from .alpaca_broker import active_paper_broker_adapter, load_alpaca_paper_config
 from .assistant import answer_research_question
 from .backtest import draft_strategy_from_analysis, run_replay_backtest
 from .external_checks import external_service_checks
@@ -126,6 +127,8 @@ def system_status() -> SystemStatusResponse:
     llm_base_url_configured = env_is_configured("DUBHE_LLM_BASE_URL")
     llm_api_key_configured = env_is_configured("DUBHE_LLM_API_KEY")
     llm_status = llm_runtime_status()
+    alpaca_config = load_alpaca_paper_config()
+    paper_broker_adapter = active_paper_broker_adapter()
     persistent_storage = store.db_path != ":memory:"
     news_adapters = [
         NewsAdapterRuntimeStatus(
@@ -240,6 +243,39 @@ def system_status() -> SystemStatusResponse:
                 ),
             ),
             RuntimeConfigStatus(
+                key="DUBHE_PAPER_BROKER",
+                label_zh="Paper broker 适配器",
+                configured=alpaca_config.enabled,
+                required_for="Alpaca paper 券商沙盒或本地模拟 broker 选择",
+                message_zh=(
+                    "已选择 Alpaca paper 沙盒；请确认 Alpaca paper Key 已配置并通过 live 体检。"
+                    if alpaca_config.enabled
+                    else "未选择外部 paper broker；当前使用本地模拟 broker。"
+                ),
+            ),
+            RuntimeConfigStatus(
+                key="ALPACA_PAPER_API_KEY_ID",
+                label_zh="Alpaca Paper Key ID",
+                configured=bool(alpaca_config.key_id),
+                required_for="Alpaca paper 券商沙盒账号检查和纸面订单提交",
+                message_zh=(
+                    "已配置；体检不会泄露 Key 内容。"
+                    if alpaca_config.key_id
+                    else "未配置；Alpaca paper 沙盒会跳过，纸面交易使用本地模拟 broker。"
+                ),
+            ),
+            RuntimeConfigStatus(
+                key="ALPACA_PAPER_SECRET_KEY",
+                label_zh="Alpaca Paper Secret",
+                configured=bool(alpaca_config.secret_key),
+                required_for="Alpaca paper 券商沙盒账号检查和纸面订单提交",
+                message_zh=(
+                    "已配置；体检不会泄露 Secret 内容。"
+                    if alpaca_config.secret_key
+                    else "未配置；Alpaca paper 沙盒会跳过，纸面交易使用本地模拟 broker。"
+                ),
+            ),
+            RuntimeConfigStatus(
                 key="DUBHE_LLM_MODEL",
                 label_zh="AI 模型名称",
                 configured=llm_model_configured,
@@ -280,6 +316,10 @@ def system_status() -> SystemStatusResponse:
         llm=llm_status,
         trading=TradingRuntimeStatus(
             paper_broker_enabled=True,
+            paper_broker_adapter=paper_broker_adapter,
+            paper_broker_configured=(
+                True if paper_broker_adapter == "simulated_paper" else alpaca_config.configured
+            ),
             live_trading_enabled=False,
             message_zh="纸面交易和模拟 broker 已启用；实盘交易保持关闭，需完成券商适配、签名、审批、审计和风控后才能开放。",
         ),
@@ -774,6 +814,7 @@ def capabilities() -> dict[str, object]:
             "risk_gate",
             "paper_order_mock",
             "simulated_paper_broker_adapter",
+            "alpaca_paper_broker_adapter",
             "paper_portfolio_ledger",
             "device_registration",
             "workspace_sync_snapshot",

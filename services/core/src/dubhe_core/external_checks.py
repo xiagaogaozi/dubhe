@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from typing import Callable
 
+from .alpaca_broker import live_check_alpaca_paper_account, load_alpaca_paper_config
 from .llm import DEFAULT_OPENAI_COMPATIBLE_BASE_URL, load_llm_config
 from .models import (
     ExternalServiceCheck,
@@ -25,6 +26,7 @@ from .news_sources import (
 )
 
 LLMConnectivityChecker = Callable[[], tuple[ProviderStatus, str]]
+AlpacaConnectivityChecker = Callable[[], tuple[ProviderStatus, str]]
 
 
 def external_service_checks(
@@ -32,6 +34,7 @@ def external_service_checks(
     live: bool,
     fetcher: JsonFetcher | None = None,
     llm_checker: LLMConnectivityChecker | None = None,
+    alpaca_checker: AlpacaConnectivityChecker | None = None,
 ) -> ExternalServiceCheckResponse:
     http_fetcher = fetcher or fetch_json
     checks = [
@@ -40,6 +43,7 @@ def external_service_checks(
         _check_alpha_vantage(live=live, fetcher=http_fetcher),
         _check_sec(live=live, fetcher=http_fetcher),
         _check_gdelt(live=live, fetcher=http_fetcher),
+        _check_alpaca_paper(live=live, checker=alpaca_checker),
     ]
     ready_count = sum(1 for item in checks if item.status == ProviderStatus.OK)
     unavailable_count = sum(
@@ -284,6 +288,48 @@ def _check_gdelt(*, live: bool, fetcher: JsonFetcher) -> ExternalServiceCheck:
         configured=True,
         duration_ms=_elapsed_ms(started),
         next_step_zh="GDELT 只提供索引和链接，不代表原文转载、缓存或 AI 处理授权。",
+    )
+
+
+def _check_alpaca_paper(
+    *,
+    live: bool,
+    checker: AlpacaConnectivityChecker | None,
+) -> ExternalServiceCheck:
+    config = load_alpaca_paper_config()
+    configured = config.configured
+    if not configured:
+        return _result(
+            service="alpaca_paper_broker",
+            label_zh="Alpaca Paper 券商沙盒",
+            configured=False,
+            live_checked=False,
+            status=ProviderStatus.SKIPPED,
+            message_zh="未配置 ALPACA_PAPER_API_KEY_ID / ALPACA_PAPER_SECRET_KEY。",
+            next_step_zh="只做本地体验可继续使用模拟 broker；需要券商沙盒 UAT 时，在 Configure-Dubhe.cmd 填写 Alpaca paper Key 并把 DUBHE_PAPER_BROKER 设为 alpaca。",
+        )
+    if not live:
+        return _configured_but_not_live(
+            service="alpaca_paper_broker",
+            label_zh="Alpaca Paper 券商沙盒",
+            next_step_zh="运行 live 外部服务体检，验证 Alpaca paper 账号接口是否可访问。",
+        )
+
+    started = time.perf_counter()
+    try:
+        status, message = (checker or live_check_alpaca_paper_account)()
+    except Exception as exc:  # noqa: BLE001 - diagnostics should be user-facing.
+        status = ProviderStatus.UNAVAILABLE
+        message = f"Alpaca paper 连接失败：{exc}"
+    return _result(
+        service="alpaca_paper_broker",
+        label_zh="Alpaca Paper 券商沙盒",
+        configured=True,
+        live_checked=True,
+        status=status,
+        duration_ms=_elapsed_ms(started),
+        message_zh=message,
+        next_step_zh="失败时检查 Alpaca paper Key、账户状态、网络和是否误填 live 交易 Key。",
     )
 
 

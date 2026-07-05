@@ -60,8 +60,11 @@ def production_readiness_response() -> ProductionReadinessResponse:
             requirement_zh="生产环境必须有真实 paper/live broker adapter，并通过断线、拒单、重复单和市场规则测试。",
             status="fail",
             blocking=True,
-            evidence_zh="当前只有 simulated_paper broker；live_trading_enabled=false。",
-            next_step_zh="按目标市场接入 IBKR、Alpaca、Futu 或其他合规券商；所有订单仍必须经过 Risk Service、审批和审计。",
+            evidence_zh=(
+                "默认使用 simulated_paper broker；已提供可选 Alpaca paper adapter 用于美股纸面沙盒 UAT，"
+                "但当前尚未完成真实券商、拒单/断线/撤单和合规验收；live_trading_enabled=false。"
+            ),
+            next_step_zh="先配置 Alpaca paper Key 并完成沙盒 UAT；生产前仍需按目标市场接入 IBKR、Alpaca、Futu 或其他合规券商，并验证拒单、断线、重复单、撤单和市场规则。",
         ),
         _item(
             item_id="live_trading_guard",

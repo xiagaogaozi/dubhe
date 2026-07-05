@@ -110,6 +110,40 @@ LOCAL_CONFIG_DEFINITIONS = [
         setup_hint_zh="用于礼貌访问 SEC EDGAR；生产环境请替换成真实产品名和可联系邮箱。",
     ),
     LocalConfigDefinition(
+        key="DUBHE_PAPER_BROKER",
+        label_zh="Paper broker 适配器",
+        description_zh="默认 simulated_paper；填写 alpaca 后会把纸面订单提交到 Alpaca paper 沙盒。",
+        group_zh="券商沙盒",
+        placeholder="simulated_paper / alpaca",
+        setup_hint_zh="没有券商沙盒账号时保持 simulated_paper；准备券商 UAT 时填写 alpaca，并补齐 Alpaca paper Key。",
+    ),
+    LocalConfigDefinition(
+        key="ALPACA_PAPER_API_KEY_ID",
+        label_zh="Alpaca Paper Key ID",
+        description_zh="Alpaca paper trading 的 API Key ID；不会在接口响应中回显。",
+        group_zh="券商沙盒",
+        placeholder="Alpaca paper key id",
+        setup_hint_zh="只使用 paper trading key；不要把真实 live 交易 key 填到本机演示环境。",
+        secret=True,
+    ),
+    LocalConfigDefinition(
+        key="ALPACA_PAPER_SECRET_KEY",
+        label_zh="Alpaca Paper Secret",
+        description_zh="Alpaca paper trading 的 Secret Key；不会在接口响应中回显。",
+        group_zh="券商沙盒",
+        placeholder="Alpaca paper secret",
+        setup_hint_zh="保存后运行 Test-Dubhe-Services.cmd 做 live 检查；失败时检查账号、网络和 key 类型。",
+        secret=True,
+    ),
+    LocalConfigDefinition(
+        key="ALPACA_PAPER_BASE_URL",
+        label_zh="Alpaca Paper 地址",
+        description_zh="Alpaca paper trading API 地址，通常保持默认值。",
+        group_zh="券商沙盒",
+        placeholder="https://paper-api.alpaca.markets",
+        setup_hint_zh="除非使用代理网关，否则保持默认 paper API 地址。",
+    ),
+    LocalConfigDefinition(
         key="DUBHE_CORE_DB_PATH",
         label_zh="Core 数据库路径",
         description_zh="SQLite 本地数据库路径；修改后需要重启 Core 才能切换数据库。",
@@ -228,6 +262,17 @@ def write_local_config_values(path: Path, values: dict[str, str]) -> None:
     lines.extend(["", "# Licensed / public financial news sources."])
     _append_named_lines(lines, known_values, ["FINNHUB_API_KEY", "ALPHA_VANTAGE_API_KEY"])
     lines.append(_format_known_line("DUBHE_SEC_USER_AGENT", known_values))
+    lines.extend(["", "# Optional paper broker adapter."])
+    _append_named_lines(
+        lines,
+        known_values,
+        [
+            "DUBHE_PAPER_BROKER",
+            "ALPACA_PAPER_API_KEY_ID",
+            "ALPACA_PAPER_SECRET_KEY",
+            "ALPACA_PAPER_BASE_URL",
+        ],
+    )
     lines.extend(["", "# Optional persistent Core database override."])
     lines.append(_format_known_line("DUBHE_CORE_DB_PATH", known_values))
 
