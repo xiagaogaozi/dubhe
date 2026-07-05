@@ -202,6 +202,19 @@ type KillSwitchState = {
   updated_at: string;
 };
 
+type AuditLogEntry = {
+  id: string;
+  actor_user_id?: string | null;
+  actor_device_id?: string | null;
+  actor_role?: UserRole | null;
+  action: string;
+  target_type: string;
+  target_id?: string | null;
+  summary_zh: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 type PaperOrder = {
   id: string;
   order_intent_id: string;
@@ -330,6 +343,7 @@ function DubheWorkbench(): React.ReactElement {
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
   const [approvals, setApprovals] = React.useState<ApprovalRequest[]>([]);
   const [killSwitch, setKillSwitch] = React.useState<KillSwitchState | null>(null);
+  const [auditLogs, setAuditLogs] = React.useState<AuditLogEntry[]>([]);
   const [riskMessage, setRiskMessage] = React.useState('登录后显示审批和急停状态。');
   const [riskBusy, setRiskBusy] = React.useState(false);
   const [logs, setLogs] = React.useState<LogEntry[]>([
@@ -355,6 +369,7 @@ function DubheWorkbench(): React.ReactElement {
     if (!session) {
       setApprovals([]);
       setKillSwitch(null);
+      setAuditLogs([]);
       setPortfolio(null);
       setRiskMessage('登录后显示审批和急停状态。');
       return;
@@ -449,6 +464,7 @@ function DubheWorkbench(): React.ReactElement {
       setPortfolio(null);
       setApprovals([]);
       setKillSwitch(null);
+      setAuditLogs([]);
       setRiskMessage('登录后显示审批和急停状态。');
       appendLog('warning', '已退出当前设备。');
     });
@@ -591,27 +607,33 @@ function DubheWorkbench(): React.ReactElement {
     if (!activeSession) {
       setApprovals([]);
       setKillSwitch(null);
+      setAuditLogs([]);
       setRiskMessage('登录后显示审批和急停状态。');
       return;
     }
     if (activeSession.role !== 'admin' && activeSession.role !== 'risk_manager') {
       setApprovals([]);
       setKillSwitch(null);
+      setAuditLogs([]);
       setRiskMessage('当前账号没有审批权限。管理员或风控管理员登录后可管理审批和 kill switch。');
       return;
     }
 
     setRiskBusy(true);
     try {
-      const [nextApprovals, nextKillSwitch] = await Promise.all([
+      const [nextApprovals, nextKillSwitch, nextAuditLogs] = await Promise.all([
         getJson<ApprovalRequest[]>(coreUrl, '/v1/approvals?status=pending', activeSession.access_token),
         getJson<KillSwitchState>(coreUrl, '/v1/risk/kill-switch', activeSession.access_token),
+        getJson<AuditLogEntry[]>(coreUrl, '/v1/audit/logs?limit=8', activeSession.access_token),
       ]);
       setApprovals(nextApprovals);
       setKillSwitch(nextKillSwitch);
+      setAuditLogs(nextAuditLogs);
       setRiskMessage(nextApprovals.length > 0 ? `当前有 ${nextApprovals.length} 个待处理审批。` : '当前没有待处理审批。');
     } catch (error) {
       setApprovals([]);
+      setKillSwitch(null);
+      setAuditLogs([]);
       setRiskMessage(`风控中心同步失败：${errorMessage(error)}。`);
     } finally {
       setRiskBusy(false);
@@ -665,6 +687,7 @@ function DubheWorkbench(): React.ReactElement {
       );
       setKillSwitch(nextState);
       appendLog(nextEnabled ? 'warning' : 'positive', nextState.reason_zh);
+      await loadRiskControls(session);
     } catch (error) {
       appendLog('negative', `更新 kill switch 失败：${errorMessage(error)}。`);
     } finally {
@@ -1084,7 +1107,7 @@ function DubheWorkbench(): React.ReactElement {
             )}
           </SidePanel>
 
-          <SidePanel title="风控中心" meta={canManageRisk ? `${approvals.length} 待审批` : '只读'}>
+          <SidePanel title="风控中心" meta={canManageRisk ? `${approvals.length} 审批 / ${auditLogs.length} 审计` : '只读'}>
             <div style={styles.riskHeaderRow}>
               <p style={{ ...styles.safeStatus, ...(killSwitch?.enabled ? styles.killSwitchOnText : undefined) }}>
                 {killSwitch?.enabled ? 'Kill switch 已启用' : '实盘交易关闭'}
@@ -1161,6 +1184,29 @@ function DubheWorkbench(): React.ReactElement {
                             通过
                           </button>
                         </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div style={styles.auditList}>
+                  <div style={styles.auditHeaderLine}>
+                    <strong style={styles.statusName}>最近审计</strong>
+                    <span style={styles.smallMeta}>最新 {auditLogs.length} 条</span>
+                  </div>
+                  {auditLogs.length === 0 ? (
+                    <p style={styles.bodyText}>暂无审计记录。</p>
+                  ) : (
+                    auditLogs.slice(0, 5).map((entry) => (
+                      <div style={styles.auditRow} key={entry.id}>
+                        <div style={styles.approvalTopLine}>
+                          <strong style={styles.statusName}>{auditActionLabel(entry.action)}</strong>
+                          <span style={styles.smallMeta}>{shortTime(entry.created_at)}</span>
+                        </div>
+                        <p style={styles.auditSummary}>{entry.summary_zh}</p>
+                        <p style={styles.statusMessage}>
+                          {auditRoleLabel(entry.actor_role)} · {entry.target_type}
+                          {entry.target_id ? ` · ${entry.target_id}` : ''}
+                        </p>
                       </div>
                     ))
                   )}
@@ -1337,6 +1383,28 @@ function riskStatusLabel(status: RiskDecision['status']): string {
   if (status === 'approved') return '已通过';
   if (status === 'rejected') return '已拒绝';
   return '需要审批';
+}
+
+function auditActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    'admin.user_role_updated': '角色更新',
+    'approval.approved': '审批通过',
+    'approval.rejected': '审批拒绝',
+    'auth.account_claimed': '账号认领',
+    'auth.account_registered': '账号注册',
+    'auth.device_registered': '设备注册',
+    'auth.device_revoked': '设备撤销',
+    'auth.login_succeeded': '登录成功',
+    'risk.kill_switch_updated': '急停更新',
+    'risk.order_evaluated': '订单风控评估',
+    'simulation.paper_order_submitted': '纸面订单',
+  };
+  return labels[action] ?? action;
+}
+
+function auditRoleLabel(role?: UserRole | null): string {
+  if (!role) return '系统';
+  return roleLabel(role);
 }
 
 function sentimentLabel(sentiment: Sentiment): string {
@@ -2104,6 +2172,29 @@ const styles = {
   approvalRow: {
     paddingTop: 10,
     borderTop: '1px solid #e5ebe8',
+  } as React.CSSProperties,
+  auditList: {
+    display: 'grid',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTop: '1px solid #e5ebe8',
+  } as React.CSSProperties,
+  auditHeaderLine: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  } as React.CSSProperties,
+  auditRow: {
+    padding: '8px 0',
+    borderTop: '1px solid #edf2ef',
+  } as React.CSSProperties,
+  auditSummary: {
+    margin: '5px 0 0',
+    color: '#30433b',
+    fontSize: 12,
+    lineHeight: 1.45,
   } as React.CSSProperties,
   approvalTopLine: {
     display: 'flex',
