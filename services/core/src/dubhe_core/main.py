@@ -491,6 +491,14 @@ def draft_strategy_from_analysis_endpoint(request: StrategyDraftRequest) -> Stra
     return store.add_strategy_draft(draft_strategy_from_analysis(request))
 
 
+@app.post("/v1/strategy/drafts", response_model=StrategyDraft)
+def save_strategy_draft_endpoint(draft: StrategyDraft) -> StrategyDraft:
+    validation = validate_strategy_spec(draft.spec)
+    if not validation.valid:
+        raise HTTPException(status_code=422, detail=validation.reasons_zh)
+    return store.add_strategy_draft(draft)
+
+
 @app.get("/v1/strategy/drafts", response_model=list[StrategyDraft])
 def list_strategy_drafts_endpoint() -> list[StrategyDraft]:
     return store.strategy_drafts

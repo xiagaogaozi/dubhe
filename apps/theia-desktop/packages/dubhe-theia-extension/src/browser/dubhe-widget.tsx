@@ -893,20 +893,30 @@ function DubheWorkbench(): React.ReactElement {
       appendLog('warning', '请先通过策略工坊校验，再设为当前草案。');
       return;
     }
-    const strategyVersionId = `blockly_${Date.now()}`;
-    setStrategyDraft({
-      id: `strategy_draft_${strategyVersionId}`,
-      strategy_version_id: strategyVersionId,
-      name: strategyWorkshopSpec.strategy_name,
-      spec: strategyWorkshopSpec,
-      explanation_zh: '由 Blockly 策略工坊生成；已通过 Dubhe Core 策略规格校验，仅允许纸面验证。',
-      generated_code: generateStrategyPseudoCode(strategyWorkshopSpec),
-      source_analysis_id: analysis?.id ?? 'blockly_manual',
-      created_at: new Date().toISOString(),
-    });
+    setStrategyDraft(createWorkshopStrategyDraft(strategyWorkshopSpec, analysis?.id));
     setBacktestResult(null);
     setPaperOrder(null);
     appendLog('positive', '策略工坊草案已设为当前策略，可运行 replay 回测。');
+  }
+
+  async function saveWorkshopStrategyToCore(): Promise<void> {
+    if (!strategyWorkshopSpec || !strategyValidation?.valid) {
+      appendLog('warning', '请先通过策略工坊校验，再保存到工作区。');
+      return;
+    }
+    const draft = createWorkshopStrategyDraft(strategyWorkshopSpec, analysis?.id);
+    await withBusy(async () => {
+      const savedDraft = await postJson<StrategyDraft>(coreUrl, '/v1/strategy/drafts', draft);
+      setStrategyDraft(savedDraft);
+      setBacktestResult(null);
+      setPaperOrder(null);
+      appendLog('positive', `策略草案已保存到工作区：${savedDraft.name}。`);
+      if (session) {
+        await loadWorkspaceSnapshot(session);
+      }
+    }).catch((error: unknown) => {
+      appendLog('negative', `保存策略草案失败：${errorMessage(error)}。`);
+    });
   }
 
   async function runBacktest(): Promise<void> {
@@ -1521,6 +1531,9 @@ function DubheWorkbench(): React.ReactElement {
                     </button>
                     <button style={styles.secondaryButton} type="button" disabled={!strategyValidation?.valid} onClick={useWorkshopStrategyDraft}>
                       设为草案
+                    </button>
+                    <button style={styles.secondaryButton} type="button" disabled={!strategyValidation?.valid || isBusy} onClick={() => void saveWorkshopStrategyToCore()}>
+                      保存到工作区
                     </button>
                     <button style={styles.secondaryButton} type="button" onClick={saveStrategyWorkshopTemplate}>
                       保存模板
@@ -2144,6 +2157,20 @@ function generateStrategyPseudoCode(spec: StrategySpec): string {
     `risk max_order_notional=${spec.risk_limits.max_order_notional}`,
     `permissions ${spec.broker_permissions.join(', ') || 'none'}`,
   ].join('\n');
+}
+
+function createWorkshopStrategyDraft(spec: StrategySpec, analysisId?: string): StrategyDraft {
+  const strategyVersionId = `blockly_${Date.now()}`;
+  return {
+    id: `strategy_draft_${strategyVersionId}`,
+    strategy_version_id: strategyVersionId,
+    name: spec.strategy_name,
+    spec,
+    explanation_zh: '由 Blockly 策略工坊生成；已通过 Dubhe Core 策略规格校验，仅允许纸面验证。',
+    generated_code: generateStrategyPseudoCode(spec),
+    source_analysis_id: analysisId ?? 'blockly_manual',
+    created_at: new Date().toISOString(),
+  };
 }
 
 function sentimentLabel(sentiment: Sentiment): string {

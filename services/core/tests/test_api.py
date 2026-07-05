@@ -1008,3 +1008,62 @@ def test_strategy_spec_validation_accepts_minimum_safe_spec() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"valid": True, "reasons_zh": []}
+
+
+def test_strategy_draft_save_emits_workspace_sync_event() -> None:
+    session_response = client.post(
+        "/v1/auth/accounts/register",
+        json={
+            "account_key": "strategy-workshop-sync-fixture",
+            "account_name": "策略工坊同步测试账户",
+            "password": "Dubhe@2026",
+            "mfa_code": "000000",
+            "device_name": "Dubhe Theia Desktop",
+            "platform": "windows",
+        },
+    )
+    assert session_response.status_code == 200
+    session = session_response.json()
+
+    response = client.post(
+        "/v1/strategy/drafts",
+        json={
+            "name": "Blockly 新闻情绪策略",
+            "spec": {
+                "strategy_name": "Blockly 新闻情绪策略",
+                "market_scope": ["US"],
+                "asset_universe": ["NVDA"],
+                "entry_rules": ["新闻情绪为正面且影响分大于 0.7"],
+                "exit_rules": ["新闻影响消退或触发止损"],
+                "risk_limits": {"max_order_notional": 10000},
+                "timeframe": "1d",
+                "rebalance_rule": "daily",
+                "data_dependencies": ["news", "market_bars"],
+                "broker_permissions": ["paper"],
+            },
+            "explanation_zh": "由 Blockly 策略工坊生成。",
+            "generated_code": "strategy blockly",
+            "source_analysis_id": "blockly_manual",
+        },
+    )
+
+    assert response.status_code == 200
+    draft = response.json()
+    assert draft["id"].startswith("strategy_draft_")
+    assert draft["strategy_version_id"].startswith("strategy_v_")
+
+    list_response = client.get("/v1/strategy/drafts")
+    assert list_response.status_code == 200
+    assert any(item["id"] == draft["id"] for item in list_response.json())
+
+    snapshot_response = client.get(
+        f"/v1/workspaces/{session['workspace_id']}/snapshot",
+        headers=auth_headers(session),
+    )
+    assert snapshot_response.status_code == 200
+    snapshot = snapshot_response.json()
+    assert any(item["id"] == draft["id"] for item in snapshot["strategy_drafts"])
+    assert any(
+        event["entity_type"] == "strategy_draft" and event["entity_id"] == draft["id"]
+        for event in snapshot["events"]
+    )

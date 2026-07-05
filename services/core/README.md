@@ -10,7 +10,7 @@ Dubhe Core 是 Dubhe 的后端 API 最小骨架，当前提供：
 - SEC EDGAR / GDELT / Finnhub / Alpha Vantage / Fixture 新闻源聚合接口。
 - 新闻事件中文分析占位链路。
 - 新闻分析生成策略草案与 deterministic replay 回测。
-- 策略规格校验。
+- 策略规格校验，以及保存 Blockly / 客户端生成的工作区策略草案并触发同步事件。
 - 订单意图风控门禁。
 - 人工审批请求与 kill switch。
 - 纸面交易订单、模拟 paper broker 成交链路、纸面组合现金/持仓/权益入账。
