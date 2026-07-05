@@ -3,6 +3,7 @@ param(
     [switch]$RunCheck,
     [switch]$RestartCore,
     [switch]$StopCoreOnly,
+    [switch]$StopAllCoreInstances,
     [int]$CorePort = 8000,
     [switch]$AllowLan,
     [switch]$DryRun
@@ -181,6 +182,31 @@ function Stop-DubheCorePort {
     }
 }
 
+function Stop-AllDubheCoreInstances {
+    $coreProcesses = @(
+        Get-CimInstance Win32_Process |
+            Where-Object {
+                $_.CommandLine -and $_.CommandLine -like "*dubhe_core.main:app*"
+            }
+    )
+    $rootProcesses = @(
+        $coreProcesses |
+            Where-Object {
+                $parentId = [int]$_.ParentProcessId
+                -not ($coreProcesses | Where-Object { [int]$_.ProcessId -eq $parentId })
+            }
+    )
+
+    if ($rootProcesses.Count -eq 0) {
+        Write-Host "No Dubhe Core process was found."
+        return
+    }
+
+    foreach ($coreProcess in $rootProcesses) {
+        Stop-ProcessTreeById -RootPid ([int]$coreProcess.ProcessId)
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $configLoader = Join-Path $repoRoot "scripts\dubhe-config.ps1"
 $coreRoot = Join-Path $repoRoot "services\core"
@@ -235,7 +261,11 @@ if ($DryRun) {
         }
     }
     if ($StopCoreOnly) {
-        Write-Host "StopCoreOnly: would stop Dubhe Core on port $CorePort and exit."
+        if ($StopAllCoreInstances) {
+            Write-Host "StopCoreOnly: would stop all Dubhe Core instances and exit."
+        } else {
+            Write-Host "StopCoreOnly: would stop Dubhe Core on port $CorePort and exit."
+        }
     }
     if (Test-Path $checkScript) {
         Write-Host "Check script: $checkScript"
@@ -249,8 +279,13 @@ if ($DryRun) {
 }
 
 if ($StopCoreOnly) {
-    Stop-DubheCorePort -Port $CorePort
-    Write-Host "Dubhe Core stop requested for port $CorePort."
+    if ($StopAllCoreInstances) {
+        Stop-AllDubheCoreInstances
+        Write-Host "Dubhe Core stop requested for all detected instances."
+    } else {
+        Stop-DubheCorePort -Port $CorePort
+        Write-Host "Dubhe Core stop requested for port $CorePort."
+    }
     exit 0
 }
 

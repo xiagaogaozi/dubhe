@@ -4,7 +4,7 @@ set "DUBHE_ROOT=%~dp0"
 echo Stop Dubhe Core
 echo.
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%DUBHE_ROOT%scripts\start-local-dubhe.ps1" -StopCoreOnly
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%DUBHE_ROOT%scripts\start-local-dubhe.ps1" -StopCoreOnly -StopAllCoreInstances
 set "DUBHE_EXIT=%ERRORLEVEL%"
 
 echo.

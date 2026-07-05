@@ -128,6 +128,29 @@ function Test-CoreLanListener {
     return $listeners.Count -gt 0
 }
 
+function Get-DubheCoreListeners {
+    $processes = @(
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -and $_.CommandLine -like "*dubhe_core.main:app*" }
+    )
+    $processById = @{}
+    foreach ($process in $processes) {
+        $processById[[int]$process.ProcessId] = $process
+    }
+    $connections = @(
+        Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $processById.ContainsKey([int]$_.OwningProcess) }
+    )
+    return @(
+        $connections |
+            Select-Object `
+                @{ Name = "Port"; Expression = { [int]$_.LocalPort } },
+                @{ Name = "Pid"; Expression = { [int]$_.OwningProcess } },
+                @{ Name = "Address"; Expression = { $_.LocalAddress } } |
+            Sort-Object Port, Pid -Unique
+    )
+}
+
 function Read-SystemStatus {
     param([string]$Url)
 
@@ -199,6 +222,7 @@ $jdkHome = Join-Path $env:LOCALAPPDATA "DubheToolchains\jdk-17"
 $androidSdk = Join-Path $env:LOCALAPPDATA "DubheToolchains\android-sdk"
 $corePort = ([System.Uri]$CoreUrl).Port
 $lanCoreUrls = @(Get-LanCoreUrls -Port $corePort)
+$coreListeners = @(Get-DubheCoreListeners)
 
 $checks = [System.Collections.Generic.List[object]]::new()
 
@@ -232,6 +256,16 @@ if (Test-Path $venvPython) {
 
 $coreReady = Test-CoreHealth -Url $CoreUrl
 Add-Check (New-Check "Core" "服务状态" ($(if ($coreReady) { "ok" } else { "warn" })) ($(if ($coreReady) { "Core 已在 $CoreUrl 运行。" } else { "Core 当前未运行；执行 scripts/start-local-dubhe.ps1 会自动启动。" })))
+$extraCorePorts = @(
+    $coreListeners |
+        Where-Object { $_.Port -ne $corePort } |
+        Select-Object -ExpandProperty Port -Unique
+)
+if ($extraCorePorts.Count -gt 0) {
+    Add-Check (New-Check "Core" "额外 Core 进程" "warn" "检测到其他 Dubhe Core 端口：$($extraCorePorts -join '、')；如非刻意多开，可双击 Stop-Dubhe-Core.cmd 后重新启动。")
+} else {
+    Add-Check (New-Check "Core" "额外 Core 进程" "ok" "未检测到其他 Dubhe Core 监听端口。")
+}
 
 $systemStatus = $null
 if ($coreReady) {
