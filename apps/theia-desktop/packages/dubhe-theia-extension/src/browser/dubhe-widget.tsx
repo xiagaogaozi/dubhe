@@ -245,6 +245,51 @@ type PaperPortfolioSnapshot = {
   updated_at: string;
 };
 
+type Workspace = {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type WatchlistItem = {
+  id: string;
+  workspace_id: string;
+  symbol: string;
+  name: string;
+  market: Market;
+  notes_zh?: string | null;
+  added_at: string;
+  updated_at: string;
+};
+
+type SyncEvent = {
+  id: string;
+  workspace_id: string;
+  sequence: number;
+  entity_type: string;
+  entity_id: string;
+  action: 'created' | 'updated' | 'deleted';
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+type WorkspaceSnapshot = {
+  workspace: Workspace;
+  watchlist: WatchlistItem[];
+  events: SyncEvent[];
+  server_sequence: number;
+};
+
+type WatchlistDisplayItem = {
+  symbol: string;
+  name: string;
+  market: string;
+  move: string;
+  tone: Tone;
+};
+
 type LogEntry = {
   id: string;
   time: string;
@@ -341,6 +386,7 @@ function DubheWorkbench(): React.ReactElement {
   const [backtestResult, setBacktestResult] = React.useState<BacktestResult | null>(null);
   const [paperOrder, setPaperOrder] = React.useState<PaperOrder | null>(null);
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
+  const [workspaceSnapshot, setWorkspaceSnapshot] = React.useState<WorkspaceSnapshot | null>(null);
   const [approvals, setApprovals] = React.useState<ApprovalRequest[]>([]);
   const [killSwitch, setKillSwitch] = React.useState<KillSwitchState | null>(null);
   const [auditLogs, setAuditLogs] = React.useState<AuditLogEntry[]>([]);
@@ -371,11 +417,25 @@ function DubheWorkbench(): React.ReactElement {
       setKillSwitch(null);
       setAuditLogs([]);
       setPortfolio(null);
+      setWorkspaceSnapshot(null);
       setRiskMessage('登录后显示审批和急停状态。');
       return;
     }
     void loadSessionData(session);
-  }, [coreUrl, session?.access_token, session?.role]);
+  }, [coreUrl, session?.access_token, session?.role, session?.workspace_id]);
+
+  const workspaceWatchlist = React.useMemo<WatchlistDisplayItem[]>(() => {
+    if (!workspaceSnapshot || workspaceSnapshot.watchlist.length === 0) {
+      return fallbackWatchlist;
+    }
+    return workspaceSnapshot.watchlist.map((item) => ({
+      symbol: item.symbol,
+      name: item.name,
+      market: marketLabel(item.market),
+      move: '同步',
+      tone: 'neutral',
+    }));
+  }, [workspaceSnapshot]);
 
   function appendLog(tone: Tone, text: string): void {
     setLogs((current) => [createLog(tone, text), ...current].slice(0, 5));
@@ -462,6 +522,7 @@ function DubheWorkbench(): React.ReactElement {
       localStorage.removeItem(DEVICE_SESSION_STORAGE_KEY);
       setSession(null);
       setPortfolio(null);
+      setWorkspaceSnapshot(null);
       setApprovals([]);
       setKillSwitch(null);
       setAuditLogs([]);
@@ -587,10 +648,27 @@ function DubheWorkbench(): React.ReactElement {
 
   async function loadSessionData(activeSession: DeviceSession): Promise<void> {
     try {
-      await Promise.all([loadPortfolio(activeSession), loadRiskControls(activeSession)]);
+      await Promise.all([
+        loadWorkspaceSnapshot(activeSession),
+        loadPortfolio(activeSession),
+        loadRiskControls(activeSession),
+      ]);
     } catch (error) {
       appendLog('warning', `会话数据同步失败：${errorMessage(error)}。`);
     }
+  }
+
+  async function loadWorkspaceSnapshot(activeSession = session): Promise<void> {
+    if (!activeSession) {
+      setWorkspaceSnapshot(null);
+      return;
+    }
+    const snapshot = await getJson<WorkspaceSnapshot>(
+      coreUrl,
+      `/v1/workspaces/${activeSession.workspace_id}/snapshot`,
+      activeSession.access_token,
+    );
+    setWorkspaceSnapshot(snapshot);
   }
 
   async function loadPortfolio(activeSession = session): Promise<void> {
@@ -855,9 +933,42 @@ function DubheWorkbench(): React.ReactElement {
             </form>
           )}
 
-          <PanelTitle title="自选列表" meta="演示" />
+          <PanelTitle title="同步状态" meta={workspaceSnapshot ? `#${workspaceSnapshot.server_sequence}` : '未同步'} />
+          <div style={styles.syncCard}>
+            {workspaceSnapshot ? (
+              <>
+                <div style={styles.syncTopLine}>
+                  <strong style={styles.statusName}>{workspaceSnapshot.workspace.name}</strong>
+                  <button
+                    style={styles.inlineTextButton}
+                    type="button"
+                    onClick={() => void loadWorkspaceSnapshot(session)}
+                    disabled={isBusy || !session}
+                  >
+                    刷新
+                  </button>
+                </div>
+                <div style={styles.syncMetrics}>
+                  <Metric label="自选股" value={`${workspaceSnapshot.watchlist.length}`} tone="neutral" compact />
+                  <Metric label="同步事件" value={`${workspaceSnapshot.events.length}`} tone="neutral" compact />
+                  <Metric label="服务器序号" value={`${workspaceSnapshot.server_sequence}`} tone="positive" compact />
+                </div>
+                <div style={styles.syncEventList}>
+                  {workspaceSnapshot.events.slice(0, 3).map((event) => (
+                    <p style={styles.statusMessage} key={event.id}>
+                      #{event.sequence} {syncEntityLabel(event.entity_type)} {syncActionLabel(event.action)}
+                    </p>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p style={styles.bodyText}>登录后显示工作区快照、自选股和最近同步事件。</p>
+            )}
+          </div>
+
+          <PanelTitle title="自选列表" meta={workspaceSnapshot ? 'Core 同步' : '演示'} />
           <div style={styles.watchlist}>
-            {fallbackWatchlist.map((item) => (
+            {workspaceWatchlist.map((item) => (
               <button
                 key={item.symbol}
                 type="button"
@@ -1363,6 +1474,13 @@ function marketFromSymbol(value: string): Market {
   return 'US';
 }
 
+function marketLabel(market: Market): string {
+  if (market === 'US') return '美股';
+  if (market === 'HK') return '港股';
+  if (market === 'A_SHARE') return 'A 股';
+  return '全球';
+}
+
 function roleLabel(role: UserRole): string {
   if (role === 'admin') return '管理员';
   if (role === 'risk_manager') return '风控管理员';
@@ -1405,6 +1523,29 @@ function auditActionLabel(action: string): string {
 function auditRoleLabel(role?: UserRole | null): string {
   if (!role) return '系统';
   return roleLabel(role);
+}
+
+function syncEntityLabel(entityType: string): string {
+  const labels: Record<string, string> = {
+    approval_request: '审批',
+    backtest_result: '回测',
+    broker_order: '模拟券商订单',
+    news_analysis: 'AI 分析',
+    news_event: '新闻',
+    paper_order: '纸面订单',
+    paper_portfolio: '纸面组合',
+    risk_decision: '风控决定',
+    strategy_draft: '策略草案',
+    watchlist_item: '自选股',
+    workspace: '工作区',
+  };
+  return labels[entityType] ?? entityType;
+}
+
+function syncActionLabel(action: SyncEvent['action']): string {
+  if (action === 'created') return '已创建';
+  if (action === 'updated') return '已更新';
+  return '已删除';
 }
 
 function sentimentLabel(sentiment: Sentiment): string {
@@ -1712,6 +1853,30 @@ const styles = {
   segmentButtonActive: {
     background: '#ffffff',
     color: '#174a3a',
+  } as React.CSSProperties,
+  syncCard: {
+    display: 'grid',
+    gap: 8,
+    marginTop: 8,
+    padding: 10,
+    border: '1px solid #e3eae6',
+    borderRadius: 8,
+    background: '#fbfcfb',
+  } as React.CSSProperties,
+  syncTopLine: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  } as React.CSSProperties,
+  syncMetrics: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: 8,
+  } as React.CSSProperties,
+  syncEventList: {
+    display: 'grid',
+    gap: 2,
   } as React.CSSProperties,
   watchlist: {
     display: 'grid',
