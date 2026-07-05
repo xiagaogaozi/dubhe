@@ -54,6 +54,11 @@ $entries = @(
         description = "Open the Chinese phone/tablet install and connection guide."
     },
     @{
+        name = "Dubhe Install Guide"
+        file = Join-Path $repoRoot "Open-Dubhe-Install-Guide.cmd"
+        description = "Open the Chinese Windows, macOS, iOS, and Android package guide."
+    },
+    @{
         name = "Configure Dubhe"
         file = Join-Path $repoRoot "Configure-Dubhe.cmd"
         description = "Open Dubhe local runtime configuration."
