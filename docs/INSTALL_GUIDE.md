@@ -22,6 +22,7 @@
 - 主链路烟测入口：`{{SMOKE_CMD}}`
 - 外部服务体检入口：`{{SERVICE_CHECK_CMD}}`
 - 生产就绪门禁入口：`{{PRODUCTION_CHECK_CMD}}`
+- 生产上线补齐包入口：`{{PRODUCTION_PACK_CMD}}`
 - 本机配置入口：`{{CONFIGURE_CMD}}`
 
 ## 怎么选安装方式
@@ -75,10 +76,11 @@ http://10.0.2.2:8000
 4. 如需单独定位环境问题，双击 `Check-Dubhe.cmd`，确认安装包、配置和 Core 状态。
 5. 填完真实 AI/新闻源 key 后，双击 `Test-Dubhe-Services.cmd` 做 live 外部服务体检。
 6. 双击 `Check-Dubhe-Production.cmd` 查看商业生产上线阻断项。
-7. 需要把当前产物交给本机用户试用时，双击 `Build-Dubhe-User-Kit.cmd`。
-8. 桌面端登录本地账号，查看 “首次使用清单”。
-9. 如需手机/平板，双击 `Connect-Dubhe-Mobile.cmd`，扫码或填写手机连接卡里的 Core 地址。
-10. 需要单独重跑主链路时，双击 `Smoke-Dubhe.cmd`。
+7. 双击 `Export-Dubhe-Production-Pack.cmd` 导出阻断项、负责人和供应商/账号材料清单。
+8. 需要把当前产物交给本机用户试用时，双击 `Build-Dubhe-User-Kit.cmd`。
+9. 桌面端登录本地账号，查看 “首次使用清单”。
+10. 如需手机/平板，双击 `Connect-Dubhe-Mobile.cmd`，扫码或填写手机连接卡里的 Core 地址。
+11. 需要单独重跑主链路时，双击 `Smoke-Dubhe.cmd`。
 
 ## 跨端数据互通
 

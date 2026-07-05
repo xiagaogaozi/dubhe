@@ -14,13 +14,14 @@
 6. 只需要局域网启动日志时，双击 `05-Start-Dubhe-LAN-This-PC.cmd`。
 7. 填完 key 后，双击 `06-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。
 8. 真正准备商业发布前，双击 `07-Check-Production-This-PC.cmd` 查看生产门禁。
-9. 需要单独重跑主链路时，双击 `08-Smoke-Dubhe-This-PC.cmd`。
+9. 需要把生产阻断项交给团队补齐时，双击 `08-Export-Production-Pack-This-PC.cmd`。
+10. 需要单独重跑主链路时，双击 `09-Smoke-Dubhe-This-PC.cmd`。
 
 ## 这个包里的内容
 
 - Windows 安装包目录：`01-Windows`
 - Android 安装包目录：`02-Android`
-- 中文向导目录：`03-Guides`，其中 `mobile-connect.html` 是手机连接卡，`mobile-core-url.svg` 是二维码文件。
+- 中文向导目录：`03-Guides`，其中 `mobile-connect.html` 是手机连接卡，`production-pack` 是生产上线补齐包。
 - 体检报告目录：`04-Checks`
 - 双击入口：`00-Start-Dubhe-This-PC.cmd` 等文件
 

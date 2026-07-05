@@ -203,6 +203,7 @@ $checkCmd = Join-Path $repoRoot "Check-Dubhe.cmd"
 $smokeCmd = Join-Path $repoRoot "Smoke-Dubhe.cmd"
 $serviceCheckCmd = Join-Path $repoRoot "Test-Dubhe-Services.cmd"
 $productionCheckCmd = Join-Path $repoRoot "Check-Dubhe-Production.cmd"
+$productionPackCmd = Join-Path $repoRoot "Export-Dubhe-Production-Pack.cmd"
 $stopCmd = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
 $configureCmd = Join-Path $repoRoot "Configure-Dubhe.cmd"
 $localConfigPath = Join-Path $repoRoot "config\dubhe.local.env"
@@ -214,6 +215,7 @@ $coreSmokeScript = Join-Path $repoRoot "scripts\smoke-core-workflow.ps1"
 $localAcceptanceScript = Join-Path $repoRoot "scripts\run-local-acceptance.ps1"
 $mobileConnectScript = Join-Path $repoRoot "scripts\show-mobile-connect.ps1"
 $qrGeneratorScript = Join-Path $repoRoot "scripts\generate-qr-svg.py"
+$productionPackScript = Join-Path $repoRoot "scripts\export-production-pack.ps1"
 $desktopExe = Join-Path $theiaRoot "app\dist\win-unpacked\Dubhe.exe"
 $desktopDist = Join-Path $theiaRoot "app\dist"
 $windowsSetup = Resolve-NewestFile $desktopDist "Dubhe-*-win-x64-setup.exe"
@@ -243,6 +245,7 @@ Add-Check (New-Check "Windows 入口" "双击体检" ($(if (Test-Path $checkCmd)
 Add-Check (New-Check "Windows 入口" "双击烟测" ($(if (Test-Path $smokeCmd) { "ok" } else { "warn" })) ($(if (Test-Path $smokeCmd) { $smokeCmd } else { "缺少 Smoke-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击外部服务体检" ($(if (Test-Path $serviceCheckCmd) { "ok" } else { "warn" })) ($(if (Test-Path $serviceCheckCmd) { $serviceCheckCmd } else { "缺少 Test-Dubhe-Services.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击生产就绪门禁" ($(if (Test-Path $productionCheckCmd) { "ok" } else { "warn" })) ($(if (Test-Path $productionCheckCmd) { $productionCheckCmd } else { "缺少 Check-Dubhe-Production.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击生产补齐包" ($(if (Test-Path $productionPackCmd) { "ok" } else { "warn" })) ($(if (Test-Path $productionPackCmd) { $productionPackCmd } else { "缺少 Export-Dubhe-Production-Pack.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击停止 Core" ($(if (Test-Path $stopCmd) { "ok" } else { "warn" })) ($(if (Test-Path $stopCmd) { $stopCmd } else { "缺少 Stop-Dubhe-Core.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击配置" ($(if (Test-Path $configureCmd) { "ok" } else { "warn" })) ($(if (Test-Path $configureCmd) { $configureCmd } else { "缺少 Configure-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "快捷方式安装器" ($(if (Test-Path $shortcutInstaller) { "ok" } else { "warn" })) ($(if (Test-Path $shortcutInstaller) { $shortcutInstaller } else { "缺少 scripts/install-windows-shortcuts.ps1。" })))
@@ -254,6 +257,7 @@ Add-Check (New-Check "Core" "主链路烟测" ($(if (Test-Path $coreSmokeScript)
 Add-Check (New-Check "Core" "本机完整验收" ($(if (Test-Path $localAcceptanceScript) { "ok" } else { "warn" })) ($(if (Test-Path $localAcceptanceScript) { $localAcceptanceScript } else { "缺少 scripts/run-local-acceptance.ps1。" })))
 Add-Check (New-Check "移动端" "手机连接卡脚本" ($(if (Test-Path $mobileConnectScript) { "ok" } else { "warn" })) ($(if (Test-Path $mobileConnectScript) { $mobileConnectScript } else { "缺少 scripts/show-mobile-connect.ps1。" })))
 Add-Check (New-Check "移动端" "二维码生成脚本" ($(if (Test-Path $qrGeneratorScript) { "ok" } else { "warn" })) ($(if (Test-Path $qrGeneratorScript) { $qrGeneratorScript } else { "缺少 scripts/generate-qr-svg.py。" })))
+Add-Check (New-Check "生产门禁" "生产补齐包脚本" ($(if (Test-Path $productionPackScript) { "ok" } else { "warn" })) ($(if (Test-Path $productionPackScript) { $productionPackScript } else { "缺少 scripts/export-production-pack.ps1。" })))
 
 $venvPython = Join-Path $coreRoot ".venv\Scripts\python.exe"
 if (Test-Path $venvPython) {

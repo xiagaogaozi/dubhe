@@ -99,6 +99,11 @@ $entries = @(
         description = "Check whether Dubhe is ready for real commercial production use."
     },
     @{
+        name = "Export Dubhe Production Pack"
+        file = Join-Path $repoRoot "Export-Dubhe-Production-Pack.cmd"
+        description = "Export Chinese production blockers, owners, evidence, and vendor/account checklist."
+    },
+    @{
         name = "Stop Dubhe Core"
         file = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
         description = "Stop local Dubhe Core backend service."
