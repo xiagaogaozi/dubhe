@@ -394,6 +394,122 @@ void main() {
   });
 
   test(
+    'assistant chat sends portfolio research context and parses guidance',
+    () async {
+      final client = CoreClient(
+        baseUrl: 'http://127.0.0.1:8019',
+        accessToken: 'dubhe_dev_token',
+        client: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/v1/assistant/chat');
+          expect(request.headers['authorization'], 'Bearer dubhe_dev_token');
+
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          final context = body['context'] as Map<String, dynamic>;
+          expect(body['question_zh'], '下一步怎么验证？');
+          expect(context['news_event']['id'], 'news_1');
+          expect(context['analysis']['id'], 'analysis_1');
+          expect(context['strategy']['strategy_version_id'], 'strategy_v_1');
+          expect(context['backtest']['strategy_version_id'], 'strategy_v_1');
+          expect(context['backtest']['total_return'], 0.124);
+
+          return http.Response(
+            '''
+          {
+            "id": "assistant_1",
+            "answer_zh": "先完成纸面验证，再进入审批。",
+            "citations": [
+              {"label_zh": "新闻", "ref": "news_1"},
+              {"label_zh": "回测", "ref": "backtest_1"}
+            ],
+            "suggested_actions_zh": ["复查最大回撤", "提交纸面买入"],
+            "safety_notes_zh": ["不会连接真实券商。"],
+            "generated_at": "2026-07-05T00:00:00Z"
+          }
+          ''',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+
+      final event = NewsEvent.fromJson({
+        'id': 'news_1',
+        'source_name': 'fixture',
+        'title_original': 'NVDA rises on AI demand',
+        'title_zh': '英伟达受 AI 需求推动上涨',
+        'published_at': '2026-07-05T00:00:00Z',
+        'market_scope': ['US'],
+        'tickers': ['NVDA'],
+        'event_type': 'earnings',
+        'authority_score': 0.9,
+      });
+      final analysis = NewsAnalysis(
+        id: 'analysis_1',
+        newsEventId: 'news_1',
+        summaryZh: 'AI 需求改善，短线偏正面。',
+        sentiment: 'positive',
+        impactScore: 0.83,
+        affectedTickers: const ['NVDA'],
+        sourceRefs: const ['news_1'],
+        confidence: 0.84,
+        generatedAt: '2026-07-05T00:00:00Z',
+      );
+      final strategy = StrategyDraft(
+        id: 'draft_1',
+        strategyVersionId: 'strategy_v_1',
+        name: '新闻情绪策略',
+        spec: StrategySpec(
+          strategyName: '新闻情绪策略',
+          marketScope: const ['US'],
+          assetUniverse: const ['NVDA'],
+          entryRules: const ['影响分大于 0.7'],
+          exitRules: const ['触发止损'],
+          riskLimits: const {'max_order_notional': 10000},
+          timeframe: '1d',
+          rebalanceRule: 'daily',
+          dataDependencies: const ['news', 'market_bars'],
+          brokerPermissions: const ['paper'],
+        ),
+        explanationZh: '只用于纸面验证。',
+        generatedCode: 'class Demo {}',
+        sourceAnalysisId: 'analysis_1',
+        createdAt: '2026-07-05T00:00:00Z',
+      );
+      final backtest = BacktestResult(
+        id: 'backtest_1',
+        strategyVersionId: 'strategy_v_1',
+        replayScenario: 'golden_news_sentiment_v1',
+        symbol: 'NVDA',
+        market: 'US',
+        initialCash: 100000,
+        finalEquity: 112400,
+        totalReturn: 0.124,
+        benchmarkReturn: 0.08,
+        maxDrawdown: 0.041,
+        winRate: 0.58,
+        tradeCount: 2,
+        riskNotesZh: const ['仅用于纸面验证。'],
+      );
+
+      final response = await client.askAssistant(
+        questionZh: '下一步怎么验证？',
+        newsEvent: event,
+        analysis: analysis,
+        strategyDraft: strategy,
+        backtestResult: backtest,
+      );
+
+      expect(response.id, 'assistant_1');
+      expect(response.answerZh, contains('纸面验证'));
+      expect(response.citations, hasLength(2));
+      expect(response.citations.last.ref, 'backtest_1');
+      expect(response.suggestedActionsZh, ['复查最大回撤', '提交纸面买入']);
+      expect(response.safetyNotesZh.single, '不会连接真实券商。');
+    },
+  );
+
+  test(
     'strategy, backtest, and paper order use Core workflow endpoints',
     () async {
       final requests = <http.Request>[];

@@ -12,6 +12,7 @@ Dubhe Companion 是 Dubhe 的 iOS / Android 移动端壳。当前目标是让中
 - 调用 `/v1/news/analyze` 生成中文影响分析。
 - 调用 `/v1/strategy/drafts/from-analysis` 生成策略草案。
 - 调用 `/v1/backtests/replay` 运行 deterministic replay 回测。
+- 调用 `/v1/assistant/chat` 进行可审计的中文 AI 分析师对话，讨论当前新闻、分析、策略草案和回测结果。
 - 调用 `/v1/simulation/paper-orders` 提交纸面买入验证。
 - 查看 `/v1/simulation/paper-portfolio/{account_id}` 纸面组合。
 - 管理员或风控管理员可查看 `/v1/approvals`，并调用通过/拒绝接口。

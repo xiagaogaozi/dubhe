@@ -171,6 +171,25 @@ class CoreClient {
     return BacktestResult.fromJson(_map(json));
   }
 
+  Future<AssistantChatResponse> askAssistant({
+    required String questionZh,
+    NewsEvent? newsEvent,
+    NewsAnalysis? analysis,
+    StrategyDraft? strategyDraft,
+    BacktestResult? backtestResult,
+  }) async {
+    final json = await _postJson('/v1/assistant/chat', {
+      'question_zh': questionZh,
+      'context': {
+        'news_event': newsEvent?.toJson(),
+        'analysis': analysis?.toJson(),
+        'strategy': strategyDraft?.toJson(),
+        'backtest': backtestResult?.toJson(),
+      },
+    });
+    return AssistantChatResponse.fromJson(_map(json));
+  }
+
   Future<PaperOrder> submitPaperBuy({
     required String accountId,
     required String strategyVersionId,
@@ -861,6 +880,25 @@ class BacktestResult {
   final int tradeCount;
   final List<String> riskNotesZh;
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'strategy_version_id': strategyVersionId,
+      'replay_scenario': replayScenario,
+      'symbol': symbol,
+      'market': market,
+      'initial_cash': initialCash,
+      'final_equity': finalEquity,
+      'total_return': totalReturn,
+      'benchmark_return': benchmarkReturn,
+      'max_drawdown': maxDrawdown,
+      'win_rate': winRate,
+      'trade_count': tradeCount,
+      'risk_notes_zh': riskNotesZh,
+      'equity_curve': const [],
+    };
+  }
+
   factory BacktestResult.fromJson(Map<String, dynamic> json) {
     return BacktestResult(
       id: _string(json['id']),
@@ -876,6 +914,51 @@ class BacktestResult {
       winRate: _double(json['win_rate']),
       tradeCount: _int(json['trade_count']),
       riskNotesZh: _stringList(json['risk_notes_zh']),
+    );
+  }
+}
+
+class AssistantCitation {
+  AssistantCitation({required this.labelZh, required this.ref});
+
+  final String labelZh;
+  final String ref;
+
+  factory AssistantCitation.fromJson(Map<String, dynamic> json) {
+    return AssistantCitation(
+      labelZh: _string(json['label_zh']),
+      ref: _string(json['ref']),
+    );
+  }
+}
+
+class AssistantChatResponse {
+  AssistantChatResponse({
+    required this.id,
+    required this.answerZh,
+    required this.citations,
+    required this.suggestedActionsZh,
+    required this.safetyNotesZh,
+    required this.generatedAt,
+  });
+
+  final String id;
+  final String answerZh;
+  final List<AssistantCitation> citations;
+  final List<String> suggestedActionsZh;
+  final List<String> safetyNotesZh;
+  final String generatedAt;
+
+  factory AssistantChatResponse.fromJson(Map<String, dynamic> json) {
+    return AssistantChatResponse(
+      id: _string(json['id']),
+      answerZh: _string(json['answer_zh']),
+      citations: _mapList(
+        json['citations'],
+      ).map(AssistantCitation.fromJson).toList(),
+      suggestedActionsZh: _stringList(json['suggested_actions_zh']),
+      safetyNotesZh: _stringList(json['safety_notes_zh']),
+      generatedAt: _string(json['generated_at']),
     );
   }
 }

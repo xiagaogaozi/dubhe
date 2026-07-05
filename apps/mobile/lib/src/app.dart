@@ -202,6 +202,29 @@ enum _MobileSyncConnectionStatus {
   offline,
 }
 
+class _AssistantChatMessage {
+  const _AssistantChatMessage({
+    required this.role,
+    required this.text,
+    this.citations = const [],
+    this.suggestedActions = const [],
+  });
+
+  final String role;
+  final String text;
+  final List<AssistantCitation> citations;
+  final List<String> suggestedActions;
+
+  bool get isUser => role == 'user';
+}
+
+extension _TakeLastMessages<T> on List<T> {
+  List<T> takeLast(int count) {
+    if (length <= count) return List<T>.of(this);
+    return sublist(length - count);
+  }
+}
+
 class CompanionHome extends StatefulWidget {
   const CompanionHome({required this.client, required this.session, super.key});
 
@@ -241,6 +264,14 @@ class _CompanionHomeState extends State<CompanionHome> {
   KillSwitchState? _killSwitch;
   List<AuditLogEntry> _auditLogs = const [];
   List<ApprovalRequest> _approvals = const [];
+  bool _assistantBusy = false;
+  String _assistantQuestion = '这条新闻会影响哪些股票？';
+  List<_AssistantChatMessage> _assistantMessages = const [
+    _AssistantChatMessage(
+      role: 'assistant',
+      text: '可以直接问我新闻影响、策略规则、回测结果和纸面验证路径。',
+    ),
+  ];
 
   @override
   void initState() {
@@ -613,6 +644,66 @@ class _CompanionHomeState extends State<CompanionHome> {
     }
   }
 
+  Future<void> _askAssistant() async {
+    final question = _assistantQuestion.trim();
+    if (question.isEmpty || _assistantBusy) return;
+    final event = _firstNewsEvent;
+    setState(() {
+      _assistantBusy = true;
+      _assistantQuestion = '';
+      _assistantMessages = [
+        ..._assistantMessages,
+        _AssistantChatMessage(role: 'user', text: question),
+      ].takeLast(8);
+      _message = null;
+    });
+    try {
+      final response = await widget.client.askAssistant(
+        questionZh: question,
+        newsEvent: event,
+        analysis: _analysis,
+        strategyDraft: _strategyDraft,
+        backtestResult: _backtestResult,
+      );
+      if (!mounted) return;
+      setState(() {
+        _assistantMessages = [
+          ..._assistantMessages,
+          _AssistantChatMessage(
+            role: 'assistant',
+            text: response.answerZh,
+            citations: response.citations,
+            suggestedActions: response.suggestedActionsZh,
+          ),
+        ].takeLast(8);
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is DubheApiException
+          ? error.message
+          : 'AI 分析师对话失败。';
+      setState(() {
+        _message = message;
+        _assistantMessages = [
+          ..._assistantMessages,
+          _AssistantChatMessage(role: 'assistant', text: message),
+        ].takeLast(8);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _assistantBusy = false;
+        });
+      }
+    }
+  }
+
+  void _setAssistantPrompt(String prompt) {
+    setState(() {
+      _assistantQuestion = prompt;
+    });
+  }
+
   Future<void> _submitPaperBuy() async {
     final analysis = _analysis;
     final draft = _strategyDraft;
@@ -904,12 +995,22 @@ class _CompanionHomeState extends State<CompanionHome> {
         strategyDraft: _strategyDraft,
         backtestResult: _backtestResult,
         paperOrder: _paperOrder,
+        assistantMessages: _assistantMessages,
+        assistantQuestion: _assistantQuestion,
+        assistantBusy: _assistantBusy,
         analyzing: _analyzing,
         busy: _loading,
         onAnalyze: _analyzeTopNews,
         onDraftStrategy: _draftStrategy,
         onRunBacktest: _runBacktest,
         onSubmitPaperBuy: _submitPaperBuy,
+        onAskAssistant: _askAssistant,
+        onAssistantQuestionChanged: (value) {
+          setState(() {
+            _assistantQuestion = value;
+          });
+        },
+        onSetAssistantPrompt: _setAssistantPrompt,
       ),
       _PortfolioPage(portfolio: _portfolio),
       _ApprovalPage(
@@ -1196,12 +1297,18 @@ class _AiPage extends StatelessWidget {
     required this.strategyDraft,
     required this.backtestResult,
     required this.paperOrder,
+    required this.assistantMessages,
+    required this.assistantQuestion,
+    required this.assistantBusy,
     required this.analyzing,
     required this.busy,
     required this.onAnalyze,
     required this.onDraftStrategy,
     required this.onRunBacktest,
     required this.onSubmitPaperBuy,
+    required this.onAskAssistant,
+    required this.onAssistantQuestionChanged,
+    required this.onSetAssistantPrompt,
   });
 
   final NewsFeed? newsFeed;
@@ -1209,12 +1316,18 @@ class _AiPage extends StatelessWidget {
   final StrategyDraft? strategyDraft;
   final BacktestResult? backtestResult;
   final PaperOrder? paperOrder;
+  final List<_AssistantChatMessage> assistantMessages;
+  final String assistantQuestion;
+  final bool assistantBusy;
   final bool analyzing;
   final bool busy;
   final VoidCallback onAnalyze;
   final VoidCallback onDraftStrategy;
   final VoidCallback onRunBacktest;
   final VoidCallback onSubmitPaperBuy;
+  final VoidCallback onAskAssistant;
+  final ValueChanged<String> onAssistantQuestionChanged;
+  final ValueChanged<String> onSetAssistantPrompt;
 
   @override
   Widget build(BuildContext context) {
@@ -1236,6 +1349,17 @@ class _AiPage extends StatelessWidget {
                 label: Text(analyzing ? '正在分析...' : '生成中文影响分析'),
               ),
             ],
+          ),
+        ),
+        _SectionCard(
+          title: 'AI 分析师对话',
+          child: _AssistantChatPanel(
+            messages: assistantMessages,
+            question: assistantQuestion,
+            busy: assistantBusy,
+            onQuestionChanged: onAssistantQuestionChanged,
+            onSend: onAskAssistant,
+            onSetPrompt: onSetAssistantPrompt,
           ),
         ),
         if (analysis != null)
@@ -1296,6 +1420,175 @@ class _AiPage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AssistantChatPanel extends StatefulWidget {
+  const _AssistantChatPanel({
+    required this.messages,
+    required this.question,
+    required this.busy,
+    required this.onQuestionChanged,
+    required this.onSend,
+    required this.onSetPrompt,
+  });
+
+  final List<_AssistantChatMessage> messages;
+  final String question;
+  final bool busy;
+  final ValueChanged<String> onQuestionChanged;
+  final VoidCallback onSend;
+  final ValueChanged<String> onSetPrompt;
+
+  @override
+  State<_AssistantChatPanel> createState() => _AssistantChatPanelState();
+}
+
+class _AssistantChatPanelState extends State<_AssistantChatPanel> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.question);
+  }
+
+  @override
+  void didUpdateWidget(_AssistantChatPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.question != widget.question &&
+        _controller.text != widget.question) {
+      _controller.value = TextEditingValue(
+        text: widget.question,
+        selection: TextSelection.collapsed(offset: widget.question.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...widget.messages.map((message) => _AssistantBubble(message: message)),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _controller,
+          enabled: !widget.busy,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: '向 AI 分析师提问',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: widget.onQuestionChanged,
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed: widget.busy
+                  ? null
+                  : () => widget.onSetPrompt('可以直接实盘买吗？需要哪些风控步骤？'),
+              icon: const Icon(Icons.verified_user_outlined),
+              label: const Text('实盘风险'),
+            ),
+            OutlinedButton.icon(
+              onPressed: widget.busy
+                  ? null
+                  : () => widget.onSetPrompt('请根据当前新闻、策略和回测，给我下一步纸面验证清单。'),
+              icon: const Icon(Icons.checklist_outlined),
+              label: const Text('验证清单'),
+            ),
+            FilledButton.icon(
+              onPressed: widget.busy || widget.question.trim().isEmpty
+                  ? null
+                  : widget.onSend,
+              icon: Icon(widget.busy ? Icons.hourglass_top : Icons.send),
+              label: Text(widget.busy ? '分析中' : '发送'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AssistantBubble extends StatelessWidget {
+  const _AssistantBubble({required this.message});
+
+  final _AssistantChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final background = message.isUser
+        ? scheme.primaryContainer
+        : scheme.surfaceContainerHighest;
+    final alignment = message.isUser
+        ? Alignment.centerRight
+        : Alignment.centerLeft;
+    return Align(
+      alignment: alignment,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 520),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message.text),
+            if (message.citations.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: message.citations
+                    .take(3)
+                    .map(
+                      (citation) => Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                          '${citation.labelZh} · ${_shortRef(citation.ref)}',
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+            if (message.suggestedActions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...message.suggestedActions
+                  .take(3)
+                  .map(
+                    (action) => Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.arrow_right, size: 18),
+                          Expanded(child: Text(action)),
+                        ],
+                      ),
+                    ),
+                  ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1607,6 +1900,7 @@ String _auditActionZh(String action) {
     'auth.device_registered': '设备注册',
     'auth.device_revoked': '设备撤销',
     'auth.login_succeeded': '登录成功',
+    'assistant.chat_requested': 'AI 分析师对话',
     'risk.kill_switch_updated': '急停更新',
     'risk.order_evaluated': '订单风控评估',
     'simulation.paper_order_submitted': '纸面订单',
@@ -1619,6 +1913,12 @@ String _shortTimestamp(String value) {
     return value.substring(11, 16);
   }
   return value;
+}
+
+String _shortRef(String value) {
+  final trimmed = value.trim();
+  if (trimmed.length <= 36) return trimmed;
+  return '${trimmed.substring(0, 18)}...${trimmed.substring(trimmed.length - 12)}';
 }
 
 String _syncEntityZh(String entityType) {
