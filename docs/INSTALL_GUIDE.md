@@ -14,6 +14,7 @@
 - 手机/平板可填写的 Core 地址候选：`{{LAN_CORE_URLS}}`
 - 普通启动入口：`{{START_CMD}}`
 - 手机局域网启动入口：`{{START_LAN_CMD}}`
+- 手机扫码连接入口：`{{CONNECT_MOBILE_CMD}}`
 - 用户交付包入口：`{{USER_KIT_CMD}}`
 - 手机专项向导入口：`{{MOBILE_GUIDE_CMD}}`
 - 本机完整验收入口：`{{ACCEPT_CMD}}`
@@ -38,7 +39,7 @@
 
 1. 测试体验优先安装 `Android 调试 APK`。
 2. 正式分发使用 `Android release AAB`，但仍需要签名、包名、图标、隐私政策和商店资料。
-3. 真机连接前先双击 `Start-Dubhe-LAN.cmd`，然后把上方 `http://192.168.x.x:8000` 形式的地址填到手机登录页的 “Core 地址”。
+3. 真机连接前优先双击 `Connect-Dubhe-Mobile.cmd`，扫码或填写连接卡里的 `http://192.168.x.x:8000` 地址；只需要局域网启动日志时再双击 `Start-Dubhe-LAN.cmd`。
 
 Android 模拟器通常使用：
 
@@ -76,7 +77,7 @@ http://10.0.2.2:8000
 6. 双击 `Check-Dubhe-Production.cmd` 查看商业生产上线阻断项。
 7. 需要把当前产物交给本机用户试用时，双击 `Build-Dubhe-User-Kit.cmd`。
 8. 桌面端登录本地账号，查看 “首次使用清单”。
-9. 如需手机/平板，双击 `Start-Dubhe-LAN.cmd`，再打开 `Open-Dubhe-Mobile-Guide.cmd`。
+9. 如需手机/平板，双击 `Connect-Dubhe-Mobile.cmd`，扫码或填写手机连接卡里的 Core 地址。
 10. 需要单独重跑主链路时，双击 `Smoke-Dubhe.cmd`。
 
 ## 跨端数据互通

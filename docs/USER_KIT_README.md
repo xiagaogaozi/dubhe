@@ -9,17 +9,18 @@
 1. 双击 `00-Start-Dubhe-This-PC.cmd`，启动 Dubhe Core 和桌面端。
 2. 第一次使用真实 AI 或新闻源时，双击 `01-Configure-Dubhe-This-PC.cmd`，按中文向导填写 key；不知道的项目直接回车即可。
 3. 双击 `02-Accept-Dubhe-This-PC.cmd` 做本机完整验收。
-4. 如需单独定位环境问题，双击 `03-Check-Dubhe-This-PC.cmd` 做本机体检。
-5. 需要手机连接时，双击 `04-Start-Dubhe-LAN-This-PC.cmd`，再看 `03-Guides\mobile-quick-start.txt`。
-6. 填完 key 后，双击 `05-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。
-7. 真正准备商业发布前，双击 `06-Check-Production-This-PC.cmd` 查看生产门禁。
-8. 需要单独重跑主链路时，双击 `07-Smoke-Dubhe-This-PC.cmd`。
+4. 需要手机连接时，双击 `03-Connect-Dubhe-Mobile-This-PC.cmd`，扫码或填写连接卡里的 Core 地址。
+5. 如需单独定位环境问题，双击 `04-Check-Dubhe-This-PC.cmd` 做本机体检。
+6. 只需要局域网启动日志时，双击 `05-Start-Dubhe-LAN-This-PC.cmd`。
+7. 填完 key 后，双击 `06-Test-Services-This-PC.cmd` 检查 AI 和新闻源连接。
+8. 真正准备商业发布前，双击 `07-Check-Production-This-PC.cmd` 查看生产门禁。
+9. 需要单独重跑主链路时，双击 `08-Smoke-Dubhe-This-PC.cmd`。
 
 ## 这个包里的内容
 
 - Windows 安装包目录：`01-Windows`
 - Android 安装包目录：`02-Android`
-- 中文向导目录：`03-Guides`
+- 中文向导目录：`03-Guides`，其中 `mobile-connect.html` 是手机连接卡，`mobile-core-url.svg` 是二维码文件。
 - 体检报告目录：`04-Checks`
 - 双击入口：`00-Start-Dubhe-This-PC.cmd` 等文件
 

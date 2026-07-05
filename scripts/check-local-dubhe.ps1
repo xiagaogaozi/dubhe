@@ -194,6 +194,7 @@ $mobileRoot = Join-Path $repoRoot "apps\mobile"
 $runRoot = Join-Path $repoRoot ".dubhe-run"
 $startCmd = Join-Path $repoRoot "Start-Dubhe.cmd"
 $startLanCmd = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
+$connectMobileCmd = Join-Path $repoRoot "Connect-Dubhe-Mobile.cmd"
 $userKitCmd = Join-Path $repoRoot "Build-Dubhe-User-Kit.cmd"
 $installGuideCmd = Join-Path $repoRoot "Open-Dubhe-Install-Guide.cmd"
 $mobileGuideCmd = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
@@ -211,6 +212,8 @@ $coreRunScript = Join-Path $coreRoot "scripts\run.ps1"
 $coreTestScript = Join-Path $coreRoot "scripts\test.ps1"
 $coreSmokeScript = Join-Path $repoRoot "scripts\smoke-core-workflow.ps1"
 $localAcceptanceScript = Join-Path $repoRoot "scripts\run-local-acceptance.ps1"
+$mobileConnectScript = Join-Path $repoRoot "scripts\show-mobile-connect.ps1"
+$qrGeneratorScript = Join-Path $repoRoot "scripts\generate-qr-svg.py"
 $desktopExe = Join-Path $theiaRoot "app\dist\win-unpacked\Dubhe.exe"
 $desktopDist = Join-Path $theiaRoot "app\dist"
 $windowsSetup = Resolve-NewestFile $desktopDist "Dubhe-*-win-x64-setup.exe"
@@ -231,6 +234,7 @@ $checks = [System.Collections.Generic.List[object]]::new()
 Add-Check (New-Check "仓库" "根目录" "ok" $repoRoot)
 Add-Check (New-Check "Windows 入口" "双击启动" ($(if (Test-Path $startCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startCmd) { $startCmd } else { "缺少 Start-Dubhe.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机局域网启动" ($(if (Test-Path $startLanCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startLanCmd) { $startLanCmd } else { "缺少 Start-Dubhe-LAN.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击手机扫码连接" ($(if (Test-Path $connectMobileCmd) { "ok" } else { "warn" })) ($(if (Test-Path $connectMobileCmd) { $connectMobileCmd } else { "缺少 Connect-Dubhe-Mobile.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击生成用户交付包" ($(if (Test-Path $userKitCmd) { "ok" } else { "warn" })) ($(if (Test-Path $userKitCmd) { $userKitCmd } else { "缺少 Build-Dubhe-User-Kit.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击四端安装向导" ($(if (Test-Path $installGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $installGuideCmd) { $installGuideCmd } else { "缺少 Open-Dubhe-Install-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机连接向导" ($(if (Test-Path $mobileGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $mobileGuideCmd) { $mobileGuideCmd } else { "缺少 Open-Dubhe-Mobile-Guide.cmd。" })))
@@ -248,6 +252,8 @@ Add-Check (New-Check "Core" "运行脚本" ($(if (Test-Path $coreRunScript) { "o
 Add-Check (New-Check "Core" "测试脚本" ($(if (Test-Path $coreTestScript) { "ok" } else { "warn" })) ($(if (Test-Path $coreTestScript) { $coreTestScript } else { "缺少测试脚本，后续无法一键验证 Core。" })))
 Add-Check (New-Check "Core" "主链路烟测" ($(if (Test-Path $coreSmokeScript) { "ok" } else { "warn" })) ($(if (Test-Path $coreSmokeScript) { $coreSmokeScript } else { "缺少 scripts/smoke-core-workflow.ps1。" })))
 Add-Check (New-Check "Core" "本机完整验收" ($(if (Test-Path $localAcceptanceScript) { "ok" } else { "warn" })) ($(if (Test-Path $localAcceptanceScript) { $localAcceptanceScript } else { "缺少 scripts/run-local-acceptance.ps1。" })))
+Add-Check (New-Check "移动端" "手机连接卡脚本" ($(if (Test-Path $mobileConnectScript) { "ok" } else { "warn" })) ($(if (Test-Path $mobileConnectScript) { $mobileConnectScript } else { "缺少 scripts/show-mobile-connect.ps1。" })))
+Add-Check (New-Check "移动端" "二维码生成脚本" ($(if (Test-Path $qrGeneratorScript) { "ok" } else { "warn" })) ($(if (Test-Path $qrGeneratorScript) { $qrGeneratorScript } else { "缺少 scripts/generate-qr-svg.py。" })))
 
 $venvPython = Join-Path $coreRoot ".venv\Scripts\python.exe"
 if (Test-Path $venvPython) {

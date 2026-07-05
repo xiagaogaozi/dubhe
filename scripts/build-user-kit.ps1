@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$CoreUrl = "http://127.0.0.1:8000",
     [string]$OutputRoot = "",
     [switch]$NoZip,
@@ -226,13 +226,26 @@ $artifacts = @(
 
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\show-install-guide.ps1") -Path (Join-Path $checksDir "render-install-guide.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\show-mobile-guide.ps1") -Path (Join-Path $checksDir "render-mobile-guide.txt")
+Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\show-mobile-connect.ps1") -Path (Join-Path $checksDir "render-mobile-connect.txt")
 $renderedInstallGuide = Join-Path $repoRoot ".dubhe-run\install-guide.txt"
 $renderedMobileGuide = Join-Path $repoRoot ".dubhe-run\mobile-quick-start.txt"
+$renderedMobileConnectFiles = @(
+    "mobile-connect.html",
+    "mobile-connect.txt",
+    "mobile-core-url.txt",
+    "mobile-core-url.svg"
+)
 if (Test-Path $renderedInstallGuide) {
     Copy-Item -LiteralPath $renderedInstallGuide -Destination (Join-Path $guidesDir "install-guide.txt") -Force
 }
 if (Test-Path $renderedMobileGuide) {
     Copy-Item -LiteralPath $renderedMobileGuide -Destination (Join-Path $guidesDir "mobile-quick-start.txt") -Force
+}
+foreach ($fileName in $renderedMobileConnectFiles) {
+    $sourcePath = Join-Path $repoRoot ".dubhe-run\$fileName"
+    if (Test-Path $sourcePath) {
+        Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $guidesDir $fileName) -Force
+    }
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination (Join-Path $guidesDir "README-project.md") -Force
 
@@ -244,11 +257,12 @@ Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\check-production-re
 Write-Launcher -Path (Join-Path $kitRoot "00-Start-Dubhe-This-PC.cmd") -Title "Start Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "01-Configure-Dubhe-This-PC.cmd") -Title "Configure Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Configure-Dubhe.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "02-Accept-Dubhe-This-PC.cmd") -Title "Accept Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Accept-Dubhe.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "03-Check-Dubhe-This-PC.cmd") -Title "Check Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "04-Start-Dubhe-LAN-This-PC.cmd") -Title "Start Dubhe LAN on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe-LAN.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "05-Test-Services-This-PC.cmd") -Title "Test Dubhe services on this PC" -TargetScript (Join-Path $repoRoot "Test-Dubhe-Services.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "06-Check-Production-This-PC.cmd") -Title "Check Dubhe production readiness on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe-Production.cmd")
-Write-Launcher -Path (Join-Path $kitRoot "07-Smoke-Dubhe-This-PC.cmd") -Title "Smoke Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Smoke-Dubhe.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "03-Connect-Dubhe-Mobile-This-PC.cmd") -Title "Connect Dubhe mobile on this PC" -TargetScript (Join-Path $repoRoot "Connect-Dubhe-Mobile.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "04-Check-Dubhe-This-PC.cmd") -Title "Check Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "05-Start-Dubhe-LAN-This-PC.cmd") -Title "Start Dubhe LAN on this PC" -TargetScript (Join-Path $repoRoot "Start-Dubhe-LAN.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "06-Test-Services-This-PC.cmd") -Title "Test Dubhe services on this PC" -TargetScript (Join-Path $repoRoot "Test-Dubhe-Services.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "07-Check-Production-This-PC.cmd") -Title "Check Dubhe production readiness on this PC" -TargetScript (Join-Path $repoRoot "Check-Dubhe-Production.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "08-Smoke-Dubhe-This-PC.cmd") -Title "Smoke Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Smoke-Dubhe.cmd")
 
 $template = Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "docs\USER_KIT_README.md")
 $readme = $template

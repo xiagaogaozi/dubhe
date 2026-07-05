@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipDesktop,
     [switch]$SkipStartMenu,
     [switch]$DryRun
@@ -47,6 +47,11 @@ $entries = @(
         name = "Start Dubhe LAN"
         file = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
         description = "Start Dubhe Core for phones on the same Wi-Fi and open Dubhe Desktop."
+    },
+    @{
+        name = "Connect Dubhe Mobile"
+        file = Join-Path $repoRoot "Connect-Dubhe-Mobile.cmd"
+        description = "Start LAN Core and open a phone connection card with URL and QR code."
     },
     @{
         name = "Build Dubhe User Kit"

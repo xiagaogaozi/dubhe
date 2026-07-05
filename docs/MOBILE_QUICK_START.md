@@ -6,17 +6,21 @@
 
 - 手机登录页可填写的 Core 地址候选：`{{LAN_CORE_URLS}}`
 - Android 调试安装包路径：`{{ANDROID_APK_PATH}}`
+- 手机扫码连接入口：`{{CONNECT_MOBILE_CMD}}`
 - 手机局域网启动入口：`{{START_LAN_CMD}}`
 - 本机体检入口：`{{CHECK_CMD}}`
+- 手机连接卡 HTML：`{{MOBILE_CONNECT_HTML}}`
+- 手机连接卡文本：`{{MOBILE_CONNECT_TEXT}}`
+- 手机连接二维码：`{{MOBILE_CONNECT_QR}}`
 - 移动端开发说明：`{{MOBILE_README}}`
 
 如果地址候选显示 `(no LAN IPv4 address detected)`，说明电脑当前没有检测到可用的局域网 IPv4 地址。请先让电脑和手机连接到同一个 Wi-Fi 或有线局域网，再重新打开本向导。
 
 ## Android 真机
 
-1. 在电脑上双击 `Start-Dubhe-LAN.cmd`。
+1. 在电脑上双击 `Connect-Dubhe-Mobile.cmd`。
 2. 如果 Windows 防火墙弹窗出现，允许专用网络访问。
-3. 把上方 “Core 地址候选” 里的 `http://192.168.x.x:8000` 填到手机登录页的 “Core 地址”。
+3. 浏览器会打开手机连接卡；能看到二维码时直接扫码，不能扫码时把连接卡里的 `http://192.168.x.x:8000` 填到手机登录页的 “Core 地址”。
 4. 在手机登录页点击 “检查连接”。成功后地址会保存。
 5. 安装上方 APK 路径里的 `app-debug.apk`，然后注册或登录本地账号。
 
@@ -50,7 +54,7 @@ http://127.0.0.1:8000
 
 ## 常见问题
 
-- 检查连接失败：先双击 `Start-Dubhe-LAN.cmd`，确认 Core 已经用局域网模式启动。
+- 检查连接失败：先重新双击 `Connect-Dubhe-Mobile.cmd`，确认 Core 已经用局域网模式启动，并优先使用连接卡显示的第一个地址。
 - 地址填了但手机打不开：确认手机和电脑在同一个 Wi-Fi，且 Windows 防火墙允许专用网络访问。
 - 登录后没有新闻或 AI：先双击 `Configure-Dubhe.cmd` 填写授权新闻源和 AI 模型 key，或在客户端 “系统状态 / 数据源配置” 中填写。
 - 想确认整套链路是否可用：优先双击 `Accept-Dubhe.cmd` 跑本机完整验收；只想单独验证主链路时，再双击 `Smoke-Dubhe.cmd`。

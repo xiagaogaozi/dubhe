@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$OpenNotepad
 )
 
@@ -130,6 +130,7 @@ $tokens = @{
     "{{LAN_CORE_URLS}}" = $lanText
     "{{START_CMD}}" = Join-Path $repoRoot "Start-Dubhe.cmd"
     "{{START_LAN_CMD}}" = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
+    "{{CONNECT_MOBILE_CMD}}" = Join-Path $repoRoot "Connect-Dubhe-Mobile.cmd"
     "{{USER_KIT_CMD}}" = Join-Path $repoRoot "Build-Dubhe-User-Kit.cmd"
     "{{MOBILE_GUIDE_CMD}}" = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
     "{{ACCEPT_CMD}}" = Join-Path $repoRoot "Accept-Dubhe.cmd"
