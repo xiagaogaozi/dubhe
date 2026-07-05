@@ -143,37 +143,74 @@ def _news_readiness_items(
 def _package_readiness_items(
     packages: list[InstallPackageStatus],
 ) -> list[ProductionReadinessItem]:
-    by_platform = {item.platform: item for item in packages}
+    by_platform: dict[str, list[InstallPackageStatus]] = {}
+    for item in packages:
+        by_platform.setdefault(item.platform, []).append(item)
     return [
         _package_item(
             platform="windows",
             label_zh="Windows 安装包",
-            package=by_platform.get("windows"),
+            package=_select_package(
+                by_platform.get("windows", []),
+                preferred_artifact_types=["nsis-setup", "portable-exe"],
+            ),
             blocking=False,
             next_step_zh="当前未签名包可用于内测；生产发布前需要代码签名证书、安装器签名和更新渠道。",
         ),
         _package_item(
             platform="android",
             label_zh="Android 安装包",
-            package=by_platform.get("android"),
+            package=_select_package(
+                by_platform.get("android", []),
+                preferred_artifact_types=["release-aab", "debug-apk"],
+            ),
             blocking=False,
             next_step_zh="当前 APK/AAB 可用于测试；生产发布前需要正式签名、包名、隐私政策和商店元数据。",
         ),
         _package_item(
             platform="macos",
             label_zh="macOS 安装包",
-            package=by_platform.get("macos"),
+            package=_select_package(
+                by_platform.get("macos", []),
+                preferred_artifact_types=["dmg-or-zip"],
+            ),
             blocking=True,
             next_step_zh="需要 macOS runner、Apple Developer 证书、签名、公证、dmg/zip 产物和更新渠道。",
         ),
         _package_item(
             platform="ios",
             label_zh="iOS 应用包",
-            package=by_platform.get("ios"),
+            package=_select_package(
+                by_platform.get("ios", []),
+                preferred_artifact_types=["runner-app"],
+            ),
             blocking=True,
             next_step_zh="需要 Xcode、Bundle ID、Team ID、证书、描述文件、TestFlight/App Store 发布资料。",
         ),
     ]
+
+
+def _select_package(
+    packages: list[InstallPackageStatus],
+    *,
+    preferred_artifact_types: list[str],
+) -> InstallPackageStatus | None:
+    preferred = [
+        package
+        for artifact_type in preferred_artifact_types
+        for package in packages
+        if package.artifact_type == artifact_type
+    ]
+    candidates = preferred or packages
+    if not candidates:
+        return None
+    for package in candidates:
+        if package.available and not package.needs_rebuild:
+            return package
+    for package in candidates:
+        if package.available:
+            return package
+    return candidates[0]
 
 
 def _package_item(

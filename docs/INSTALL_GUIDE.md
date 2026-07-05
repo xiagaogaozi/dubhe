@@ -28,7 +28,8 @@
 
 1. 普通用户优先使用 `Windows setup 安装包`。
 2. 没有安装权限时使用 `Windows portable 免安装包`。
-3. 开发或本机体验时，也可以直接双击 `Start-Dubhe.cmd`，它会启动 Core 并打开桌面端。
+3. 如果 setup/portable 生成失败，但 `Windows 已解包桌面程序` 可用，可以在 `win-unpacked` 目录里双击 `Dubhe.exe` 作为兜底体验。
+4. 开发或本机体验时，也可以直接双击 `Start-Dubhe.cmd`，它会启动 Core 并打开桌面端。
 
 如果 Windows 安装包显示 `(尚未生成)`，请先由开发者在 `apps/theia-desktop` 生成 setup/portable；本机体检会提示具体命令。
 

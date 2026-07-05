@@ -393,6 +393,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
     )
     windows_setup = _newest_file(desktop_dist, "Dubhe-*-win-x64-setup.exe")
     windows_portable = _newest_file(desktop_dist, "Dubhe-*-win-x64-portable.exe")
+    windows_unpacked = desktop_dist / "win-unpacked" / "Dubhe.exe"
     android_debug_apk = (
         mobile_build / "app" / "outputs" / "flutter-apk" / "app-debug.apk"
     )
@@ -425,6 +426,17 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             ready_zh="可直接拷贝运行；适合当前阶段给测试用户体验。",
             missing_zh="尚未生成 Windows portable 便携版。",
             next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app electron-builder --win portable。",
+            source_updated_at=desktop_source_updated_at,
+        ),
+        _install_package(
+            platform="windows",
+            label_zh="Windows 已解包桌面程序",
+            artifact_type="unpacked-exe",
+            path=windows_unpacked,
+            build_channel_zh="electron-builder --dir",
+            ready_zh="可直接双击运行；适合安装器构建失败时在本机或交付包里兜底试用。",
+            missing_zh="尚未生成 Windows 已解包桌面程序。",
+            next_step_zh="需要重新生成时，在 apps/theia-desktop 执行 yarn --cwd app package:electron。",
             source_updated_at=desktop_source_updated_at,
         ),
         _install_package(

@@ -34,5 +34,6 @@
 
 - Windows setup：`{{WINDOWS_SETUP}}`
 - Windows portable：`{{WINDOWS_PORTABLE}}`
+- Windows 已解包桌面程序：`{{WINDOWS_UNPACKED_EXE}}`
 - Android debug APK：`{{ANDROID_APK}}`
 - Android release AAB：`{{ANDROID_AAB}}`

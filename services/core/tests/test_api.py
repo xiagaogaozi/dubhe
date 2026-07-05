@@ -78,6 +78,17 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     )
     windows_setup.parent.mkdir(parents=True, exist_ok=True)
     windows_setup.write_bytes(b"setup")
+    windows_unpacked = (
+        tmp_path
+        / "apps"
+        / "theia-desktop"
+        / "app"
+        / "dist"
+        / "win-unpacked"
+        / "Dubhe.exe"
+    )
+    windows_unpacked.parent.mkdir(parents=True, exist_ok=True)
+    windows_unpacked.write_bytes(b"unpacked")
     desktop_source = (
         tmp_path
         / "apps"
@@ -108,6 +119,7 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     stale_artifact_time = 1_700_000_000
     fresh_source_time = 1_700_100_000
     os.utime(windows_setup, (stale_artifact_time, stale_artifact_time))
+    os.utime(windows_unpacked, (stale_artifact_time, stale_artifact_time))
     os.utime(android_apk, (stale_artifact_time, stale_artifact_time))
     os.utime(desktop_source, (fresh_source_time, fresh_source_time))
     os.utime(mobile_source, (fresh_source_time, fresh_source_time))
@@ -152,6 +164,9 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     assert packages[("windows", "nsis-setup")]["size_bytes"] == 5
     assert packages[("windows", "nsis-setup")]["needs_rebuild"] is True
     assert "需要重建" in packages[("windows", "nsis-setup")]["freshness_message_zh"]
+    assert packages[("windows", "unpacked-exe")]["available"] is True
+    assert packages[("windows", "unpacked-exe")]["size_bytes"] == 8
+    assert packages[("windows", "unpacked-exe")]["needs_rebuild"] is True
     assert packages[("android", "debug-apk")]["available"] is True
     assert packages[("android", "debug-apk")]["size_bytes"] == 3
     assert packages[("android", "debug-apk")]["needs_rebuild"] is True

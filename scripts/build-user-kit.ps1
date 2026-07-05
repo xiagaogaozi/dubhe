@@ -102,6 +102,44 @@ function Copy-Artifact {
     }
 }
 
+function Copy-DirectoryArtifact {
+    param(
+        [string]$Path,
+        [string]$DestinationDirectory,
+        [string]$Label
+    )
+
+    if (-not $Path -or -not (Test-Path $Path)) {
+        return [pscustomobject]@{
+            label = $Label
+            available = $false
+            source = $Path
+            copied_to = $null
+            size_bytes = 0
+            file_count = 0
+            sha256 = $null
+        }
+    }
+
+    New-Item -ItemType Directory -Force -Path $DestinationDirectory | Out-Null
+    $destination = Join-Path $DestinationDirectory (Split-Path -Leaf $Path)
+    Copy-Item -LiteralPath $Path -Destination $destination -Recurse -Force
+    $files = @(Get-ChildItem -LiteralPath $destination -Recurse -File)
+    $sizeBytes = ($files | Measure-Object -Property Length -Sum).Sum
+    if ($null -eq $sizeBytes) {
+        $sizeBytes = 0
+    }
+    return [pscustomobject]@{
+        label = $Label
+        available = $true
+        source = $Path
+        copied_to = $destination
+        size_bytes = [int64]$sizeBytes
+        file_count = $files.Count
+        sha256 = $null
+    }
+}
+
 function Write-Launcher {
     param(
         [string]$Path,
@@ -168,6 +206,9 @@ $theiaDist = Join-Path $repoRoot "apps\theia-desktop\app\dist"
 $mobileRoot = Join-Path $repoRoot "apps\mobile"
 $windowsSetup = Resolve-NewestFile $theiaDist "Dubhe-*-win-x64-setup.exe"
 $windowsPortable = Resolve-NewestFile $theiaDist "Dubhe-*-win-x64-portable.exe"
+$windowsUnpackedDir = Join-Path $theiaDist "win-unpacked"
+$windowsUnpackedExe = Join-Path $windowsUnpackedDir "Dubhe.exe"
+$windowsUnpacked = if (Test-Path $windowsUnpackedExe) { $windowsUnpackedDir } else { $null }
 $androidApk = Join-Path $mobileRoot "build\app\outputs\flutter-apk\app-debug.apk"
 $androidAab = Join-Path $mobileRoot "build\app\outputs\bundle\release\app-release.aab"
 $lanUrls = @(Get-LanCoreUrls -Port ([System.Uri]$CoreUrl).Port)
@@ -178,6 +219,7 @@ New-Item -ItemType Directory -Force -Path $windowsDir, $androidDir, $guidesDir, 
 $artifacts = @(
     Copy-Artifact -Path $windowsSetup -DestinationDirectory $windowsDir -Label "Windows setup"
     Copy-Artifact -Path $windowsPortable -DestinationDirectory $windowsDir -Label "Windows portable"
+    Copy-DirectoryArtifact -Path $windowsUnpacked -DestinationDirectory $windowsDir -Label "Windows unpacked desktop"
     Copy-Artifact -Path $androidApk -DestinationDirectory $androidDir -Label "Android debug APK"
     Copy-Artifact -Path $androidAab -DestinationDirectory $androidDir -Label "Android release AAB"
 )
@@ -214,6 +256,7 @@ $readme = Replace-Token $readme "{{CORE_URL}}" $CoreUrl
 $readme = Replace-Token $readme "{{LAN_CORE_URLS}}" $lanText
 $readme = Replace-Token $readme "{{WINDOWS_SETUP}}" (Format-DetectedPath $windowsSetup)
 $readme = Replace-Token $readme "{{WINDOWS_PORTABLE}}" (Format-DetectedPath $windowsPortable)
+$readme = Replace-Token $readme "{{WINDOWS_UNPACKED_EXE}}" (Format-DetectedPath $windowsUnpackedExe)
 $readme = Replace-Token $readme "{{ANDROID_APK}}" (Format-DetectedPath $androidApk)
 $readme = Replace-Token $readme "{{ANDROID_AAB}}" (Format-DetectedPath $androidAab)
 Set-Content -Path (Join-Path $kitRoot "README-FIRST.md") -Encoding UTF8 -Value $readme
