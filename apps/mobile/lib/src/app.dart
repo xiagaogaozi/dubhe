@@ -839,6 +839,16 @@ class _CompanionHomeState extends State<CompanionHome> {
     }
   }
 
+  void _useSyncedStrategyDraft(StrategyDraft draft) {
+    setState(() {
+      _strategyDraft = draft;
+      _backtestResult = null;
+      _paperOrder = null;
+      _tabIndex = 2;
+      _message = '已载入同步策略：${draft.name}。';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -852,6 +862,7 @@ class _CompanionHomeState extends State<CompanionHome> {
         portfolio: _portfolio,
         message: _message,
         loading: _loading,
+        onUseStrategyDraft: _useSyncedStrategyDraft,
       ),
       _NewsPage(newsFeed: _newsFeed),
       _AiPage(
@@ -928,6 +939,7 @@ class _TodayPage extends StatelessWidget {
     required this.portfolio,
     required this.message,
     required this.loading,
+    required this.onUseStrategyDraft,
   });
 
   final DeviceSession session;
@@ -939,6 +951,7 @@ class _TodayPage extends StatelessWidget {
   final PaperPortfolio? portfolio;
   final String? message;
   final bool loading;
+  final ValueChanged<StrategyDraft> onUseStrategyDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -988,6 +1001,7 @@ class _TodayPage extends StatelessWidget {
           snapshot: workspaceSnapshot,
           syncStatus: syncStatus,
           lastPushedEvent: lastPushedSyncEvent,
+          onUseStrategyDraft: onUseStrategyDraft,
         ),
         _SystemStatusPanel(status: systemStatus),
         _ProviderStatusList(statuses: newsFeed?.providerStatus ?? const []),
@@ -1001,11 +1015,13 @@ class _SyncStatusPanel extends StatelessWidget {
     required this.snapshot,
     required this.syncStatus,
     required this.lastPushedEvent,
+    required this.onUseStrategyDraft,
   });
 
   final WorkspaceSnapshot? snapshot;
   final _MobileSyncConnectionStatus syncStatus;
   final SyncEvent? lastPushedEvent;
+  final ValueChanged<StrategyDraft> onUseStrategyDraft;
 
   @override
   Widget build(BuildContext context) {
@@ -1058,6 +1074,16 @@ class _SyncStatusPanel extends StatelessWidget {
               ),
               trailing: Text(
                 _shortTimestamp(current.strategyDrafts.first.createdAt),
+              ),
+              onTap: () => onUseStrategyDraft(current.strategyDrafts.first),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () =>
+                    onUseStrategyDraft(current.strategyDrafts.first),
+                icon: const Icon(Icons.playlist_add_check),
+                label: const Text('使用同步策略'),
               ),
             ),
           ],
