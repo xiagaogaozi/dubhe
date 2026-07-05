@@ -166,6 +166,21 @@ void main() {
                 "generated_at": "2026-07-05T00:02:00Z"
               }
             ],
+            "assistant_turns": [
+              {
+                "id": "assistant_1",
+                "workspace_id": "workspace_1",
+                "question_zh": "下一步怎么验证？",
+                "answer_zh": "先完成纸面验证。",
+                "citations": [{"label_zh": "回测", "ref": "backtest_1"}],
+                "suggested_actions_zh": ["提交纸面买入"],
+                "safety_notes_zh": ["不会连接真实券商。"],
+                "context_refs": ["analysis_1", "strategy_v_1", "backtest_1"],
+                "created_by_user_id": "user_1",
+                "created_by_device_id": "device_1",
+                "generated_at": "2026-07-05T00:03:00Z"
+              }
+            ],
             "events": [
               {
                 "id": "sync_1",
@@ -198,6 +213,9 @@ void main() {
     expect(snapshot.strategyDrafts.single.spec.brokerPermissions, ['paper']);
     expect(snapshot.backtestResults.single.strategyVersionId, 'strategy_v_1');
     expect(snapshot.backtestResults.single.totalReturn, 0.124);
+    expect(snapshot.assistantTurns.single.questionZh, '下一步怎么验证？');
+    expect(snapshot.assistantTurns.single.citations.single.ref, 'backtest_1');
+    expect(snapshot.assistantTurns.single.suggestedActionsZh, ['提交纸面买入']);
     expect(snapshot.events.single.entityType, 'watchlist_item');
   });
 

@@ -82,6 +82,7 @@ class SyncEntityType(str, Enum):
     WATCHLIST_ITEM = "watchlist_item"
     NEWS_EVENT = "news_event"
     NEWS_ANALYSIS = "news_analysis"
+    ASSISTANT_TURN = "assistant_turn"
     STRATEGY_DRAFT = "strategy_draft"
     BACKTEST_RESULT = "backtest_result"
     RISK_DECISION = "risk_decision"
@@ -293,6 +294,20 @@ class AssistantChatResponse(BaseModel):
     citations: list[AssistantCitation] = Field(default_factory=list)
     suggested_actions_zh: list[str] = Field(default_factory=list)
     safety_notes_zh: list[str] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=utc_now)
+
+
+class AssistantConversationTurn(BaseModel):
+    id: str = Field(default_factory=lambda: f"assistant_turn_{uuid4().hex}")
+    workspace_id: str = Field(min_length=1)
+    question_zh: str = Field(min_length=1)
+    answer_zh: str = Field(min_length=1)
+    citations: list[AssistantCitation] = Field(default_factory=list)
+    suggested_actions_zh: list[str] = Field(default_factory=list)
+    safety_notes_zh: list[str] = Field(default_factory=list)
+    context_refs: list[str] = Field(default_factory=list)
+    created_by_user_id: str | None = None
+    created_by_device_id: str | None = None
     generated_at: datetime = Field(default_factory=utc_now)
 
 
@@ -585,5 +600,6 @@ class WorkspaceSnapshot(BaseModel):
     paper_portfolios: list[PaperPortfolioSnapshot] = Field(default_factory=list)
     strategy_drafts: list[StrategyDraft] = Field(default_factory=list)
     backtest_results: list[BacktestResult] = Field(default_factory=list)
+    assistant_turns: list[AssistantConversationTurn] = Field(default_factory=list)
     events: list[SyncEvent] = Field(default_factory=list)
     server_sequence: int = 0

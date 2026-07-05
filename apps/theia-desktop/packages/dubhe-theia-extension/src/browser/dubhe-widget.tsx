@@ -222,6 +222,20 @@ type AssistantChatMessage = {
   suggestedActions?: string[];
 };
 
+type AssistantConversationTurn = {
+  id: string;
+  workspace_id: string;
+  question_zh: string;
+  answer_zh: string;
+  citations: AssistantCitation[];
+  suggested_actions_zh: string[];
+  safety_notes_zh: string[];
+  context_refs: string[];
+  created_by_user_id?: string | null;
+  created_by_device_id?: string | null;
+  generated_at: string;
+};
+
 type RiskDecision = {
   id: string;
   order_intent_id: string;
@@ -330,6 +344,7 @@ type WorkspaceSnapshot = {
   watchlist: WatchlistItem[];
   strategy_drafts: StrategyDraft[];
   backtest_results: BacktestResult[];
+  assistant_turns?: AssistantConversationTurn[];
   events: SyncEvent[];
   server_sequence: number;
 };
@@ -364,6 +379,14 @@ const navItems = [
   { label: '回测中心', glyph: '回' },
   { label: '纸面交易', glyph: '纸' },
   { label: '风控中心', glyph: '控' },
+];
+
+const assistantWelcomeMessages: AssistantChatMessage[] = [
+  {
+    id: 'assistant_welcome',
+    role: 'assistant',
+    text: '登录后可以直接问我新闻影响、策略规则、回测结果和纸面验证路径。',
+  },
 ];
 
 const defaultStrategyWorkshopForm: StrategyWorkshopForm = {
@@ -516,13 +539,7 @@ function DubheWorkbench(): React.ReactElement {
   const [paperOrder, setPaperOrder] = React.useState<PaperOrder | null>(null);
   const [assistantQuestion, setAssistantQuestion] = React.useState('这条新闻会影响哪些股票？');
   const [assistantBusy, setAssistantBusy] = React.useState(false);
-  const [assistantMessages, setAssistantMessages] = React.useState<AssistantChatMessage[]>([
-    {
-      id: 'assistant_welcome',
-      role: 'assistant',
-      text: '登录后可以直接问我新闻影响、策略规则、回测结果和纸面验证路径。',
-    },
-  ]);
+  const [assistantMessages, setAssistantMessages] = React.useState<AssistantChatMessage[]>(assistantWelcomeMessages);
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
   const [workspaceSnapshot, setWorkspaceSnapshot] = React.useState<WorkspaceSnapshot | null>(null);
   const [syncConnectionStatus, setSyncConnectionStatus] = React.useState<SyncConnectionStatus>('未连接');
@@ -798,6 +815,7 @@ function DubheWorkbench(): React.ReactElement {
       setSession(null);
       setPortfolio(null);
       setWorkspaceSnapshot(null);
+      setAssistantMessages(assistantWelcomeMessages);
       setLastSyncEvent(null);
       setSyncConnectionStatus('未连接');
       syncCursorRef.current = 0;
@@ -1105,6 +1123,7 @@ function DubheWorkbench(): React.ReactElement {
       activeSession.access_token,
     );
     setWorkspaceSnapshot(snapshot);
+    setAssistantMessages(assistantMessagesFromTurns(snapshot.assistant_turns ?? []));
     const syncedBacktest = latestWorkspaceBacktest(strategyDraft, snapshot.backtest_results);
     if (syncedBacktest) {
       setBacktestResult(syncedBacktest);
@@ -2221,6 +2240,26 @@ function latestWorkspaceBacktest(draft: StrategyDraft | null, results: BacktestR
   return results[0];
 }
 
+function assistantMessagesFromTurns(turns: AssistantConversationTurn[]): AssistantChatMessage[] {
+  if (turns.length === 0) return assistantWelcomeMessages;
+  const messages: AssistantChatMessage[] = [];
+  for (const turn of turns) {
+    messages.push({
+      id: `${turn.id}_question`,
+      role: 'user',
+      text: turn.question_zh,
+    });
+    messages.push({
+      id: `${turn.id}_answer`,
+      role: 'assistant',
+      text: turn.answer_zh,
+      citations: turn.citations,
+      suggestedActions: turn.suggested_actions_zh,
+    });
+  }
+  return messages.slice(-8);
+}
+
 function marketLabel(market: Market): string {
   if (market === 'US') return '美股';
   if (market === 'HK') return '港股';
@@ -2260,6 +2299,7 @@ function auditActionLabel(action: string): string {
     'auth.device_registered': '设备注册',
     'auth.device_revoked': '设备撤销',
     'auth.login_succeeded': '登录成功',
+    'assistant.chat_requested': 'AI 分析师对话',
     'risk.kill_switch_updated': '急停更新',
     'risk.order_evaluated': '订单风控评估',
     'simulation.paper_order_submitted': '纸面订单',
@@ -2275,6 +2315,7 @@ function auditRoleLabel(role?: UserRole | null): string {
 function syncEntityLabel(entityType: string): string {
   const labels: Record<string, string> = {
     approval_request: '审批',
+    assistant_turn: 'AI 分析师对话',
     backtest_result: '回测',
     broker_order: '模拟券商订单',
     news_analysis: 'AI 分析',

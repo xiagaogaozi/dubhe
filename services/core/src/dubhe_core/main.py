@@ -14,6 +14,8 @@ from .models import (
     AccountRegistrationRequest,
     AssistantChatRequest,
     AssistantChatResponse,
+    AssistantContext,
+    AssistantConversationTurn,
     AuditLogEntry,
     ApprovalActionRequest,
     ApprovalRequest,
@@ -517,17 +519,45 @@ def list_backtests_endpoint() -> list[BacktestResult]:
     return store.backtest_results
 
 
+def assistant_context_refs(context: AssistantContext) -> list[str]:
+    refs = []
+    if context.news_event is not None:
+        refs.append(context.news_event.id)
+    if context.analysis is not None:
+        refs.append(context.analysis.id)
+    if context.strategy is not None:
+        refs.append(context.strategy.strategy_version_id)
+    if context.backtest is not None:
+        refs.append(context.backtest.id)
+    return refs
+
+
 @app.post("/v1/assistant/chat", response_model=AssistantChatResponse)
 def assistant_chat_endpoint(
     request: AssistantChatRequest,
     session: DeviceSession = Depends(require_device_session),
 ) -> AssistantChatResponse:
     response = answer_research_question(request)
+    turn = store.add_assistant_turn(
+        AssistantConversationTurn(
+            id=response.id,
+            workspace_id=session.workspace_id,
+            question_zh=request.question_zh,
+            answer_zh=response.answer_zh,
+            citations=response.citations,
+            suggested_actions_zh=response.suggested_actions_zh,
+            safety_notes_zh=response.safety_notes_zh,
+            context_refs=assistant_context_refs(request.context),
+            created_by_user_id=session.user_id,
+            created_by_device_id=session.device_id,
+            generated_at=response.generated_at,
+        ),
+    )
     store.append_audit_log(
         actor_session=session,
         action="assistant.chat_requested",
-        target_type="assistant_response",
-        target_id=response.id,
+        target_type="assistant_turn",
+        target_id=turn.id,
         summary_zh="AI 分析师生成了一条中文研究答复。",
         metadata={
             "question_length": len(request.question_zh),
@@ -538,6 +568,14 @@ def assistant_chat_endpoint(
         },
     )
     return response
+
+
+@app.get("/v1/assistant/turns", response_model=list[AssistantConversationTurn])
+def list_assistant_turns_endpoint(
+    limit: int = Query(default=20, ge=1, le=50),
+    session: DeviceSession = Depends(require_device_session),
+) -> list[AssistantConversationTurn]:
+    return store.list_assistant_turns(session.workspace_id, limit=limit)
 
 
 @app.post("/v1/risk/evaluate", response_model=RiskDecision)

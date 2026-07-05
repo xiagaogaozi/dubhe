@@ -218,11 +218,37 @@ class _AssistantChatMessage {
   bool get isUser => role == 'user';
 }
 
+const _assistantWelcomeMessages = [
+  _AssistantChatMessage(
+    role: 'assistant',
+    text: '可以直接问我新闻影响、策略规则、回测结果和纸面验证路径。',
+  ),
+];
+
 extension _TakeLastMessages<T> on List<T> {
   List<T> takeLast(int count) {
     if (length <= count) return List<T>.of(this);
     return sublist(length - count);
   }
+}
+
+List<_AssistantChatMessage> _assistantMessagesFromTurns(
+  List<AssistantConversationTurn> turns,
+) {
+  if (turns.isEmpty) return _assistantWelcomeMessages;
+  final messages = <_AssistantChatMessage>[];
+  for (final turn in turns) {
+    messages.add(_AssistantChatMessage(role: 'user', text: turn.questionZh));
+    messages.add(
+      _AssistantChatMessage(
+        role: 'assistant',
+        text: turn.answerZh,
+        citations: turn.citations,
+        suggestedActions: turn.suggestedActionsZh,
+      ),
+    );
+  }
+  return messages.takeLast(8);
 }
 
 class CompanionHome extends StatefulWidget {
@@ -266,12 +292,7 @@ class _CompanionHomeState extends State<CompanionHome> {
   List<ApprovalRequest> _approvals = const [];
   bool _assistantBusy = false;
   String _assistantQuestion = '这条新闻会影响哪些股票？';
-  List<_AssistantChatMessage> _assistantMessages = const [
-    _AssistantChatMessage(
-      role: 'assistant',
-      text: '可以直接问我新闻影响、策略规则、回测结果和纸面验证路径。',
-    ),
-  ];
+  List<_AssistantChatMessage> _assistantMessages = _assistantWelcomeMessages;
 
   @override
   void initState() {
@@ -449,6 +470,7 @@ class _CompanionHomeState extends State<CompanionHome> {
     );
     setState(() {
       _workspaceSnapshot = snapshot;
+      _assistantMessages = _assistantMessagesFromTurns(snapshot.assistantTurns);
       if (syncedBacktest != null) {
         _backtestResult = syncedBacktest;
       }
@@ -523,6 +545,9 @@ class _CompanionHomeState extends State<CompanionHome> {
         _newsFeed = newsFeed;
         _portfolio = portfolio;
         _workspaceSnapshot = workspaceSnapshot;
+        _assistantMessages = _assistantMessagesFromTurns(
+          workspaceSnapshot.assistantTurns,
+        );
         if (syncedBacktest != null) {
           _backtestResult = syncedBacktest;
         }
@@ -1927,6 +1952,7 @@ String _syncEntityZh(String entityType) {
     'watchlist_item': '自选股',
     'news_event': '新闻',
     'news_analysis': 'AI 分析',
+    'assistant_turn': 'AI 分析师对话',
     'strategy_draft': '策略草案',
     'backtest_result': '回测',
     'risk_decision': '风控决定',

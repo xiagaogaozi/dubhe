@@ -34,4 +34,3 @@ def analyze_news(event: NewsEvent) -> NewsAnalysis:
         source_refs=[source],
         confidence=confidence,
     )
-

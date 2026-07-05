@@ -16,4 +16,3 @@ def validate_strategy_spec(spec: StrategySpec) -> StrategyValidationResult:
         reasons.append("缺少券商权限声明，至少应声明 paper。")
 
     return StrategyValidationResult(valid=not reasons, reasons_zh=reasons)
-

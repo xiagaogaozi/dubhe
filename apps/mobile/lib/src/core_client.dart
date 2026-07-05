@@ -561,6 +561,7 @@ class WorkspaceSnapshot {
     required this.watchlist,
     required this.strategyDrafts,
     required this.backtestResults,
+    required this.assistantTurns,
     required this.events,
     required this.serverSequence,
   });
@@ -570,6 +571,7 @@ class WorkspaceSnapshot {
   final List<WatchlistItem> watchlist;
   final List<StrategyDraft> strategyDrafts;
   final List<BacktestResult> backtestResults;
+  final List<AssistantConversationTurn> assistantTurns;
   final List<SyncEvent> events;
   final int serverSequence;
 
@@ -587,6 +589,9 @@ class WorkspaceSnapshot {
       backtestResults: _mapList(
         json['backtest_results'],
       ).map(BacktestResult.fromJson).toList(),
+      assistantTurns: _mapList(
+        json['assistant_turns'],
+      ).map(AssistantConversationTurn.fromJson).toList(),
       events: _mapList(json['events']).map(SyncEvent.fromJson).toList(),
       serverSequence: _int(json['server_sequence']),
     );
@@ -952,6 +957,40 @@ class AssistantChatResponse {
   factory AssistantChatResponse.fromJson(Map<String, dynamic> json) {
     return AssistantChatResponse(
       id: _string(json['id']),
+      answerZh: _string(json['answer_zh']),
+      citations: _mapList(
+        json['citations'],
+      ).map(AssistantCitation.fromJson).toList(),
+      suggestedActionsZh: _stringList(json['suggested_actions_zh']),
+      safetyNotesZh: _stringList(json['safety_notes_zh']),
+      generatedAt: _string(json['generated_at']),
+    );
+  }
+}
+
+class AssistantConversationTurn {
+  AssistantConversationTurn({
+    required this.id,
+    required this.questionZh,
+    required this.answerZh,
+    required this.citations,
+    required this.suggestedActionsZh,
+    required this.safetyNotesZh,
+    required this.generatedAt,
+  });
+
+  final String id;
+  final String questionZh;
+  final String answerZh;
+  final List<AssistantCitation> citations;
+  final List<String> suggestedActionsZh;
+  final List<String> safetyNotesZh;
+  final String generatedAt;
+
+  factory AssistantConversationTurn.fromJson(Map<String, dynamic> json) {
+    return AssistantConversationTurn(
+      id: _string(json['id']),
+      questionZh: _string(json['question_zh']),
       answerZh: _string(json['answer_zh']),
       citations: _mapList(
         json['citations'],

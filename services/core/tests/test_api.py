@@ -545,7 +545,9 @@ def test_sqlite_store_persists_workspace_and_watchlist_across_restarts(tmp_path:
     assert second_session.workspace_id == first_session.workspace_id
     assert "TSLA" in {item.symbol for item in snapshot.watchlist}
     assert snapshot.server_sequence >= 6
-    assert any(event.entity_id for event in snapshot.events if event.entity_type == "watchlist_item")
+    assert any(
+        event.entity_id for event in snapshot.events if event.entity_type == "watchlist_item"
+    )
 
 
 def test_news_analysis_returns_chinese_summary_and_sources() -> None:
@@ -629,8 +631,9 @@ def test_strategy_draft_and_replay_backtest_from_news_analysis() -> None:
 
 
 def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
+    account_key = f"assistant-chat-{uuid4().hex[:8]}"
     session = register_test_device(
-        account_key=f"assistant-chat-{uuid4().hex[:8]}",
+        account_key=account_key,
         account_name="AI 分析师测试账户",
     )
     analysis = {
@@ -661,6 +664,12 @@ def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
     )
     assert backtest_response.status_code == 200
     backtest = backtest_response.json()
+    before_snapshot_response = client.get(
+        f"/v1/workspaces/{session['workspace_id']}/snapshot",
+        headers=auth_headers(session),
+    )
+    assert before_snapshot_response.status_code == 200
+    before_sequence = before_snapshot_response.json()["server_sequence"]
 
     unauthorized_response = client.post(
         "/v1/assistant/chat",
@@ -689,6 +698,54 @@ def test_assistant_chat_answers_with_context_citations_and_audit_log() -> None:
     assert any(item["ref"] == "https://example.com/nvda-news" for item in body["citations"])
     assert any("纸面" in item for item in body["suggested_actions_zh"])
     assert any("风控" in item for item in body["safety_notes_zh"])
+
+    snapshot_response = client.get(
+        f"/v1/workspaces/{session['workspace_id']}/snapshot",
+        headers=auth_headers(session),
+    )
+    assert snapshot_response.status_code == 200
+    snapshot = snapshot_response.json()
+    assert any(turn["id"] == body["id"] for turn in snapshot["assistant_turns"])
+    turn = next(item for item in snapshot["assistant_turns"] if item["id"] == body["id"])
+    assert turn["question_zh"] == "这条新闻会影响哪些股票？可以直接实盘买吗？策略脚本和回测怎么看？"
+    assert turn["answer_zh"] == body["answer_zh"]
+    assert turn["context_refs"] == [
+        analysis["id"],
+        draft["strategy_version_id"],
+        backtest["id"],
+    ]
+    assert turn["created_by_device_id"] == session["device_id"]
+
+    sync_response = client.get(
+        f"/v1/workspaces/{session['workspace_id']}/sync-events?since_sequence={before_sequence}",
+        headers=auth_headers(session),
+    )
+    assert sync_response.status_code == 200
+    sync_events = sync_response.json()
+    assert any(
+        event["entity_type"] == "assistant_turn" and event["entity_id"] == body["id"]
+        for event in sync_events
+    )
+
+    turns_response = client.get("/v1/assistant/turns", headers=auth_headers(session))
+    assert turns_response.status_code == 200
+    assert turns_response.json()[-1]["id"] == body["id"]
+
+    second_session = register_test_device(
+        account_key=account_key,
+        account_name="AI 分析师测试账户",
+        device_name="Android 测试机",
+        platform="android",
+    )
+    second_snapshot_response = client.get(
+        f"/v1/workspaces/{second_session['workspace_id']}/snapshot",
+        headers=auth_headers(second_session),
+    )
+    assert second_snapshot_response.status_code == 200
+    assert second_session["workspace_id"] == session["workspace_id"]
+    assert any(
+        turn["id"] == body["id"] for turn in second_snapshot_response.json()["assistant_turns"]
+    )
 
     audit_response = client.get("/v1/audit/logs", headers=auth_headers(session))
     assert audit_response.status_code == 200

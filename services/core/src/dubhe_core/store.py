@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from .models import (
     AccountLoginRequest,
     AccountRegistrationRequest,
+    AssistantConversationTurn,
     AuditLogEntry,
     ApprovalActionRequest,
     ApprovalRequest,
@@ -52,7 +53,12 @@ from .models import (
 DEFAULT_WATCHLIST = [
     {"symbol": "NVDA", "name": "英伟达", "market": "US", "notes_zh": "美股 AI 算力龙头"},
     {"symbol": "0700.HK", "name": "腾讯控股", "market": "HK", "notes_zh": "港股互联网核心标的"},
-    {"symbol": "600519.SH", "name": "贵州茅台", "market": "A_SHARE", "notes_zh": "A 股消费核心标的"},
+    {
+        "symbol": "600519.SH",
+        "name": "贵州茅台",
+        "market": "A_SHARE",
+        "notes_zh": "A 股消费核心标的",
+    },
     {"symbol": "AAPL", "name": "苹果", "market": "US", "notes_zh": "美股消费电子核心标的"},
 ]
 DEFAULT_PAPER_CASH_BY_CURRENCY = {
@@ -150,7 +156,9 @@ class SQLiteStore:
 
     @property
     def paper_portfolios(self) -> list[PaperPortfolioSnapshot]:
-        return self._load_payloads("paper_portfolios", PaperPortfolioSnapshot, "updated_at DESC, account_id")
+        return self._load_payloads(
+            "paper_portfolios", PaperPortfolioSnapshot, "updated_at DESC, account_id"
+        )
 
     @property
     def strategy_drafts(self) -> list[StrategyDraft]:
@@ -262,7 +270,9 @@ class SQLiteStore:
                     "decided_by": request.decided_by,
                     "decision_comment_zh": request.decision_comment_zh,
                     "decided_at": utc_now(),
-                    "message_zh": "审批已通过。" if status == ApprovalStatus.APPROVED else "审批已拒绝。",
+                    "message_zh": "审批已通过。"
+                    if status == ApprovalStatus.APPROVED
+                    else "审批已拒绝。",
                 },
             )
             self._save_approval_request(decided)
@@ -443,6 +453,41 @@ class SQLiteStore:
             self._connection.commit()
             return result
 
+    def add_assistant_turn(self, turn: AssistantConversationTurn) -> AssistantConversationTurn:
+        with self._lock:
+            self._ensure_workspace_exists(turn.workspace_id)
+            self._save_assistant_turn(turn)
+            self._append_sync_event(
+                workspace_id=turn.workspace_id,
+                entity_type=SyncEntityType.ASSISTANT_TURN,
+                entity_id=turn.id,
+                action="created",
+                payload=turn.model_dump(mode="json"),
+            )
+            self._connection.commit()
+            return turn
+
+    def list_assistant_turns(
+        self,
+        workspace_id: str,
+        limit: int = 20,
+    ) -> list[AssistantConversationTurn]:
+        with self._lock:
+            self._ensure_workspace_exists(workspace_id)
+            rows = self._connection.execute(
+                """
+                SELECT payload FROM assistant_turns
+                WHERE workspace_id = ?
+                ORDER BY generated_at DESC, id DESC
+                LIMIT ?
+                """,
+                (workspace_id, limit),
+            ).fetchall()
+            return [
+                AssistantConversationTurn.model_validate_json(row["payload"])
+                for row in reversed(rows)
+            ]
+
     def register_device(self, request: DeviceRegistrationRequest) -> DeviceSession:
         with self._lock:
             user = self._user_by_account_key(request.account_key)
@@ -458,7 +503,9 @@ class SQLiteStore:
             else:
                 workspace = self._workspace_by_user_id(user.id)
 
-            session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            session = self._create_device_session(
+                user, workspace.id, request.device_name, request.platform
+            )
             self._append_audit_log(
                 actor_session=session,
                 action="auth.device_registered",
@@ -502,13 +549,19 @@ class SQLiteStore:
                 )
                 self._save_user(user)
                 workspace = self._workspace_by_user_id(user.id)
-            session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            session = self._create_device_session(
+                user, workspace.id, request.device_name, request.platform
+            )
             self._append_audit_log(
                 actor_session=session,
-                action="auth.account_claimed" if is_claiming_existing else "auth.account_registered",
+                action="auth.account_claimed"
+                if is_claiming_existing
+                else "auth.account_registered",
                 target_type="user",
                 target_id=user.id,
-                summary_zh="账号已接管并启用密码登录。" if is_claiming_existing else "本地账号已创建。",
+                summary_zh="账号已接管并启用密码登录。"
+                if is_claiming_existing
+                else "本地账号已创建。",
                 metadata={
                     "account_key": user.account_key,
                     "role": user.role.value,
@@ -527,7 +580,9 @@ class SQLiteStore:
                 raise PermissionError("invalid_mfa")
 
             workspace = self._workspace_by_user_id(user.id)
-            session = self._create_device_session(user, workspace.id, request.device_name, request.platform)
+            session = self._create_device_session(
+                user, workspace.id, request.device_name, request.platform
+            )
             self._append_audit_log(
                 actor_session=session,
                 action="auth.login_succeeded",
@@ -547,7 +602,9 @@ class SQLiteStore:
             rows = self._connection.execute(
                 "SELECT payload FROM users ORDER BY account_key",
             ).fetchall()
-            return [self._user_summary(UserAccount.model_validate_json(row["payload"])) for row in rows]
+            return [
+                self._user_summary(UserAccount.model_validate_json(row["payload"])) for row in rows
+            ]
 
     def update_user_role(
         self,
@@ -557,7 +614,11 @@ class SQLiteStore:
     ) -> UserSummary:
         with self._lock:
             user = self._user_by_id(user_id)
-            if user.role == UserRole.ADMIN and request.role != UserRole.ADMIN and self._admin_count() <= 1:
+            if (
+                user.role == UserRole.ADMIN
+                and request.role != UserRole.ADMIN
+                and self._admin_count() <= 1
+            ):
                 raise ValueError("last_admin")
             updated_user = user.model_copy(update={"role": request.role})
             self._save_user(updated_user)
@@ -680,6 +741,7 @@ class SQLiteStore:
                 paper_portfolios=self.paper_portfolios,
                 strategy_drafts=self.strategy_drafts,
                 backtest_results=self.backtest_results,
+                assistant_turns=self.list_assistant_turns(workspace_id),
                 events=self.list_sync_events(workspace_id, since_sequence=since_sequence),
                 server_sequence=self._server_sequence(workspace_id),
             )
@@ -817,6 +879,13 @@ class SQLiteStore:
                     payload TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS assistant_turns (
+                    id TEXT PRIMARY KEY,
+                    workspace_id TEXT NOT NULL,
+                    generated_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS audit_logs (
                     id TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
@@ -832,6 +901,8 @@ class SQLiteStore:
                 CREATE INDEX IF NOT EXISTS idx_watchlist_workspace ON watchlist_items(workspace_id);
                 CREATE INDEX IF NOT EXISTS idx_sync_events_workspace_sequence
                     ON sync_events(workspace_id, sequence);
+                CREATE INDEX IF NOT EXISTS idx_assistant_turns_workspace_generated_at
+                    ON assistant_turns(workspace_id, generated_at);
                 CREATE INDEX IF NOT EXISTS idx_paper_portfolios_updated_at ON paper_portfolios(updated_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_user_id ON audit_logs(actor_user_id);
@@ -946,6 +1017,21 @@ class SQLiteStore:
             ),
         )
 
+    def _save_assistant_turn(self, turn: AssistantConversationTurn) -> None:
+        self._connection.execute(
+            """
+            INSERT OR REPLACE INTO assistant_turns
+                (id, workspace_id, generated_at, payload)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                turn.id,
+                turn.workspace_id,
+                turn.generated_at.isoformat(),
+                turn.model_dump_json(),
+            ),
+        )
+
     def _paper_portfolio_by_account_id(self, account_id: str) -> PaperPortfolioSnapshot | None:
         row = self._connection.execute(
             "SELECT payload FROM paper_portfolios WHERE account_id = ?",
@@ -965,7 +1051,9 @@ class SQLiteStore:
 
     def _apply_broker_order_to_portfolio(self, order: BrokerOrder) -> PaperPortfolioSnapshot:
         account_id = order.broker_account_id.removeprefix("paper:")
-        portfolio = self._paper_portfolio_by_account_id(account_id) or self._default_paper_portfolio(account_id)
+        portfolio = self._paper_portfolio_by_account_id(
+            account_id
+        ) or self._default_paper_portfolio(account_id)
         cash_by_currency = dict(portfolio.cash_by_currency)
         realized_pnl_by_currency = dict(portfolio.realized_pnl_by_currency)
         positions = {
@@ -984,7 +1072,9 @@ class SQLiteStore:
                     currency=currency,
                 )
 
-            current_cash = cash_by_currency.get(currency, DEFAULT_PAPER_CASH_BY_CURRENCY.get(currency, 0.0))
+            current_cash = cash_by_currency.get(
+                currency, DEFAULT_PAPER_CASH_BY_CURRENCY.get(currency, 0.0)
+            )
             current_realized = realized_pnl_by_currency.get(currency, 0.0)
 
             if fill.side.value == "buy":
@@ -998,7 +1088,9 @@ class SQLiteStore:
             else:
                 next_quantity = existing.quantity - fill.quantity
                 next_avg_cost = existing.avg_cost if next_quantity > 0 else 0
-                current_realized += ((fill.price - existing.avg_cost) * fill.quantity) - fill.commission
+                current_realized += (
+                    (fill.price - existing.avg_cost) * fill.quantity
+                ) - fill.commission
                 current_cash += fill.notional - fill.commission
 
             updated_position = existing.model_copy(
@@ -1019,7 +1111,9 @@ class SQLiteStore:
             else:
                 positions[position_key] = updated_position
 
-        position_list = sorted(positions.values(), key=lambda item: (item.currency, item.market.value, item.symbol))
+        position_list = sorted(
+            positions.values(), key=lambda item: (item.currency, item.market.value, item.symbol)
+        )
         equity_by_currency = dict(cash_by_currency)
         for position in position_list:
             equity_by_currency[position.currency] = round(
@@ -1313,7 +1407,11 @@ class SQLiteStore:
 
     def _admin_count(self) -> int:
         rows = self._connection.execute("SELECT payload FROM users").fetchall()
-        return sum(1 for row in rows if UserAccount.model_validate_json(row["payload"]).role == UserRole.ADMIN)
+        return sum(
+            1
+            for row in rows
+            if UserAccount.model_validate_json(row["payload"]).role == UserRole.ADMIN
+        )
 
     def _workspace_by_user_id(self, user_id: str) -> Workspace:
         row = self._connection.execute(
