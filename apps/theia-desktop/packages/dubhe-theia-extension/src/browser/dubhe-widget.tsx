@@ -18,6 +18,7 @@ type Market = 'A_SHARE' | 'HK' | 'US' | 'GLOBAL';
 type Sentiment = 'positive' | 'neutral' | 'negative';
 type Tone = 'positive' | 'negative' | 'neutral' | 'warning';
 type UserRole = 'user' | 'risk_manager' | 'admin';
+type SyncConnectionStatus = '未连接' | '连接中' | '实时同步' | '重连中' | '离线';
 
 type AuthForm = {
   account_key: string;
@@ -387,6 +388,8 @@ function DubheWorkbench(): React.ReactElement {
   const [paperOrder, setPaperOrder] = React.useState<PaperOrder | null>(null);
   const [portfolio, setPortfolio] = React.useState<PaperPortfolioSnapshot | null>(null);
   const [workspaceSnapshot, setWorkspaceSnapshot] = React.useState<WorkspaceSnapshot | null>(null);
+  const [syncConnectionStatus, setSyncConnectionStatus] = React.useState<SyncConnectionStatus>('未连接');
+  const [lastSyncEvent, setLastSyncEvent] = React.useState<SyncEvent | null>(null);
   const [approvals, setApprovals] = React.useState<ApprovalRequest[]>([]);
   const [killSwitch, setKillSwitch] = React.useState<KillSwitchState | null>(null);
   const [auditLogs, setAuditLogs] = React.useState<AuditLogEntry[]>([]);
@@ -406,10 +409,16 @@ function DubheWorkbench(): React.ReactElement {
   const enabledAdapterCount = systemStatus?.news_adapters.filter((adapter) => adapter.enabled).length ?? 0;
   const adapterStatusMeta = systemStatus ? `${enabledAdapterCount}/${systemStatus.news_adapters.length} 可用` : '待检查';
   const missingConfigCount = systemStatus?.config_items.filter((item) => !item.configured).length ?? 0;
+  const syncCursorRef = React.useRef(0);
 
   React.useEffect(() => {
     void checkHealth();
   }, [coreUrl]);
+
+  React.useEffect(() => {
+    if (!workspaceSnapshot) return;
+    syncCursorRef.current = Math.max(syncCursorRef.current, workspaceSnapshot.server_sequence);
+  }, [workspaceSnapshot?.server_sequence]);
 
   React.useEffect(() => {
     if (!session) {
@@ -418,11 +427,96 @@ function DubheWorkbench(): React.ReactElement {
       setAuditLogs([]);
       setPortfolio(null);
       setWorkspaceSnapshot(null);
+      setLastSyncEvent(null);
+      setSyncConnectionStatus('未连接');
+      syncCursorRef.current = 0;
       setRiskMessage('登录后显示审批和急停状态。');
       return;
     }
     void loadSessionData(session);
   }, [coreUrl, session?.access_token, session?.role, session?.workspace_id]);
+
+  React.useEffect(() => {
+    if (!session) {
+      setSyncConnectionStatus('未连接');
+      return;
+    }
+
+    let closedByEffect = false;
+    let socket: WebSocket | null = null;
+    let retryTimer: number | undefined;
+    let retryCount = 0;
+    let cursor = syncCursorRef.current;
+
+    const refreshFromSyncEvent = async (event: SyncEvent): Promise<void> => {
+      const refreshes: Array<Promise<void>> = [loadWorkspaceSnapshot(session)];
+      if (event.entity_type === 'paper_order' || event.entity_type === 'broker_order' || event.entity_type === 'paper_portfolio') {
+        refreshes.push(loadPortfolio(session));
+      }
+      if (event.entity_type === 'approval_request' || event.entity_type === 'risk_decision') {
+        refreshes.push(loadRiskControls(session));
+      }
+      await Promise.all(refreshes);
+    };
+
+    const connect = (): void => {
+      if (closedByEffect) return;
+      setSyncConnectionStatus(retryCount === 0 ? '连接中' : '重连中');
+      socket = new WebSocket(
+        toWebSocketUrl(
+          coreUrl,
+          `/v1/workspaces/${session.workspace_id}/sync-events/ws?access_token=${encodeURIComponent(session.access_token)}&since_sequence=${cursor}`,
+        ),
+      );
+
+      socket.onopen = () => {
+        if (closedByEffect) return;
+        retryCount = 0;
+        setSyncConnectionStatus('实时同步');
+      };
+
+      socket.onmessage = (message) => {
+        if (closedByEffect) return;
+        const event = parseSyncEvent(`${message.data}`);
+        if (!event) return;
+        cursor = Math.max(cursor, event.sequence);
+        syncCursorRef.current = cursor;
+        setLastSyncEvent(event);
+        setLogs((current) => [
+          createLog('neutral', `同步事件：#${event.sequence} ${syncEntityLabel(event.entity_type)} ${syncActionLabel(event.action)}。`),
+          ...current,
+        ].slice(0, 5));
+        void refreshFromSyncEvent(event).catch((error: unknown) => {
+          setLogs((current) => [
+            createLog('warning', `同步事件刷新失败：${errorMessage(error)}。`),
+            ...current,
+          ].slice(0, 5));
+        });
+      };
+
+      socket.onerror = () => {
+        if (closedByEffect) return;
+        setSyncConnectionStatus('离线');
+      };
+
+      socket.onclose = () => {
+        if (closedByEffect) return;
+        retryCount += 1;
+        setSyncConnectionStatus('重连中');
+        retryTimer = window.setTimeout(connect, Math.min(15000, retryCount * 1000));
+      };
+    };
+
+    connect();
+
+    return () => {
+      closedByEffect = true;
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+      socket?.close();
+    };
+  }, [coreUrl, session?.access_token, session?.workspace_id]);
 
   const workspaceWatchlist = React.useMemo<WatchlistDisplayItem[]>(() => {
     if (!workspaceSnapshot || workspaceSnapshot.watchlist.length === 0) {
@@ -523,6 +617,9 @@ function DubheWorkbench(): React.ReactElement {
       setSession(null);
       setPortfolio(null);
       setWorkspaceSnapshot(null);
+      setLastSyncEvent(null);
+      setSyncConnectionStatus('未连接');
+      syncCursorRef.current = 0;
       setApprovals([]);
       setKillSwitch(null);
       setAuditLogs([]);
@@ -933,7 +1030,7 @@ function DubheWorkbench(): React.ReactElement {
             </form>
           )}
 
-          <PanelTitle title="同步状态" meta={workspaceSnapshot ? `#${workspaceSnapshot.server_sequence}` : '未同步'} />
+          <PanelTitle title="同步状态" meta={workspaceSnapshot ? `#${workspaceSnapshot.server_sequence} · ${syncConnectionStatus}` : syncConnectionStatus} />
           <div style={styles.syncCard}>
             {workspaceSnapshot ? (
               <>
@@ -952,7 +1049,13 @@ function DubheWorkbench(): React.ReactElement {
                   <Metric label="自选股" value={`${workspaceSnapshot.watchlist.length}`} tone="neutral" compact />
                   <Metric label="同步事件" value={`${workspaceSnapshot.events.length}`} tone="neutral" compact />
                   <Metric label="服务器序号" value={`${workspaceSnapshot.server_sequence}`} tone="positive" compact />
+                  <Metric label="实时连接" value={syncConnectionStatus} tone={syncConnectionTone(syncConnectionStatus)} compact />
                 </div>
+                {lastSyncEvent && (
+                  <p style={styles.statusMessage}>
+                    最近推送：#{lastSyncEvent.sequence} {syncEntityLabel(lastSyncEvent.entity_type)} {syncActionLabel(lastSyncEvent.action)}
+                  </p>
+                )}
                 <div style={styles.syncEventList}>
                   {workspaceSnapshot.events.slice(0, 3).map((event) => (
                     <p style={styles.statusMessage} key={event.id}>
@@ -1396,6 +1499,12 @@ function normalizeCoreUrl(value: string): string {
   return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
 }
 
+function toWebSocketUrl(baseUrl: string, path: string): string {
+  const url = new URL(`${normalizeCoreUrl(baseUrl)}${path}`);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
 async function getJson<T>(baseUrl: string, path: string, accessToken?: string): Promise<T> {
   return requestJson<T>(baseUrl, path, { accessToken });
 }
@@ -1440,6 +1549,35 @@ function readApiError(text: string): string {
     // Fall through to raw response text.
   }
   return text;
+}
+
+function parseSyncEvent(raw: string): SyncEvent | null {
+  try {
+    const parsed = JSON.parse(raw) as Partial<SyncEvent>;
+    if (
+      typeof parsed.id === 'string' &&
+      typeof parsed.workspace_id === 'string' &&
+      typeof parsed.sequence === 'number' &&
+      typeof parsed.entity_type === 'string' &&
+      typeof parsed.entity_id === 'string' &&
+      (parsed.action === 'created' || parsed.action === 'updated' || parsed.action === 'deleted') &&
+      typeof parsed.created_at === 'string'
+    ) {
+      return {
+        id: parsed.id,
+        workspace_id: parsed.workspace_id,
+        sequence: parsed.sequence,
+        entity_type: parsed.entity_type,
+        entity_id: parsed.entity_id,
+        action: parsed.action,
+        payload: parsed.payload && typeof parsed.payload === 'object' ? parsed.payload : {},
+        created_at: parsed.created_at,
+      };
+    }
+  } catch {
+    // Ignore malformed sync payloads and keep the socket alive.
+  }
+  return null;
 }
 
 function detectPlatform(): DevicePlatform {
@@ -1546,6 +1684,13 @@ function syncActionLabel(action: SyncEvent['action']): string {
   if (action === 'created') return '已创建';
   if (action === 'updated') return '已更新';
   return '已删除';
+}
+
+function syncConnectionTone(status: SyncConnectionStatus): Tone {
+  if (status === '实时同步') return 'positive';
+  if (status === '离线') return 'negative';
+  if (status === '连接中' || status === '重连中') return 'warning';
+  return 'neutral';
 }
 
 function sentimentLabel(sentiment: Sentiment): string {
