@@ -76,7 +76,7 @@ function Get-ArtifactForItem {
     switch ($ItemId) {
         "llm_configured" { "模型供应商账号、API key、base URL、live 体检报告、数据使用条款" }
         "production_identity" { "OIDC 租户、MFA 策略、刷新令牌策略、管理员角色 UI、会话撤销测试" }
-        "production_storage" { "PostgreSQL/TimescaleDB、Redis、S3/MinIO、备份恢复演练、迁移脚本" }
+        "production_storage" { "DUBHE_STORAGE_BACKEND、DUBHE_DATABASE_URL、DUBHE_REDIS_URL、S3/MinIO 配置、备份恢复 runbook、迁移 runbook、PostgreSQL store 切换演练" }
         "immutable_audit" { "追加写审计存储、对象锁/WORM 策略、签名摘要、审计查询与留存策略" }
         "live_broker_adapter" { "券商沙盒/实盘账号、adapter、拒单/断线/重复单/撤单 UAT、合规审批" }
         "package_macos" { "Apple Developer、Developer ID、notarization、公证日志、dmg/zip 产物" }

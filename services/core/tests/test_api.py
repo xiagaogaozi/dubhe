@@ -142,6 +142,9 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     assert body["service"] == "dubhe-core"
     assert body["language"] == "zh-CN"
     assert body["storage"]["backend"] == "sqlite"
+    assert body["storage"]["target_backend"] == "sqlite"
+    assert body["storage"]["production_ready"] is False
+    assert "DUBHE_DATABASE_URL" in "、".join(body["storage"]["missing_items_zh"])
     assert body["auth"]["mfa_mode"] == "local_placeholder"
     assert body["llm"]["enabled"] is False
     assert body["llm"]["fallback_available"] is True
@@ -188,6 +191,33 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     assert launchers["build-user-kit"]["local_path"].endswith("Build-Dubhe-User-Kit.cmd")
     assert launchers["start-local"]["available"] is True
     assert launchers["configure"]["available"] is False
+
+
+def test_system_status_reports_production_storage_probe(monkeypatch) -> None:
+    monkeypatch.setenv("DUBHE_STORAGE_BACKEND", "postgresql")
+    monkeypatch.setenv("DUBHE_DATABASE_URL", "postgresql://dubhe:secret@db.example.com:5432/dubhe")
+    monkeypatch.setenv("DUBHE_REDIS_URL", "rediss://:secret@redis.example.com:6379/0")
+    monkeypatch.setenv("DUBHE_OBJECT_STORAGE_ENDPOINT", "https://s3.example.com")
+    monkeypatch.setenv("DUBHE_OBJECT_STORAGE_BUCKET", "dubhe-prod")
+    monkeypatch.setenv("DUBHE_OBJECT_STORAGE_ACCESS_KEY_ID", "access-key")
+    monkeypatch.setenv("DUBHE_OBJECT_STORAGE_SECRET_ACCESS_KEY", "secret-key")
+    monkeypatch.setenv("DUBHE_BACKUP_RUNBOOK_URL", "https://docs.example.com/backup")
+    monkeypatch.setenv("DUBHE_MIGRATION_RUNBOOK_URL", "https://docs.example.com/migration")
+
+    response = client.get("/v1/system/status")
+
+    assert response.status_code == 200
+    storage = response.json()["storage"]
+    assert storage["backend"] == "sqlite"
+    assert storage["target_backend"] == "postgresql"
+    assert storage["production_database_configured"] is True
+    assert storage["redis_configured"] is True
+    assert storage["object_storage_configured"] is True
+    assert storage["backup_runbook_configured"] is True
+    assert storage["migration_runbook_configured"] is True
+    assert storage["production_ready"] is False
+    assert storage["missing_items_zh"] == []
+    assert "当前运行后端仍为 SQLite" in storage["message_zh"]
 
 
 def test_local_mfa_placeholder_uses_configurable_fixed_code(monkeypatch) -> None:

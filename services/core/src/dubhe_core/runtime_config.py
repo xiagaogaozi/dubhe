@@ -199,6 +199,91 @@ LOCAL_CONFIG_DEFINITIONS = [
         setup_hint_zh="想把数据放到固定磁盘目录时填写；普通本地体验可先留空。",
         restart_required=True,
     ),
+    LocalConfigDefinition(
+        key="DUBHE_STORAGE_BACKEND",
+        label_zh="生产目标存储后端",
+        description_zh="生产目标后端；当前本地实现仍运行 SQLite，后续切换到 postgresql 后才可通过门禁。",
+        group_zh="生产存储",
+        placeholder="postgresql",
+        setup_hint_zh="生产准备时填写 postgresql；仅填写该项不会切换当前 SQLite store。",
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_DATABASE_URL",
+        label_zh="PostgreSQL/TimescaleDB DSN",
+        description_zh="生产 PostgreSQL 或 TimescaleDB 连接串；不会在接口响应中回显。",
+        group_zh="生产存储",
+        placeholder="postgresql://dubhe:password@db.example.com:5432/dubhe",
+        setup_hint_zh="由运维创建数据库、用户、网络白名单和 TLS 后填写。当前版本只做配置探针。",
+        secret=True,
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_REDIS_URL",
+        label_zh="Redis 地址",
+        description_zh="生产 Redis 连接串，用于后续 pub/sub、缓存、任务队列和速率限制；不会明文回显。",
+        group_zh="生产存储",
+        placeholder="rediss://:password@redis.example.com:6379/0",
+        setup_hint_zh="用于替代 SQLite 轮询和承载跨实例实时同步；当前版本只做配置探针。",
+        secret=True,
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_OBJECT_STORAGE_ENDPOINT",
+        label_zh="对象存储 Endpoint",
+        description_zh="S3/MinIO/OSS/COS 兼容对象存储地址，用于报告、附件和归档。",
+        group_zh="生产存储",
+        placeholder="https://s3.example.com",
+        setup_hint_zh="生产前需要同时填写 bucket、access key 和 secret，并确认对象锁/留存策略。",
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_OBJECT_STORAGE_BUCKET",
+        label_zh="对象存储 Bucket",
+        description_zh="Dubhe 生产对象存储桶名。",
+        group_zh="生产存储",
+        placeholder="dubhe-prod",
+        setup_hint_zh="建议区分 dev/staging/prod，并开启服务端加密、版本化和生命周期策略。",
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_OBJECT_STORAGE_ACCESS_KEY_ID",
+        label_zh="对象存储 Access Key",
+        description_zh="对象存储访问 Key ID；不会在接口响应中回显。",
+        group_zh="生产存储",
+        placeholder="access-key-id",
+        setup_hint_zh="只授予 Dubhe 所需的最小权限。",
+        secret=True,
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_OBJECT_STORAGE_SECRET_ACCESS_KEY",
+        label_zh="对象存储 Secret",
+        description_zh="对象存储 Secret Access Key；不会在接口响应中回显。",
+        group_zh="生产存储",
+        placeholder="secret-access-key",
+        setup_hint_zh="按生产密钥管理规范保存和轮换。",
+        secret=True,
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_BACKUP_RUNBOOK_URL",
+        label_zh="备份恢复 Runbook",
+        description_zh="备份、恢复演练和 RPO/RTO 说明文档地址。",
+        group_zh="生产存储",
+        placeholder="https://docs.example.com/dubhe/backup-runbook",
+        setup_hint_zh="生产门禁需要能追溯备份计划和最近一次恢复演练记录。",
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_MIGRATION_RUNBOOK_URL",
+        label_zh="迁移 Runbook",
+        description_zh="SQLite 到 PostgreSQL/TimescaleDB 迁移、回滚和校验说明地址。",
+        group_zh="生产存储",
+        placeholder="https://docs.example.com/dubhe/migration-runbook",
+        setup_hint_zh="生产切换前必须写清迁移、回滚、校验和停机窗口。",
+        restart_required=True,
+    ),
 ]
 
 LOCAL_CONFIG_KEYS = {definition.key for definition in LOCAL_CONFIG_DEFINITIONS}
@@ -334,6 +419,22 @@ def write_local_config_values(path: Path, values: dict[str, str]) -> None:
     )
     lines.extend(["", "# Optional persistent Core database override."])
     lines.append(_format_known_line("DUBHE_CORE_DB_PATH", known_values))
+    lines.extend(["", "# Production storage readiness probe."])
+    _append_named_lines(
+        lines,
+        known_values,
+        [
+            "DUBHE_STORAGE_BACKEND",
+            "DUBHE_DATABASE_URL",
+            "DUBHE_REDIS_URL",
+            "DUBHE_OBJECT_STORAGE_ENDPOINT",
+            "DUBHE_OBJECT_STORAGE_BUCKET",
+            "DUBHE_OBJECT_STORAGE_ACCESS_KEY_ID",
+            "DUBHE_OBJECT_STORAGE_SECRET_ACCESS_KEY",
+            "DUBHE_BACKUP_RUNBOOK_URL",
+            "DUBHE_MIGRATION_RUNBOOK_URL",
+        ],
+    )
 
     if unknown_values:
         lines.extend(["", "# Other local entries preserved from the existing file."])

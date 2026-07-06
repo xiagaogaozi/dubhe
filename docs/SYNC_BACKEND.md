@@ -217,6 +217,24 @@ $env:DUBHE_CORE_DB_PATH="D:\dubhe-data\dubhe-core.sqlite"
 
 当前 SQLite 层是本地可用版本和后续 PostgreSQL schema 的过渡层。生产部署时仍应迁移到 PostgreSQL/TimescaleDB，并保留相同 API 契约。
 
+## 生产存储配置探针
+
+`/v1/system/status` 的 `storage` 字段会区分“当前实际运行后端”和“生产目标配置”。当前实际后端仍是 `sqlite`；下列变量只用于生产准备检查，不会单独把 store 切到 PostgreSQL：
+
+```text
+DUBHE_STORAGE_BACKEND=postgresql
+DUBHE_DATABASE_URL=postgresql://dubhe:password@db.example.com:5432/dubhe
+DUBHE_REDIS_URL=rediss://:password@redis.example.com:6379/0
+DUBHE_OBJECT_STORAGE_ENDPOINT=https://s3.example.com
+DUBHE_OBJECT_STORAGE_BUCKET=dubhe-prod
+DUBHE_OBJECT_STORAGE_ACCESS_KEY_ID=...
+DUBHE_OBJECT_STORAGE_SECRET_ACCESS_KEY=...
+DUBHE_BACKUP_RUNBOOK_URL=https://docs.example.com/dubhe/backup-runbook
+DUBHE_MIGRATION_RUNBOOK_URL=https://docs.example.com/dubhe/migration-runbook
+```
+
+生产门禁会继续失败，直到 PostgreSQL/TimescaleDB store 实现并实际启用；即使这些变量全部填写，Dubhe 也只会报告“配置材料齐全但当前仍运行 SQLite”。这样可以防止把准备材料误判成生产上线完成。
+
 ## 下一步
 
 - 将当前 SQLite schema 迁移到 PostgreSQL/TimescaleDB。

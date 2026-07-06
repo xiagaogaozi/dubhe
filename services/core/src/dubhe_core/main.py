@@ -64,7 +64,6 @@ from .models import (
     StrategyTemplate,
     StrategyTemplateDraftRequest,
     StrategyValidationResult,
-    StorageRuntimeStatus,
     SyncEvent,
     SystemStatusResponse,
     TradingRuntimeStatus,
@@ -83,6 +82,7 @@ from .risk import evaluate_order_intent
 from .runtime_config import local_runtime_config_response, repo_root, update_local_runtime_config
 from .simulation import submit_paper_order
 from .smoke_report import read_smoke_workflow_report
+from .storage_runtime import storage_runtime_status
 from .store import store
 from .strategy import (
     draft_strategy_from_template,
@@ -131,7 +131,7 @@ def system_status() -> SystemStatusResponse:
     alpaca_config = load_alpaca_paper_config()
     paper_broker_adapter = active_paper_broker_adapter()
     mfa_mode = local_mfa_runtime_mode()
-    persistent_storage = store.db_path != ":memory:"
+    storage_status = storage_runtime_status(store.db_path)
     news_adapters = [
         NewsAdapterRuntimeStatus(
             provider="finnhub_company_news",
@@ -195,16 +195,7 @@ def system_status() -> SystemStatusResponse:
     return SystemStatusResponse(
         service="dubhe-core",
         version=CORE_VERSION,
-        storage=StorageRuntimeStatus(
-            backend="sqlite",
-            path=store.db_path,
-            persistent=persistent_storage,
-            message_zh=(
-                "SQLite 持久化存储已启用。"
-                if persistent_storage
-                else "当前使用内存数据库，服务重启后数据会丢失。"
-            ),
-        ),
+        storage=storage_status,
         auth=AuthRuntimeStatus(
             mode="local_dev",
             mfa_mode=mfa_mode,

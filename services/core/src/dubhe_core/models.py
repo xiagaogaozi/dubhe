@@ -185,6 +185,15 @@ class StorageRuntimeStatus(BaseModel):
     backend: Literal["sqlite"]
     path: str
     persistent: bool
+    target_backend: str = "sqlite"
+    production_database_configured: bool = False
+    redis_configured: bool = False
+    object_storage_configured: bool = False
+    backup_runbook_configured: bool = False
+    migration_runbook_configured: bool = False
+    production_ready: bool = False
+    missing_items_zh: list[str] = Field(default_factory=list)
+    next_step_zh: str = ""
     message_zh: str
 
 

@@ -4743,6 +4743,53 @@
             "type": "boolean",
             "title": "Persistent"
           },
+          "target_backend": {
+            "type": "string",
+            "title": "Target Backend",
+            "default": "sqlite"
+          },
+          "production_database_configured": {
+            "type": "boolean",
+            "title": "Production Database Configured",
+            "default": false
+          },
+          "redis_configured": {
+            "type": "boolean",
+            "title": "Redis Configured",
+            "default": false
+          },
+          "object_storage_configured": {
+            "type": "boolean",
+            "title": "Object Storage Configured",
+            "default": false
+          },
+          "backup_runbook_configured": {
+            "type": "boolean",
+            "title": "Backup Runbook Configured",
+            "default": false
+          },
+          "migration_runbook_configured": {
+            "type": "boolean",
+            "title": "Migration Runbook Configured",
+            "default": false
+          },
+          "production_ready": {
+            "type": "boolean",
+            "title": "Production Ready",
+            "default": false
+          },
+          "missing_items_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Items Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh",
+            "default": ""
+          },
           "message_zh": {
             "type": "string",
             "title": "Message Zh"
