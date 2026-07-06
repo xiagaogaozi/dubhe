@@ -2,6 +2,7 @@
     [string]$CoreUrl = "http://127.0.0.1:8000",
     [string]$OutputRoot = "",
     [switch]$NoZip,
+    [switch]$IncludeUnpackedInZip,
     [switch]$OpenFolder
 )
 
@@ -375,6 +376,50 @@ $($rows -join "`n")
     Set-Content -Path $Path -Encoding UTF8 -Value $html
 }
 
+function Remove-SafeDirectory {
+    param(
+        [string]$Path,
+        [string]$AllowedRoot
+    )
+
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    $allowedFull = [System.IO.Path]::GetFullPath($AllowedRoot).TrimEnd("\")
+    $targetFull = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Path).Path).TrimEnd("\")
+    if (-not $targetFull.StartsWith($allowedFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove directory outside output root: $targetFull"
+    }
+    Remove-Item -LiteralPath $targetFull -Recurse -Force
+}
+
+function Copy-ZipPayload {
+    param(
+        [string]$SourceRoot,
+        [string]$StageRoot,
+        [switch]$IncludeUnpacked
+    )
+
+    New-Item -ItemType Directory -Force -Path $StageRoot | Out-Null
+
+    foreach ($item in @(Get-ChildItem -LiteralPath $SourceRoot -Force)) {
+        if ($item.Name -eq "01-Windows" -and $item.PSIsContainer) {
+            $stageWindows = Join-Path $StageRoot "01-Windows"
+            New-Item -ItemType Directory -Force -Path $stageWindows | Out-Null
+            foreach ($windowsItem in @(Get-ChildItem -LiteralPath $item.FullName -Force)) {
+                if (-not $IncludeUnpacked -and $windowsItem.Name -eq "win-unpacked") {
+                    continue
+                }
+                Copy-Item -LiteralPath $windowsItem.FullName -Destination $stageWindows -Recurse -Force
+            }
+            continue
+        }
+
+        Copy-Item -LiteralPath $item.FullName -Destination $StageRoot -Recurse -Force
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $OutputRoot) {
     $OutputRoot = Join-Path $repoRoot ".dubhe-run\user-kits"
@@ -488,6 +533,7 @@ $manifest = [pscustomobject]@{
     lan_core_urls = $lanUrls
     install_index = $installIndexPath
     checksums = Join-Path $kitRoot "CHECKSUMS-SHA256.txt"
+    zip_excludes_windows_unpacked = -not [bool]$IncludeUnpackedInZip
     artifacts = $artifacts
 }
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $kitRoot "manifest.json") -Encoding UTF8
@@ -500,7 +546,14 @@ if (-not $NoZip) {
     if (Test-Path $zipPath) {
         Remove-Item -LiteralPath $zipPath -Force
     }
-    Compress-Archive -Path (Join-Path $kitRoot "*") -DestinationPath $zipPath -Force
+    $zipStage = Join-Path $OutputRoot "Dubhe-User-Kit-$timestamp-zip-payload"
+    Remove-SafeDirectory -Path $zipStage -AllowedRoot $OutputRoot
+    Copy-ZipPayload -SourceRoot $kitRoot -StageRoot $zipStage -IncludeUnpacked:$IncludeUnpackedInZip
+    try {
+        Compress-Archive -Path (Join-Path $zipStage "*") -DestinationPath $zipPath -Force
+    } finally {
+        Remove-SafeDirectory -Path $zipStage -AllowedRoot $OutputRoot
+    }
 }
 
 Write-Host "Dubhe user kit created:"

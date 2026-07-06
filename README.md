@@ -104,6 +104,8 @@ cd D:\github\dubhe-main
 
 `run-local-acceptance.ps1` 会自动启动 Core，然后串起本机体检、本地审计链验证、主链路 smoke 和外部服务状态检查，适合交给不会命令行的用户前做一次“这台电脑能不能用”的兜底验收；报告会写入 `.dubhe-run\local-acceptance.txt` 和 `.dubhe-run\local-acceptance.json`。
 
+`build-user-kit.ps1` 默认生成的 ZIP 会排除 Windows 已解包目录 `win-unpacked`，优先分发 setup/portable、Android APK/AAB、说明、报告和校验清单；未压缩的用户包目录里仍保留 `win-unpacked`，方便本机兜底试运行。确实需要把已解包目录也压进 ZIP 时，可加 `-IncludeUnpackedInZip`。
+
 `check-local-dubhe.ps1` 会用中文检查 Core、桌面端、移动端工具链、新闻源配置、纸面/实盘交易开关、本地审计链和本地安装包状态；它会列出 Windows setup/portable、Android APK/AAB 以及 macOS/iOS 的构建缺口，只读取环境，不会修改系统。`start-local-dubhe.ps1 -RunCheck` 会先启动 Core，再输出同一份体检结果，然后打开已打包的 Dubhe 桌面端；如果没有打包产物，会回退到 Theia 开发启动。
 
 `verify-audit-chain.ps1` 会读取 `/v1/audit/chain/verify`，验证本地 SQLite 审计日志的序号和 SHA-256 哈希链；验证失败会返回非零退出码，并把报告写入 `.dubhe-run\audit-chain-verification.txt` 和 `.dubhe-run\audit-chain-verification.json`。

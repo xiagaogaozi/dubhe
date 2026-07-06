@@ -36,6 +36,7 @@
 - 手机 Core 地址候选：`{{LAN_CORE_URLS}}`
 - 这个交付包里的双击入口会调用上面的仓库路径。不要删除或移动该仓库，否则这些入口会失效。
 - Windows 和 Android 当前可以本机体验；macOS / iOS 仍需要 macOS runner、Apple 签名、公证和商店发布资料。
+- 默认生成的 ZIP 不包含 `01-Windows\win-unpacked` 已解包目录，优先分发 setup 或 portable；完整目录版仍保留在未压缩的用户包文件夹里。
 - 真实生产上线前必须让 `Check-Dubhe-Production.cmd` 通过。当前本地演示能力不等于商业生产可用。
 - 本地审计链验证只能证明当前 SQLite 审计记录的哈希链没有断裂，不等同于生产级 WORM、对象锁或外部不可变审计存储。
 
