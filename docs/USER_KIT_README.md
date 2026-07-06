@@ -18,6 +18,7 @@
 10. 真正准备商业发布前，双击 `09-Check-Production-This-PC.cmd` 查看生产门禁。
 11. 需要把生产阻断项交给团队补齐时，双击 `10-Export-Production-Pack-This-PC.cmd`。
 12. 需要单独重跑主链路时，双击 `11-Smoke-Dubhe-This-PC.cmd`。
+13. 需要确认最新交付 ZIP 没有损坏或漏文件时，双击 `12-Verify-Dubhe-Delivery-This-PC.cmd`。
 
 ## 这个包里的内容
 
@@ -37,6 +38,7 @@
 - 这个交付包里的双击入口会调用上面的仓库路径。不要删除或移动该仓库，否则这些入口会失效。
 - Windows 和 Android 当前可以本机体验；macOS / iOS 仍需要 macOS runner、Apple 签名、公证和商店发布资料。
 - 默认生成的 ZIP 不包含 `01-Windows\win-unpacked` 已解包目录，优先分发 setup 或 portable；完整目录版仍保留在未压缩的用户包文件夹里。
+- 发出 ZIP 前建议先运行 `Verify-Dubhe-Delivery.cmd`，确认 ZIP 摘要、关键安装包和 `CHECKSUMS-SHA256.txt` 逐文件校验都通过。
 - 真实生产上线前必须让 `Check-Dubhe-Production.cmd` 通过。当前本地演示能力不等于商业生产可用。
 - 本地审计链验证只能证明当前 SQLite 审计记录的哈希链没有断裂，不等同于生产级 WORM、对象锁或外部不可变审计存储。
 

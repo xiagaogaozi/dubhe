@@ -64,6 +64,11 @@ $entries = @(
         description = "Build the latest Dubhe delivery ZIP and write its SHA256 summary."
     },
     @{
+        name = "Verify Dubhe Delivery"
+        file = Join-Path $repoRoot "Verify-Dubhe-Delivery.cmd"
+        description = "Verify the latest Dubhe delivery ZIP hash, required installers, and checksums."
+    },
+    @{
         name = "Dubhe Mobile Guide"
         file = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
         description = "Open the Chinese phone/tablet install and connection guide."

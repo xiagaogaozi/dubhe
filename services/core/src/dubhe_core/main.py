@@ -612,6 +612,14 @@ def build_local_launcher_status(root: Path) -> list[LocalLauncherStatus]:
             "交付前仍需查看生产门禁；当前内测 ZIP 不等同于签名生产安装器。",
         ),
         (
+            "verify-delivery",
+            "验证最终交付 ZIP",
+            "验证最新交付 ZIP 的 SHA256、关键安装包和逐文件校验清单。",
+            "Verify-Dubhe-Delivery.cmd",
+            "双击即可验证最新交付 ZIP 完整性。",
+            "如果验证失败，先重新运行 Prepare-Dubhe-Delivery.cmd；生产发布仍需生产门禁通过。",
+        ),
+        (
             "install-guide",
             "打开安装指南",
             "打开 Windows/macOS/Android/iOS 的安装和分发说明。",

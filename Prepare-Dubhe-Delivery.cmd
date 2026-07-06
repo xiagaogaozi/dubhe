@@ -14,6 +14,7 @@ if not "%DUBHE_EXIT%"=="0" (
   echo Delivery build failed. Send the output above to the developer.
 ) else (
   echo Delivery pack completed. Open .dubhe-run\LATEST-DUBHE-DELIVERY.txt for the ZIP path and SHA256.
+  echo Next, run Verify-Dubhe-Delivery.cmd before sending the ZIP.
 )
 echo.
 pause

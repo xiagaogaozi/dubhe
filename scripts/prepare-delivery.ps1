@@ -132,6 +132,7 @@ $lines = @(
     "3. Windows 用户优先安装 01-Windows 里的 setup 或 portable。",
     "4. Android 用户安装 02-Android 里的 APK；AAB 用于后续商店发布链路。",
     "5. 需要手机连接时，按 03-Guides/mobile-connect.html 的 Core 地址连接。",
+    "6. 发出 ZIP 前，双击 Verify-Dubhe-Delivery.cmd 验证 SHA256、关键安装包和逐文件校验清单。",
     "",
     "重要说明：$($summary.production_note_zh)",
     "构建日志：$buildLog",
