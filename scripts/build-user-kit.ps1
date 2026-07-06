@@ -190,6 +190,191 @@ function Replace-Token {
     return $Content.Replace($Token, $Value)
 }
 
+function ConvertTo-HtmlText {
+    param([string]$Value)
+    return [System.Net.WebUtility]::HtmlEncode($Value)
+}
+
+function Format-ByteSize {
+    param([int64]$Bytes)
+
+    if ($Bytes -ge 1GB) {
+        return "{0:N2} GB" -f ($Bytes / 1GB)
+    }
+    if ($Bytes -ge 1MB) {
+        return "{0:N2} MB" -f ($Bytes / 1MB)
+    }
+    if ($Bytes -ge 1KB) {
+        return "{0:N2} KB" -f ($Bytes / 1KB)
+    }
+    return "$Bytes B"
+}
+
+function Resolve-KitRelativePath {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+
+    if (-not $Path) {
+        return ""
+    }
+    $rootFull = (Resolve-Path -LiteralPath $Root).Path.TrimEnd("\")
+    $pathFull = (Resolve-Path -LiteralPath $Path).Path
+    if ($pathFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $pathFull.Substring($rootFull.Length).TrimStart("\")
+    }
+    return $pathFull
+}
+
+function Write-ChecksumFile {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add("# Dubhe user kit SHA256 checksums") | Out-Null
+    $lines.Add("# Generated: $((Get-Date).ToString("s"))") | Out-Null
+    $lines.Add("# Format: SHA256  relative-path") | Out-Null
+    $lines.Add("# The Windows unpacked directory is intentionally not expanded here; use the setup or portable EXE for distribution checks.") | Out-Null
+    $lines.Add("") | Out-Null
+
+    $checksumLeaf = Split-Path -Leaf $Path
+    $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
+    foreach ($file in @(Get-ChildItem -LiteralPath $Root -File -ErrorAction SilentlyContinue)) {
+        if ($file.Name -ne $checksumLeaf) {
+            $files.Add($file) | Out-Null
+        }
+    }
+
+    $windowsDir = Join-Path $Root "01-Windows"
+    if (Test-Path $windowsDir) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $windowsDir -File -ErrorAction SilentlyContinue)) {
+            $files.Add($file) | Out-Null
+        }
+    }
+
+    foreach ($directoryName in @("02-Android", "03-Guides", "04-Checks")) {
+        $directory = Join-Path $Root $directoryName
+        if (-not (Test-Path $directory)) {
+            continue
+        }
+        foreach ($file in @(Get-ChildItem -LiteralPath $directory -Recurse -File -ErrorAction SilentlyContinue)) {
+            $files.Add($file) | Out-Null
+        }
+    }
+
+    foreach ($file in $files) {
+        $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName
+        $relative = Resolve-KitRelativePath -Root $Root -Path $file.FullName
+        $lines.Add("$($hash.Hash)  $relative") | Out-Null
+    }
+
+    Set-Content -Path $Path -Encoding UTF8 -Value $lines
+}
+
+function Write-InstallPackIndex {
+    param(
+        [string]$Path,
+        [string]$KitRoot,
+        [object[]]$Artifacts,
+        [string]$CoreUrl,
+        [string]$LanText
+    )
+
+    $rows = foreach ($artifact in $Artifacts) {
+        $status = if ($artifact.available) { "可用" } else { "未生成" }
+        $statusClass = if ($artifact.available) { "ok" } else { "warn" }
+        $copiedTo = if ($artifact.copied_to) {
+            Resolve-KitRelativePath -Root $KitRoot -Path $artifact.copied_to
+        } else {
+            "未复制"
+        }
+        $hash = if ($artifact.sha256) { $artifact.sha256 } elseif ($artifact.available) { "见 CHECKSUMS-SHA256.txt" } else { "" }
+        $size = if ($artifact.available) { Format-ByteSize -Bytes $artifact.size_bytes } else { "" }
+        $fileCount = if ($artifact.PSObject.Properties.Name -contains "file_count") {
+            "$($artifact.file_count)"
+        } else {
+            ""
+        }
+        @"
+      <tr>
+        <td>$(ConvertTo-HtmlText $artifact.label)</td>
+        <td class="$statusClass">$(ConvertTo-HtmlText $status)</td>
+        <td><code>$(ConvertTo-HtmlText $copiedTo)</code></td>
+        <td>$(ConvertTo-HtmlText $size)</td>
+        <td>$(ConvertTo-HtmlText $fileCount)</td>
+        <td><code>$(ConvertTo-HtmlText $hash)</code></td>
+      </tr>
+"@
+    }
+
+    $html = @"
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Dubhe 安装包索引</title>
+  <style>
+    body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; margin: 28px; color: #1f2937; background: #f8fafc; }
+    main { max-width: 1100px; margin: 0 auto; background: #fff; border: 1px solid #dbe3ef; border-radius: 8px; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin-top: 28px; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f7; }
+    code { word-break: break-all; }
+    .ok { color: #047857; font-weight: 700; }
+    .warn { color: #b45309; font-weight: 700; }
+    .note { border-left: 4px solid #2563eb; padding-left: 12px; }
+    .danger { border-left: 4px solid #b45309; padding-left: 12px; color: #92400e; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Dubhe 安装包索引</h1>
+    <p>生成时间：$(ConvertTo-HtmlText ((Get-Date).ToString("s")))</p>
+    <p class="note">先打开 <code>README-FIRST.md</code>。本页用于快速确认 Windows / Android 安装产物、校验哈希和仍缺失的 macOS / iOS 发布条件。</p>
+
+    <h2>安装产物</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>项目</th>
+          <th>状态</th>
+          <th>包内路径</th>
+          <th>大小</th>
+          <th>文件数</th>
+          <th>SHA256</th>
+        </tr>
+      </thead>
+      <tbody>
+$($rows -join "`n")
+      </tbody>
+    </table>
+
+    <h2>推荐顺序</h2>
+    <ol>
+      <li>Windows 用户优先使用 <code>01-Windows</code> 里的 setup 安装包；portable 适合免安装测试。</li>
+      <li>Android 用户使用 <code>02-Android</code> 里的 debug APK 内测；AAB 用于后续商店发布链路。</li>
+      <li>手机连接前打开 <code>03-Guides/mobile-connect.html</code>，或双击包根目录里的连接脚本。</li>
+      <li>需要确认安装文件或说明文件没有损坏时，打开 <code>CHECKSUMS-SHA256.txt</code> 对照校验。</li>
+    </ol>
+
+    <h2>Core 地址</h2>
+    <p>本机 Core：<code>$(ConvertTo-HtmlText $CoreUrl)</code></p>
+    <p>局域网候选：<code>$(ConvertTo-HtmlText $LanText)</code></p>
+
+    <p class="danger">当前包仍是内测/本机体验交付物。生产发布前还需要签名、macOS/iOS 构建、云同步、授权数据源、生产身份、不可篡改审计和真实券商 UAT。</p>
+  </main>
+</body>
+</html>
+"@
+
+    Set-Content -Path $Path -Encoding UTF8 -Value $html
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $OutputRoot) {
     $OutputRoot = Join-Path $repoRoot ".dubhe-run\user-kits"
@@ -287,15 +472,27 @@ $readme = Replace-Token $readme "{{ANDROID_APK}}" (Format-DetectedPath $androidA
 $readme = Replace-Token $readme "{{ANDROID_AAB}}" (Format-DetectedPath $androidAab)
 Set-Content -Path (Join-Path $kitRoot "README-FIRST.md") -Encoding UTF8 -Value $readme
 
+$installIndexPath = Join-Path $kitRoot "INSTALL-PACK-INDEX.html"
+Write-InstallPackIndex `
+    -Path $installIndexPath `
+    -KitRoot $kitRoot `
+    -Artifacts $artifacts `
+    -CoreUrl $CoreUrl `
+    -LanText $lanText
+
 $manifest = [pscustomobject]@{
     generated_at = (Get-Date).ToString("s")
     repo_root = $repoRoot
     core_url = $CoreUrl
     kit_root = $kitRoot
     lan_core_urls = $lanUrls
+    install_index = $installIndexPath
+    checksums = Join-Path $kitRoot "CHECKSUMS-SHA256.txt"
     artifacts = $artifacts
 }
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $kitRoot "manifest.json") -Encoding UTF8
+
+Write-ChecksumFile -Root $kitRoot -Path (Join-Path $kitRoot "CHECKSUMS-SHA256.txt")
 
 $zipPath = $null
 if (-not $NoZip) {
