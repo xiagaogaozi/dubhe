@@ -19,6 +19,7 @@
 11. 需要把生产阻断项交给团队补齐时，双击 `10-Export-Production-Pack-This-PC.cmd`。
 12. 需要单独重跑主链路时，双击 `11-Smoke-Dubhe-This-PC.cmd`。
 13. 需要确认最新交付 ZIP 没有损坏或漏文件时，双击 `12-Verify-Dubhe-Delivery-This-PC.cmd`。
+14. 下载 GitHub Actions 四端产物后，双击 `13-Import-Dubhe-CI-Artifacts-This-PC.cmd` 导入并重打交付包。
 
 ## 这个包里的内容
 

@@ -607,6 +607,14 @@ def build_local_launcher_status(root: Path) -> list[LocalLauncherStatus]:
             "如果验证失败，先重新运行 Prepare-Dubhe-Delivery.cmd；生产发布仍需生产门禁通过。",
         ),
         (
+            "import-ci-artifacts",
+            "导入 CI 安装产物",
+            "导入 GitHub Actions 下载的四端安装产物，并重新生成交付 ZIP。",
+            "Import-Dubhe-CI-Artifacts.cmd",
+            "把 artifact ZIP 放入 .dubhe-run\\ci-artifacts 后双击即可导入。",
+            "最终四端交付前仍需运行 verify-delivery-pack.ps1 -RequireAllPlatforms。",
+        ),
+        (
             "install-guide",
             "打开安装指南",
             "打开 Windows/macOS/Android/iOS 的安装和分发说明。",

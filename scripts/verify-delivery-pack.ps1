@@ -215,6 +215,7 @@ try {
                     @{ label = "SHA256 校验清单"; pattern = "CHECKSUMS-SHA256.txt" },
                     @{ label = "用户包 manifest"; pattern = "manifest.json" },
                     @{ label = "交付验证入口"; pattern = "12-Verify-Dubhe-Delivery-This-PC.cmd" },
+                    @{ label = "CI 产物导入入口"; pattern = "13-Import-Dubhe-CI-Artifacts-This-PC.cmd" },
                     @{ label = "Windows setup"; pattern = "01-Windows/Dubhe-*-win-x64-setup.exe" },
                     @{ label = "Windows portable"; pattern = "01-Windows/Dubhe-*-win-x64-portable.exe" },
                     @{ label = "Android debug APK"; pattern = "02-Android/app-debug.apk" },

@@ -69,6 +69,11 @@ $entries = @(
         description = "Verify the latest Dubhe delivery ZIP hash, required installers, and checksums."
     },
     @{
+        name = "Import Dubhe CI Artifacts"
+        file = Join-Path $repoRoot "Import-Dubhe-CI-Artifacts.cmd"
+        description = "Import downloaded GitHub Actions package artifacts and rebuild the delivery ZIP."
+    },
+    @{
         name = "Dubhe Mobile Guide"
         file = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
         description = "Open the Chinese phone/tablet install and connection guide."
