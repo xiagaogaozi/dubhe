@@ -26,8 +26,10 @@
 - Android 安装包目录：`02-Android`
 - 中文向导目录：`03-Guides`，其中 `mobile-connect.html` 是手机连接卡，`production-pack` 是生产上线补齐包。
 - 体检报告目录：`04-Checks`
+- macOS 安装包目录：`05-macOS`，下载 macOS CI 产物后会放入 `.dmg/.zip`。
+- iOS 安装包目录：`06-iOS`，下载 iOS CI 产物后会放入 `Runner.app` 或 `.ipa`。
 - 双击入口：`00-Start-Dubhe-This-PC.cmd` 等文件
-- 安装包索引：`INSTALL-PACK-INDEX.html`，用表格列出 Windows / Android 产物、大小、哈希和缺失项。
+- 安装包索引：`INSTALL-PACK-INDEX.html`，用表格列出 Windows / macOS / iOS / Android 产物、大小、哈希和缺失项。
 - 校验清单：`CHECKSUMS-SHA256.txt`，用于确认主要安装文件、说明文件和报告没有损坏或被替换；Windows 已解包目录不逐文件展开，正式分发优先校验 setup/portable 安装文件。
 
 ## 重要说明
@@ -49,3 +51,7 @@
 - Windows 已解包桌面程序：`{{WINDOWS_UNPACKED_EXE}}`
 - Android debug APK：`{{ANDROID_APK}}`
 - Android release AAB：`{{ANDROID_AAB}}`
+- macOS DMG：`{{MACOS_DMG}}`
+- macOS ZIP：`{{MACOS_ZIP}}`
+- iOS no-codesign app bundle：`{{IOS_APP}}`
+- iOS IPA：`{{IOS_IPA}}`

@@ -89,6 +89,8 @@ cd D:\github\dubhe-main
 
 准备把 ZIP 发出去前，先双击 `Prepare-Dubhe-Delivery.cmd`，再双击 `Verify-Dubhe-Delivery.cmd`。验证会重新计算 ZIP 的 SHA256，检查 Windows setup/portable、Android APK/AAB、安装包索引、校验清单和关键报告是否都在包内，并逐项验证 `CHECKSUMS-SHA256.txt` 里的文件哈希；报告会写入 `.dubhe-run\delivery-verification.txt/json`。
 
+如果要验证“Windows / macOS / iOS / Android 四端安装包都已进入交付 ZIP”，请用命令行运行 `.\scripts\verify-delivery-pack.ps1 -RequireAllPlatforms`；当前 Windows 本机内测包默认只强制 Windows/Android，macOS/iOS 会作为提示项，直到 macOS runner 产物被下载并放入对应目录。
+
 桌面端和移动端都会显示“首次使用清单”，把连接 Core、创建/登录账号、配置模型与新闻源、刷新新闻、AI 分析、跨端同步、纸面交易和实盘风控边界拆成可检查步骤，并提供可点击的下一步操作。
 
 命令行启动方式：
@@ -115,6 +117,8 @@ cd D:\github\dubhe-main
 `prepare-delivery.ps1` 会调用同一个用户包构建器，生成最新交付 ZIP，并把固定摘要写到 `.dubhe-run\LATEST-DUBHE-DELIVERY.txt` 和 `.dubhe-run\latest-delivery.json`；双击 `Prepare-Dubhe-Delivery.cmd` 等价于给非技术交付前做一次“生成最终安装包路径和校验值”的收口。
 
 `verify-delivery-pack.ps1` 会读取 `.dubhe-run\latest-delivery.json`，验证 ZIP 文件存在、大小和 SHA256 与摘要一致，检查关键安装包和说明文件，并按 `CHECKSUMS-SHA256.txt` 逐个重新计算包内文件哈希；失败时返回非零退出码，适合交付前兜底。
+
+`verify-delivery-pack.ps1 -RequireAllPlatforms` 会额外要求 ZIP 内包含 `05-macOS` 里的 `.dmg/.zip` 和 `06-iOS` 里的 `Runner.app/.ipa`，用于最终四端交付门禁。
 
 `check-local-dubhe.ps1` 会用中文检查 Core、桌面端、移动端工具链、新闻源配置、纸面/实盘交易开关、本地审计链和本地安装包状态；它会列出 Windows setup/portable、Android APK/AAB 以及 macOS/iOS 的构建缺口，只读取环境，不会修改系统。`start-local-dubhe.ps1 -RunCheck` 会先启动 Core，再输出同一份体检结果，然后打开已打包的 Dubhe 桌面端；如果没有打包产物，会回退到 Theia 开发启动。
 

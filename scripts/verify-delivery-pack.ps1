@@ -2,6 +2,7 @@
     [string]$SummaryJsonPath = "",
     [string]$ZipPath = "",
     [switch]$Json,
+    [switch]$RequireAllPlatforms,
     [switch]$OpenReport,
     [switch]$OpenFolder
 )
@@ -116,6 +117,20 @@ function Test-EntryPattern {
     return $false
 }
 
+function Test-EntryAnyPattern {
+    param(
+        [string[]]$EntryNames,
+        [string[]]$Patterns
+    )
+
+    foreach ($pattern in $Patterns) {
+        if (Test-EntryPattern -EntryNames $EntryNames -Pattern $pattern) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Write-CheckLine {
     param([pscustomobject]$Check)
 
@@ -219,6 +234,27 @@ try {
                     }
                 }
 
+                $appleEntries = @(
+                    @{
+                        label = "macOS DMG 或 ZIP"
+                        patterns = @("05-macOS/*.dmg", "05-macOS/*.zip")
+                    },
+                    @{
+                        label = "iOS Runner.app 或 IPA"
+                        patterns = @("06-iOS/Runner.app/*", "06-iOS/*.ipa")
+                    }
+                )
+                foreach ($apple in $appleEntries) {
+                    $patternText = $apple.patterns -join " 或 "
+                    if (Test-EntryAnyPattern -EntryNames $entryNames -Patterns $apple.patterns) {
+                        Add-Check (New-Check "四端安装包" $apple.label "ok" $patternText)
+                    } elseif ($RequireAllPlatforms) {
+                        Add-Check (New-Check "四端安装包" $apple.label "fail" "严格四端验证要求存在 $patternText。")
+                    } else {
+                        Add-Check (New-Check "四端安装包" $apple.label "warn" "当前 ZIP 未包含 $patternText；内测可继续，四端正式交付请使用 -RequireAllPlatforms。")
+                    }
+                }
+
                 if (Test-EntryPattern -EntryNames $entryNames -Pattern "01-Windows/win-unpacked/*") {
                     Add-Check (New-Check "包体大小" "排除 win-unpacked" "fail" "ZIP 内包含 01-Windows/win-unpacked；标准交付 ZIP 应只包含 setup/portable。")
                 } else {
@@ -286,6 +322,7 @@ $report = [pscustomobject]@{
     delivery_zip = $deliveryZipPath
     zip_size_bytes = $zipSizeBytes
     sha256 = $actualSha256
+    require_all_platforms = [bool]$RequireAllPlatforms
     verified_checksum_entries = $verifiedChecksumEntries
     failure_count = $failureCount
     warning_count = $warningCount
@@ -302,6 +339,7 @@ $lines.Add("摘要文件：$SummaryJsonPath") | Out-Null
 $lines.Add("ZIP 路径：$deliveryZipPath") | Out-Null
 $lines.Add("ZIP 大小：$(Format-ByteSize -Bytes $zipSizeBytes) ($zipSizeBytes bytes)") | Out-Null
 $lines.Add("SHA256：$actualSha256") | Out-Null
+$lines.Add("严格四端验证：$([bool]$RequireAllPlatforms)") | Out-Null
 $lines.Add("逐文件校验条目：$verifiedChecksumEntries") | Out-Null
 $lines.Add("") | Out-Null
 foreach ($check in $checks) {

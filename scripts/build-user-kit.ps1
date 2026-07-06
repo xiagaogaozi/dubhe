@@ -256,7 +256,7 @@ function Write-ChecksumFile {
         }
     }
 
-    foreach ($directoryName in @("02-Android", "03-Guides", "04-Checks")) {
+    foreach ($directoryName in @("02-Android", "03-Guides", "04-Checks", "05-macOS", "06-iOS")) {
         $directory = Join-Path $Root $directoryName
         if (-not (Test-Path $directory)) {
             continue
@@ -273,6 +273,22 @@ function Write-ChecksumFile {
     }
 
     Set-Content -Path $Path -Encoding UTF8 -Value $lines
+}
+
+function Write-MissingArtifactNote {
+    param(
+        [string]$Path,
+        [string]$Title,
+        [string[]]$Lines
+    )
+
+    $content = [System.Collections.Generic.List[string]]::new()
+    $content.Add($Title) | Out-Null
+    $content.Add("") | Out-Null
+    foreach ($line in $Lines) {
+        $content.Add($line) | Out-Null
+    }
+    Set-Content -Path $Path -Encoding UTF8 -Value $content
 }
 
 function Write-InstallPackIndex {
@@ -336,7 +352,7 @@ function Write-InstallPackIndex {
   <main>
     <h1>Dubhe 安装包索引</h1>
     <p>生成时间：$(ConvertTo-HtmlText ((Get-Date).ToString("s")))</p>
-    <p class="note">先打开 <code>README-FIRST.md</code>。本页用于快速确认 Windows / Android 安装产物、校验哈希和仍缺失的 macOS / iOS 发布条件。</p>
+    <p class="note">先打开 <code>README-FIRST.md</code>。本页用于快速确认 Windows / macOS / iOS / Android 安装产物、校验哈希和仍缺失的发布条件。</p>
 
     <h2>安装产物</h2>
     <table>
@@ -360,7 +376,7 @@ $($rows -join "`n")
       <li>Windows 用户优先使用 <code>01-Windows</code> 里的 setup 安装包；portable 适合免安装测试。</li>
       <li>Android 用户使用 <code>02-Android</code> 里的 debug APK 内测；AAB 用于后续商店发布链路。</li>
       <li>手机连接前打开 <code>03-Guides/mobile-connect.html</code>，或双击包根目录里的连接脚本。</li>
-      <li>需要确认安装文件或说明文件没有损坏时，打开 <code>CHECKSUMS-SHA256.txt</code> 对照校验。</li>
+      <li>需要确认安装文件或说明文件没有损坏时，打开 <code>CHECKSUMS-SHA256.txt</code> 对照校验；最终四端交付前运行 <code>verify-delivery-pack.ps1 -RequireAllPlatforms</code>。</li>
     </ol>
 
     <h2>Core 地址</h2>
@@ -431,6 +447,8 @@ $windowsDir = Join-Path $kitRoot "01-Windows"
 $androidDir = Join-Path $kitRoot "02-Android"
 $guidesDir = Join-Path $kitRoot "03-Guides"
 $checksDir = Join-Path $kitRoot "04-Checks"
+$macosDir = Join-Path $kitRoot "05-macOS"
+$iosDir = Join-Path $kitRoot "06-iOS"
 
 $theiaDist = Join-Path $repoRoot "apps\theia-desktop\app\dist"
 $mobileRoot = Join-Path $repoRoot "apps\mobile"
@@ -439,12 +457,16 @@ $windowsPortable = Resolve-NewestFile $theiaDist "Dubhe-*-win-x64-portable.exe"
 $windowsUnpackedDir = Join-Path $theiaDist "win-unpacked"
 $windowsUnpackedExe = Join-Path $windowsUnpackedDir "Dubhe.exe"
 $windowsUnpacked = if (Test-Path $windowsUnpackedExe) { $windowsUnpackedDir } else { $null }
+$macosDmg = Resolve-NewestFile $theiaDist "Dubhe-*-mac-*.dmg"
+$macosZip = Resolve-NewestFile $theiaDist "Dubhe-*-mac-*.zip"
 $androidApk = Join-Path $mobileRoot "build\app\outputs\flutter-apk\app-debug.apk"
 $androidAab = Join-Path $mobileRoot "build\app\outputs\bundle\release\app-release.aab"
+$iosApp = Join-Path $mobileRoot "build\ios\iphoneos\Runner.app"
+$iosIpa = Resolve-NewestFile (Join-Path $mobileRoot "build\ios\ipa") "*.ipa"
 $lanUrls = @(Get-LanCoreUrls -Port ([System.Uri]$CoreUrl).Port)
 $lanText = if ($lanUrls.Count -gt 0) { $lanUrls -join " / " } else { "(no LAN IPv4 address detected)" }
 
-New-Item -ItemType Directory -Force -Path $windowsDir, $androidDir, $guidesDir, $checksDir | Out-Null
+New-Item -ItemType Directory -Force -Path $windowsDir, $androidDir, $guidesDir, $checksDir, $macosDir, $iosDir | Out-Null
 
 $artifacts = @(
     Copy-Artifact -Path $windowsSetup -DestinationDirectory $windowsDir -Label "Windows setup"
@@ -452,7 +474,35 @@ $artifacts = @(
     Copy-DirectoryArtifact -Path $windowsUnpacked -DestinationDirectory $windowsDir -Label "Windows unpacked desktop"
     Copy-Artifact -Path $androidApk -DestinationDirectory $androidDir -Label "Android debug APK"
     Copy-Artifact -Path $androidAab -DestinationDirectory $androidDir -Label "Android release AAB"
+    Copy-Artifact -Path $macosDmg -DestinationDirectory $macosDir -Label "macOS DMG"
+    Copy-Artifact -Path $macosZip -DestinationDirectory $macosDir -Label "macOS ZIP"
+    Copy-DirectoryArtifact -Path $iosApp -DestinationDirectory $iosDir -Label "iOS no-codesign app bundle"
+    Copy-Artifact -Path $iosIpa -DestinationDirectory $iosDir -Label "iOS IPA"
 )
+
+if (-not $macosDmg -and -not $macosZip) {
+    Write-MissingArtifactNote `
+        -Path (Join-Path $macosDir "README-missing-macos.txt") `
+        -Title "macOS 安装包尚未放入本交付包" `
+        -Lines @(
+            "当前 Windows 本机不能生成 macOS dmg/zip。",
+            "请在 macOS runner 或真实 Mac 上运行 docs/ci/theia-desktop.yml 对应流程。",
+            "下载 GitHub Actions 产物后，把 .dmg 或 .zip 放入 apps/theia-desktop/app/dist，再重新运行 Prepare-Dubhe-Delivery.cmd。",
+            "最终四端交付前必须运行 scripts\verify-delivery-pack.ps1 -RequireAllPlatforms。"
+        )
+}
+
+if (-not (Test-Path $iosApp) -and -not $iosIpa) {
+    Write-MissingArtifactNote `
+        -Path (Join-Path $iosDir "README-missing-ios.txt") `
+        -Title "iOS 安装包尚未放入本交付包" `
+        -Lines @(
+            "当前 Windows 本机不能生成 iOS Runner.app 或 IPA。",
+            "请在 macOS + Xcode 环境运行 docs/ci/mobile.yml 对应流程。",
+            "下载 GitHub Actions 产物后，把 Runner.app 放入 apps/mobile/build/ios/iphoneos，或把 .ipa 放入 apps/mobile/build/ios/ipa，再重新运行 Prepare-Dubhe-Delivery.cmd。",
+            "最终四端交付前必须运行 scripts\verify-delivery-pack.ps1 -RequireAllPlatforms。"
+        )
+}
 
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\show-install-guide.ps1") -Path (Join-Path $checksDir "render-install-guide.txt")
 Invoke-QuietScript -ScriptPath (Join-Path $repoRoot "scripts\show-mobile-guide.ps1") -Path (Join-Path $checksDir "render-mobile-guide.txt")
@@ -516,6 +566,10 @@ $readme = Replace-Token $readme "{{WINDOWS_PORTABLE}}" (Format-DetectedPath $win
 $readme = Replace-Token $readme "{{WINDOWS_UNPACKED_EXE}}" (Format-DetectedPath $windowsUnpackedExe)
 $readme = Replace-Token $readme "{{ANDROID_APK}}" (Format-DetectedPath $androidApk)
 $readme = Replace-Token $readme "{{ANDROID_AAB}}" (Format-DetectedPath $androidAab)
+$readme = Replace-Token $readme "{{MACOS_DMG}}" (Format-DetectedPath $macosDmg)
+$readme = Replace-Token $readme "{{MACOS_ZIP}}" (Format-DetectedPath $macosZip)
+$readme = Replace-Token $readme "{{IOS_APP}}" (Format-DetectedPath $iosApp)
+$readme = Replace-Token $readme "{{IOS_IPA}}" (Format-DetectedPath $iosIpa)
 Set-Content -Path (Join-Path $kitRoot "README-FIRST.md") -Encoding UTF8 -Value $readme
 
 $installIndexPath = Join-Path $kitRoot "INSTALL-PACK-INDEX.html"
