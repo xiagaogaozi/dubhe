@@ -223,6 +223,7 @@ $startCmd = Join-Path $repoRoot "Start-Dubhe.cmd"
 $startLanCmd = Join-Path $repoRoot "Start-Dubhe-LAN.cmd"
 $connectMobileCmd = Join-Path $repoRoot "Connect-Dubhe-Mobile.cmd"
 $userKitCmd = Join-Path $repoRoot "Build-Dubhe-User-Kit.cmd"
+$deliveryCmd = Join-Path $repoRoot "Prepare-Dubhe-Delivery.cmd"
 $installGuideCmd = Join-Path $repoRoot "Open-Dubhe-Install-Guide.cmd"
 $mobileGuideCmd = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
 $acceptCmd = Join-Path $repoRoot "Accept-Dubhe.cmd"
@@ -268,6 +269,7 @@ Add-Check (New-Check "Windows 入口" "双击启动" ($(if (Test-Path $startCmd)
 Add-Check (New-Check "Windows 入口" "双击手机局域网启动" ($(if (Test-Path $startLanCmd) { "ok" } else { "warn" })) ($(if (Test-Path $startLanCmd) { $startLanCmd } else { "缺少 Start-Dubhe-LAN.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机扫码连接" ($(if (Test-Path $connectMobileCmd) { "ok" } else { "warn" })) ($(if (Test-Path $connectMobileCmd) { $connectMobileCmd } else { "缺少 Connect-Dubhe-Mobile.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击生成用户交付包" ($(if (Test-Path $userKitCmd) { "ok" } else { "warn" })) ($(if (Test-Path $userKitCmd) { $userKitCmd } else { "缺少 Build-Dubhe-User-Kit.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击生成最终交付 ZIP" ($(if (Test-Path $deliveryCmd) { "ok" } else { "warn" })) ($(if (Test-Path $deliveryCmd) { $deliveryCmd } else { "缺少 Prepare-Dubhe-Delivery.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击四端安装向导" ($(if (Test-Path $installGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $installGuideCmd) { $installGuideCmd } else { "缺少 Open-Dubhe-Install-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机连接向导" ($(if (Test-Path $mobileGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $mobileGuideCmd) { $mobileGuideCmd } else { "缺少 Open-Dubhe-Mobile-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击本机完整验收" ($(if (Test-Path $acceptCmd) { "ok" } else { "warn" })) ($(if (Test-Path $acceptCmd) { $acceptCmd } else { "缺少 Accept-Dubhe.cmd。" })))

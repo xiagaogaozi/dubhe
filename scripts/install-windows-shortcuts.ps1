@@ -59,6 +59,11 @@ $entries = @(
         description = "Gather installers, APKs, guides, checks, and this-PC launchers for internal users."
     },
     @{
+        name = "Prepare Dubhe Delivery"
+        file = Join-Path $repoRoot "Prepare-Dubhe-Delivery.cmd"
+        description = "Build the latest Dubhe delivery ZIP and write its SHA256 summary."
+    },
+    @{
         name = "Dubhe Mobile Guide"
         file = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
         description = "Open the Chinese phone/tablet install and connection guide."

@@ -604,6 +604,14 @@ def build_local_launcher_status(root: Path) -> list[LocalLauncherStatus]:
             "生成前先确认安装包状态和生产门禁结果。",
         ),
         (
+            "prepare-delivery",
+            "生成最终交付 ZIP",
+            "生成最新交付 ZIP，并写出固定路径的交付摘要和 SHA256。",
+            "Prepare-Dubhe-Delivery.cmd",
+            "双击即可生成最新交付 ZIP 和校验摘要。",
+            "交付前仍需查看生产门禁；当前内测 ZIP 不等同于签名生产安装器。",
+        ),
+        (
             "install-guide",
             "打开安装指南",
             "打开 Windows/macOS/Android/iOS 的安装和分发说明。",
