@@ -227,6 +227,7 @@ $deliveryCmd = Join-Path $repoRoot "Prepare-Dubhe-Delivery.cmd"
 $deliveryVerifyCmd = Join-Path $repoRoot "Verify-Dubhe-Delivery.cmd"
 $ciArtifactImportCmd = Join-Path $repoRoot "Import-Dubhe-CI-Artifacts.cmd"
 $releaseEvidenceCmd = Join-Path $repoRoot "Export-Dubhe-Release-Evidence.cmd"
+$githubActionsAuthorizeCmd = Join-Path $repoRoot "Authorize-Dubhe-GitHub-Actions.cmd"
 $githubActionsCmd = Join-Path $repoRoot "Activate-Dubhe-GitHub-Actions.cmd"
 $installGuideCmd = Join-Path $repoRoot "Open-Dubhe-Install-Guide.cmd"
 $mobileGuideCmd = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
@@ -254,6 +255,7 @@ $productionPackScript = Join-Path $repoRoot "scripts\export-production-pack.ps1"
 $deliveryVerifyScript = Join-Path $repoRoot "scripts\verify-delivery-pack.ps1"
 $ciArtifactImportScript = Join-Path $repoRoot "scripts\import-ci-artifacts.ps1"
 $releaseEvidenceScript = Join-Path $repoRoot "scripts\export-release-evidence.ps1"
+$githubActionsAuthorizeScript = Join-Path $repoRoot "scripts\authorize-github-workflow-scope.ps1"
 $githubActionsScript = Join-Path $repoRoot "scripts\activate-github-actions.ps1"
 $desktopExe = Join-Path $theiaRoot "app\dist\win-unpacked\Dubhe.exe"
 $desktopDist = Join-Path $theiaRoot "app\dist"
@@ -281,6 +283,7 @@ Add-Check (New-Check "Windows 入口" "双击生成最终交付 ZIP" ($(if (Test
 Add-Check (New-Check "Windows 入口" "双击验证最终交付 ZIP" ($(if (Test-Path $deliveryVerifyCmd) { "ok" } else { "warn" })) ($(if (Test-Path $deliveryVerifyCmd) { $deliveryVerifyCmd } else { "缺少 Verify-Dubhe-Delivery.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击导入 CI 产物" ($(if (Test-Path $ciArtifactImportCmd) { "ok" } else { "warn" })) ($(if (Test-Path $ciArtifactImportCmd) { $ciArtifactImportCmd } else { "缺少 Import-Dubhe-CI-Artifacts.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击导出发行证据包" ($(if (Test-Path $releaseEvidenceCmd) { "ok" } else { "warn" })) ($(if (Test-Path $releaseEvidenceCmd) { $releaseEvidenceCmd } else { "缺少 Export-Dubhe-Release-Evidence.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击授权 GitHub Actions" ($(if (Test-Path $githubActionsAuthorizeCmd) { "ok" } else { "warn" })) ($(if (Test-Path $githubActionsAuthorizeCmd) { $githubActionsAuthorizeCmd } else { "缺少 Authorize-Dubhe-GitHub-Actions.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击激活 GitHub Actions" ($(if (Test-Path $githubActionsCmd) { "ok" } else { "warn" })) ($(if (Test-Path $githubActionsCmd) { $githubActionsCmd } else { "缺少 Activate-Dubhe-GitHub-Actions.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击四端安装向导" ($(if (Test-Path $installGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $installGuideCmd) { $installGuideCmd } else { "缺少 Open-Dubhe-Install-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机连接向导" ($(if (Test-Path $mobileGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $mobileGuideCmd) { $mobileGuideCmd } else { "缺少 Open-Dubhe-Mobile-Guide.cmd。" })))
@@ -308,6 +311,7 @@ Add-Check (New-Check "生产门禁" "生产补齐包脚本" ($(if (Test-Path $pr
 Add-Check (New-Check "交付包" "最终 ZIP 验证脚本" ($(if (Test-Path $deliveryVerifyScript) { "ok" } else { "warn" })) ($(if (Test-Path $deliveryVerifyScript) { $deliveryVerifyScript } else { "缺少 scripts/verify-delivery-pack.ps1。" })))
 Add-Check (New-Check "交付包" "CI 产物导入脚本" ($(if (Test-Path $ciArtifactImportScript) { "ok" } else { "warn" })) ($(if (Test-Path $ciArtifactImportScript) { $ciArtifactImportScript } else { "缺少 scripts/import-ci-artifacts.ps1。" })))
 Add-Check (New-Check "交付包" "发行证据包脚本" ($(if (Test-Path $releaseEvidenceScript) { "ok" } else { "warn" })) ($(if (Test-Path $releaseEvidenceScript) { $releaseEvidenceScript } else { "缺少 scripts/export-release-evidence.ps1。" })))
+Add-Check (New-Check "交付包" "GitHub Actions 授权脚本" ($(if (Test-Path $githubActionsAuthorizeScript) { "ok" } else { "warn" })) ($(if (Test-Path $githubActionsAuthorizeScript) { $githubActionsAuthorizeScript } else { "缺少 scripts/authorize-github-workflow-scope.ps1。" })))
 Add-Check (New-Check "交付包" "GitHub Actions 激活脚本" ($(if (Test-Path $githubActionsScript) { "ok" } else { "warn" })) ($(if (Test-Path $githubActionsScript) { $githubActionsScript } else { "缺少 scripts/activate-github-actions.ps1。" })))
 
 $venvPython = Join-Path $coreRoot ".venv\Scripts\python.exe"
@@ -440,7 +444,7 @@ if (Test-Path $mobileReleaseAab) {
     Add-Check (New-Check "安装包" "Android release AAB" "warn" "尚未生成 release AAB；正式分发前还需要签名、图标和商店元数据。")
 }
 
-Add-Check (New-Check "安装包" "macOS / iOS" "warn" "当前 Windows 本机不能生成 macOS/iOS 包；请先运行 Activate-Dubhe-GitHub-Actions.cmd 激活 workflow，再导入 GitHub Actions 产物。")
+Add-Check (New-Check "安装包" "macOS / iOS" "warn" "当前 Windows 本机不能生成 macOS/iOS 包；请先运行 Authorize-Dubhe-GitHub-Actions.cmd 和 Activate-Dubhe-GitHub-Actions.cmd，再导入 GitHub Actions 产物。")
 
 if ($lanCoreUrls.Count -eq 0) {
     Add-Check (New-Check "移动端" "手机连接地址" "warn" "未检测到可用局域网 IPv4 地址；真机需要电脑和手机在同一 Wi-Fi/局域网。")

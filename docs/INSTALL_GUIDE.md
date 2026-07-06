@@ -79,7 +79,7 @@ http://10.0.2.2:8000
 7. 双击 `Check-Dubhe-Production.cmd` 查看商业生产上线阻断项。
 8. 双击 `Export-Dubhe-Production-Pack.cmd` 导出阻断项、负责人和供应商/账号材料清单。
 9. 需要把当前产物交给本机用户试用时，双击 `Build-Dubhe-User-Kit.cmd`。
-10. 如果 GitHub Actions 尚未启用，双击 `Activate-Dubhe-GitHub-Actions.cmd`；若提示缺少 `workflow` scope，按报告重新授权 GitHub CLI。
+10. 如果 GitHub Actions 尚未启用，先双击 `Authorize-Dubhe-GitHub-Actions.cmd`，再双击 `Activate-Dubhe-GitHub-Actions.cmd`。
 11. 如果已经从 GitHub Actions 下载到 macOS/iOS/Android/Windows 构建产物，先放入 `.dubhe-run\ci-artifacts`，再双击 `Import-Dubhe-CI-Artifacts.cmd`。
 12. 准备发出 ZIP 前，先双击 `Prepare-Dubhe-Delivery.cmd`，再双击 `Verify-Dubhe-Delivery.cmd`。
 13. 需要给负责人或测试人员看当前交付状态时，双击 `Export-Dubhe-Release-Evidence.cmd`。

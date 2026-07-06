@@ -79,6 +79,11 @@ $entries = @(
         description = "Export delivery, four-platform, local-check, and production-readiness evidence."
     },
     @{
+        name = "Authorize Dubhe GitHub Actions"
+        file = Join-Path $repoRoot "Authorize-Dubhe-GitHub-Actions.cmd"
+        description = "Authorize GitHub CLI workflow scope for package-building workflows."
+    },
+    @{
         name = "Activate Dubhe GitHub Actions"
         file = Join-Path $repoRoot "Activate-Dubhe-GitHub-Actions.cmd"
         description = "Activate package-building GitHub Actions workflows when gh has workflow scope."

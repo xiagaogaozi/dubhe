@@ -85,7 +85,7 @@ if ($CommitAndPush) {
         $nextStep = "请先安装 GitHub CLI gh，再重新运行本脚本。"
     } elseif (-not $hasWorkflowScope) {
         $activationStatus = "blocked"
-        $nextStep = "当前 GitHub CLI token 缺少 workflow scope。请运行 gh auth refresh -h github.com -s workflow，授权完成后重新双击 Activate-Dubhe-GitHub-Actions.cmd。"
+        $nextStep = "当前 GitHub CLI token 缺少 workflow scope。请先双击 Authorize-Dubhe-GitHub-Actions.cmd 完成授权，再重新双击 Activate-Dubhe-GitHub-Actions.cmd。"
     } else {
         $addResult = Invoke-Capture -FilePath "git" -Arguments @(
             "add",
@@ -102,7 +102,15 @@ if ($CommitAndPush) {
             $activationStatus = "already_active"
             $nextStep = "远端可能已经包含相同 workflow；请到 GitHub Actions 页面确认。"
         } else {
-            $commitResult = Invoke-Capture -FilePath "git" -Arguments @("commit", "-m", $CommitMessage)
+            $commitResult = Invoke-Capture -FilePath "git" -Arguments @(
+                "commit",
+                "-m",
+                $CommitMessage,
+                "--",
+                ".github/workflows/core.yml",
+                ".github/workflows/theia-desktop.yml",
+                ".github/workflows/mobile.yml"
+            )
             if ($commitResult.exit_code -ne 0) {
                 $activationStatus = "blocked"
                 $nextStep = "workflow 文件已复制，但 git commit 失败。请查看报告并手动处理。"

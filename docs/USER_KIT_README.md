@@ -21,7 +21,8 @@
 13. 需要确认最新交付 ZIP 没有损坏或漏文件时，双击 `12-Verify-Dubhe-Delivery-This-PC.cmd`。
 14. 下载 GitHub Actions 四端产物后，双击 `13-Import-Dubhe-CI-Artifacts-This-PC.cmd` 导入并重打交付包。
 15. 需要查看当前是否能发行或还缺什么时，双击 `14-Export-Dubhe-Release-Evidence-This-PC.cmd`。
-16. 需要启用 GitHub Actions 四端构建时，双击 `15-Activate-Dubhe-GitHub-Actions-This-PC.cmd`。
+16. 需要给 GitHub CLI 补 workflow 权限时，双击 `15-Authorize-Dubhe-GitHub-Actions-This-PC.cmd`。
+17. 需要启用 GitHub Actions 四端构建时，双击 `16-Activate-Dubhe-GitHub-Actions-This-PC.cmd`。
 
 ## 这个包里的内容
 
