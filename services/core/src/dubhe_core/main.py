@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .analysis import analyze_news
 from .alpaca_broker import active_paper_broker_adapter, load_alpaca_paper_config
 from .assistant import answer_research_question
+from .auth_runtime import auth_runtime_status
 from .backtest import draft_strategy_from_analysis, run_replay_backtest
 from .external_checks import external_service_checks
 from .models import (
@@ -57,7 +58,6 @@ from .models import (
     DeviceRegistrationRequest,
     DeviceSession,
     Market,
-    AuthRuntimeStatus,
     StrategySpec,
     StrategyDraft,
     StrategyDraftRequest,
@@ -75,7 +75,7 @@ from .models import (
     WorkspaceSnapshot,
 )
 from .llm import llm_runtime_status
-from .local_mfa import local_mfa_runtime_message_zh, local_mfa_runtime_mode
+from .local_mfa import local_mfa_runtime_mode
 from .news_sources import fetch_news_feed
 from .production_readiness import production_readiness_response
 from .risk import evaluate_order_intent
@@ -130,7 +130,7 @@ def system_status() -> SystemStatusResponse:
     llm_status = llm_runtime_status()
     alpaca_config = load_alpaca_paper_config()
     paper_broker_adapter = active_paper_broker_adapter()
-    mfa_mode = local_mfa_runtime_mode()
+    auth_status = auth_runtime_status()
     storage_status = storage_runtime_status(store.db_path)
     news_adapters = [
         NewsAdapterRuntimeStatus(
@@ -196,11 +196,7 @@ def system_status() -> SystemStatusResponse:
         service="dubhe-core",
         version=CORE_VERSION,
         storage=storage_status,
-        auth=AuthRuntimeStatus(
-            mode="local_dev",
-            mfa_mode=mfa_mode,
-            message_zh=local_mfa_runtime_message_zh(),
-        ),
+        auth=auth_status,
         config_items=[
             RuntimeConfigStatus(
                 key="FINNHUB_API_KEY",

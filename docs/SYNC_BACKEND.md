@@ -201,6 +201,24 @@ ws://127.0.0.1:8000/v1/workspaces/{workspace_id}/sync-events/ws?access_token=dub
 - 工作区快照、自选股写入、增量事件、WebSocket 实时同步、风控评估、风险决策列表、纸面订单、纸面组合、审批请求、kill switch、角色分配和审计日志端点已经要求设备 token；跨工作区 token 会被拒绝。
 - AI 仍不能调用真实券商下单接口；交易必须经过 Risk Service。
 
+## 生产身份配置探针
+
+`/v1/system/status` 的 `auth` 字段会区分“当前实际认证模式”和“生产目标配置”。当前实际认证仍是 `local_dev`；下列变量只用于生产准备检查，不会单独启用 OIDC：
+
+```text
+DUBHE_AUTH_MODE=oidc
+DUBHE_OIDC_ISSUER_URL=https://login.example.com/realms/dubhe
+DUBHE_OIDC_CLIENT_ID=dubhe-client
+DUBHE_OIDC_CLIENT_SECRET=...
+DUBHE_OIDC_REDIRECT_URI=dubhe://auth/callback
+DUBHE_SESSION_SIGNING_KEY=...
+DUBHE_REFRESH_TOKEN_TTL_DAYS=30
+DUBHE_OIDC_MFA_POLICY_URL=https://docs.example.com/dubhe/identity-mfa-policy
+DUBHE_IDENTITY_RUNBOOK_URL=https://docs.example.com/dubhe/identity-runbook
+```
+
+生产门禁会继续失败，直到 OIDC 登录、刷新令牌、会话撤销、角色映射和管理员审计真正实现并启用。即使这些变量全部填写，Dubhe 也只会报告“配置材料齐全但当前仍运行 local_dev”。
+
 ## 本地数据库
 
 默认数据库路径：

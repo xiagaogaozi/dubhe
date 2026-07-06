@@ -200,6 +200,15 @@ class StorageRuntimeStatus(BaseModel):
 class AuthRuntimeStatus(BaseModel):
     mode: Literal["local_dev"]
     mfa_mode: Literal["local_placeholder", "totp"]
+    target_mode: str = "local_dev"
+    oidc_configured: bool = False
+    session_signing_configured: bool = False
+    refresh_token_policy_configured: bool = False
+    mfa_policy_configured: bool = False
+    identity_runbook_configured: bool = False
+    production_ready: bool = False
+    missing_items_zh: list[str] = Field(default_factory=list)
+    next_step_zh: str = ""
     message_zh: str
 
 

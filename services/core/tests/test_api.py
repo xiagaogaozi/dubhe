@@ -146,6 +146,9 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     assert body["storage"]["production_ready"] is False
     assert "DUBHE_DATABASE_URL" in "、".join(body["storage"]["missing_items_zh"])
     assert body["auth"]["mfa_mode"] == "local_placeholder"
+    assert body["auth"]["target_mode"] == "local_dev"
+    assert body["auth"]["production_ready"] is False
+    assert "DUBHE_AUTH_MODE=oidc" in "、".join(body["auth"]["missing_items_zh"])
     assert body["llm"]["enabled"] is False
     assert body["llm"]["fallback_available"] is True
     assert body["trading"]["paper_broker_enabled"] is True
@@ -218,6 +221,33 @@ def test_system_status_reports_production_storage_probe(monkeypatch) -> None:
     assert storage["production_ready"] is False
     assert storage["missing_items_zh"] == []
     assert "当前运行后端仍为 SQLite" in storage["message_zh"]
+
+
+def test_system_status_reports_production_identity_probe(monkeypatch) -> None:
+    monkeypatch.setenv("DUBHE_AUTH_MODE", "oidc")
+    monkeypatch.setenv("DUBHE_OIDC_ISSUER_URL", "https://login.example.com/realms/dubhe")
+    monkeypatch.setenv("DUBHE_OIDC_CLIENT_ID", "dubhe-client")
+    monkeypatch.setenv("DUBHE_OIDC_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("DUBHE_OIDC_REDIRECT_URI", "dubhe://auth/callback")
+    monkeypatch.setenv("DUBHE_SESSION_SIGNING_KEY", "x" * 32)
+    monkeypatch.setenv("DUBHE_REFRESH_TOKEN_TTL_DAYS", "30")
+    monkeypatch.setenv("DUBHE_OIDC_MFA_POLICY_URL", "https://docs.example.com/mfa")
+    monkeypatch.setenv("DUBHE_IDENTITY_RUNBOOK_URL", "https://docs.example.com/identity")
+
+    response = client.get("/v1/system/status")
+
+    assert response.status_code == 200
+    auth = response.json()["auth"]
+    assert auth["mode"] == "local_dev"
+    assert auth["target_mode"] == "oidc"
+    assert auth["oidc_configured"] is True
+    assert auth["session_signing_configured"] is True
+    assert auth["refresh_token_policy_configured"] is True
+    assert auth["mfa_policy_configured"] is True
+    assert auth["identity_runbook_configured"] is True
+    assert auth["production_ready"] is False
+    assert auth["missing_items_zh"] == []
+    assert "当前运行认证仍为 local_dev" in auth["message_zh"]
 
 
 def test_local_mfa_placeholder_uses_configurable_fixed_code(monkeypatch) -> None:

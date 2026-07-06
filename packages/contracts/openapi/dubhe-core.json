@@ -2665,6 +2665,53 @@
             ],
             "title": "Mfa Mode"
           },
+          "target_mode": {
+            "type": "string",
+            "title": "Target Mode",
+            "default": "local_dev"
+          },
+          "oidc_configured": {
+            "type": "boolean",
+            "title": "Oidc Configured",
+            "default": false
+          },
+          "session_signing_configured": {
+            "type": "boolean",
+            "title": "Session Signing Configured",
+            "default": false
+          },
+          "refresh_token_policy_configured": {
+            "type": "boolean",
+            "title": "Refresh Token Policy Configured",
+            "default": false
+          },
+          "mfa_policy_configured": {
+            "type": "boolean",
+            "title": "Mfa Policy Configured",
+            "default": false
+          },
+          "identity_runbook_configured": {
+            "type": "boolean",
+            "title": "Identity Runbook Configured",
+            "default": false
+          },
+          "production_ready": {
+            "type": "boolean",
+            "title": "Production Ready",
+            "default": false
+          },
+          "missing_items_zh": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Items Zh"
+          },
+          "next_step_zh": {
+            "type": "string",
+            "title": "Next Step Zh",
+            "default": ""
+          },
           "message_zh": {
             "type": "string",
             "title": "Message Zh"
