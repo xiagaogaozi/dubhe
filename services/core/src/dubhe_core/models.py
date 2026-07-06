@@ -190,7 +190,7 @@ class StorageRuntimeStatus(BaseModel):
 
 class AuthRuntimeStatus(BaseModel):
     mode: Literal["local_dev"]
-    mfa_mode: Literal["local_placeholder"]
+    mfa_mode: Literal["local_placeholder", "totp"]
     message_zh: str
 
 

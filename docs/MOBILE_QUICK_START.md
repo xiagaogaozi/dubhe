@@ -24,7 +24,7 @@
 4. 在手机登录页点击 “检查连接”。成功后地址会保存。
 5. 安装上方 APK 路径里的 `app-debug.apk`，然后注册或登录本地账号。
 
-第一次使用真实 AI 或授权新闻源时，先在电脑上双击 `Configure-Dubhe.cmd`，按中文向导填写 key；不知道的项目直接回车即可。保存后重新启动 Dubhe Core，再回到手机端同步状态。
+第一次使用真实 AI 或授权新闻源时，先在电脑上双击 `Configure-Dubhe.cmd`，按中文向导填写 key；不知道的项目直接回车即可。需要动态登录验证码时，再双击 `Setup-Dubhe-MFA.cmd`，用认证器 App 扫码。保存后重新启动 Dubhe Core，再回到手机端同步状态。
 
 如果 APK 路径后面显示 `(not built yet)`，说明这台电脑还没有生成 Android 调试包。开发者可以在 `apps/mobile` 下执行：
 
@@ -57,4 +57,5 @@ http://127.0.0.1:8000
 - 检查连接失败：先重新双击 `Connect-Dubhe-Mobile.cmd`，确认 Core 已经用局域网模式启动，并优先使用连接卡显示的第一个地址。
 - 地址填了但手机打不开：确认手机和电脑在同一个 Wi-Fi，且 Windows 防火墙允许专用网络访问。
 - 登录后没有新闻或 AI：先双击 `Configure-Dubhe.cmd` 填写授权新闻源和 AI 模型 key，或在客户端 “系统状态 / 数据源配置” 中填写。
+- 登录验证码不想继续用固定占位码：在电脑上双击 `Setup-Dubhe-MFA.cmd`，扫码后重启 Core。
 - 想确认整套链路是否可用：优先双击 `Accept-Dubhe.cmd` 跑本机完整验收；只想单独验证主链路时，再双击 `Smoke-Dubhe.cmd`。

@@ -62,6 +62,15 @@ $env:DUBHE_CORE_DB_PATH="D:\dubhe-data\dubhe-core.sqlite"
 $env:DUBHE_LOCAL_MFA_CODE="123456"
 ```
 
+也可以启用本机 TOTP 动态验证码：
+
+```powershell
+$env:DUBHE_LOCAL_MFA_MODE="totp"
+$env:DUBHE_LOCAL_TOTP_SECRET="Base32 secret"
+```
+
+Windows 非技术用户优先双击仓库根目录的 `Setup-Dubhe-MFA.cmd`，脚本会生成密钥、二维码和 `.dubhe-run\local-mfa.html` 说明，并写入 `config\dubhe.local.env`。该能力仍属于本地开发认证；生产版仍需替换为 OIDC、正式 MFA、刷新令牌和集中身份审计。
+
 角色：
 
 - `admin`：管理员，可访问审批列表、审批/拒绝请求、查看和切换 kill switch、查看账号列表、分配角色、查看审计日志。

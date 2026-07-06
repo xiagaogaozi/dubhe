@@ -50,6 +50,7 @@ from .models import (
     WorkspaceSnapshot,
     utc_now,
 )
+from .local_mfa import verify_local_mfa_code
 
 
 DEFAULT_WATCHLIST = [
@@ -72,7 +73,6 @@ DEFAULT_PAPER_CASH_BY_CURRENCY = {
 ModelT = TypeVar("ModelT", bound=BaseModel)
 PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 120_000
-LOCAL_MFA_CODE = os.environ.get("DUBHE_LOCAL_MFA_CODE", "000000")
 
 
 def hash_access_token(access_token: str) -> str:
@@ -110,10 +110,6 @@ def verify_password(password: str, stored_hash: str | None) -> bool:
         iteration_count,
     ).hex()
     return hmac.compare_digest(digest, expected)
-
-
-def verify_local_mfa_code(mfa_code: str) -> bool:
-    return hmac.compare_digest(mfa_code, LOCAL_MFA_CODE)
 
 
 def default_db_path() -> str:

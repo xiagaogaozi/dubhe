@@ -76,6 +76,7 @@ from .models import (
     WorkspaceSnapshot,
 )
 from .llm import llm_runtime_status
+from .local_mfa import local_mfa_runtime_message_zh, local_mfa_runtime_mode
 from .news_sources import fetch_news_feed
 from .production_readiness import production_readiness_response
 from .risk import evaluate_order_intent
@@ -129,6 +130,7 @@ def system_status() -> SystemStatusResponse:
     llm_status = llm_runtime_status()
     alpaca_config = load_alpaca_paper_config()
     paper_broker_adapter = active_paper_broker_adapter()
+    mfa_mode = local_mfa_runtime_mode()
     persistent_storage = store.db_path != ":memory:"
     news_adapters = [
         NewsAdapterRuntimeStatus(
@@ -205,8 +207,8 @@ def system_status() -> SystemStatusResponse:
         ),
         auth=AuthRuntimeStatus(
             mode="local_dev",
-            mfa_mode="local_placeholder",
-            message_zh="当前为本地开发认证：账号密码、设备令牌、角色权限和占位 MFA。生产版需替换为 OIDC/MFA。",
+            mfa_mode=mfa_mode,
+            message_zh=local_mfa_runtime_message_zh(),
         ),
         config_items=[
             RuntimeConfigStatus(
@@ -554,6 +556,14 @@ def build_local_launcher_status(root: Path) -> list[LocalLauncherStatus]:
             "填写后重新启动 Dubhe，再点击系统体检。",
         ),
         (
+            "setup-mfa",
+            "设置本地动态验证码",
+            "生成本机 TOTP 二维码和密钥，供账号注册/登录时输入 6 位动态验证码。",
+            "Setup-Dubhe-MFA.cmd",
+            "双击后用认证器 App 扫码，并重启 Dubhe Core。",
+            "如果仍显示占位 MFA，请先运行 Setup-Dubhe-MFA.cmd，然后重启 Dubhe。",
+        ),
+        (
             "check-local",
             "检查本机环境",
             "检查 Node、Python、Flutter、依赖和基础目录是否可用。",
@@ -805,6 +815,9 @@ def system_production_readiness() -> ProductionReadinessResponse:
 
 @app.get("/v1/capabilities")
 def capabilities() -> dict[str, object]:
+    mfa_features = (
+        ["local_totp_mfa"] if local_mfa_runtime_mode() == "totp" else ["local_mfa_placeholder"]
+    )
     return {
         "language": "zh-CN",
         "markets": ["A_SHARE", "HK", "US", "GLOBAL"],
@@ -829,7 +842,7 @@ def capabilities() -> dict[str, object]:
             "device_bearer_token_auth",
             "device_token_revocation",
             "account_password_login",
-            "local_mfa_placeholder",
+            *mfa_features,
             "role_based_risk_controls",
             "admin_user_role_management",
             "audit_log",

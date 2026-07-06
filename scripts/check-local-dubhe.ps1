@@ -234,6 +234,7 @@ $productionCheckCmd = Join-Path $repoRoot "Check-Dubhe-Production.cmd"
 $productionPackCmd = Join-Path $repoRoot "Export-Dubhe-Production-Pack.cmd"
 $stopCmd = Join-Path $repoRoot "Stop-Dubhe-Core.cmd"
 $configureCmd = Join-Path $repoRoot "Configure-Dubhe.cmd"
+$setupMfaCmd = Join-Path $repoRoot "Setup-Dubhe-MFA.cmd"
 $localConfigPath = Join-Path $repoRoot "config\dubhe.local.env"
 $localConfigExamplePath = Join-Path $repoRoot "config\dubhe.local.env.example"
 $shortcutInstaller = Join-Path $repoRoot "scripts\install-windows-shortcuts.ps1"
@@ -278,6 +279,7 @@ Add-Check (New-Check "Windows 入口" "双击生产就绪门禁" ($(if (Test-Pat
 Add-Check (New-Check "Windows 入口" "双击生产补齐包" ($(if (Test-Path $productionPackCmd) { "ok" } else { "warn" })) ($(if (Test-Path $productionPackCmd) { $productionPackCmd } else { "缺少 Export-Dubhe-Production-Pack.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击停止 Core" ($(if (Test-Path $stopCmd) { "ok" } else { "warn" })) ($(if (Test-Path $stopCmd) { $stopCmd } else { "缺少 Stop-Dubhe-Core.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击配置" ($(if (Test-Path $configureCmd) { "ok" } else { "warn" })) ($(if (Test-Path $configureCmd) { $configureCmd } else { "缺少 Configure-Dubhe.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击设置本地 MFA" ($(if (Test-Path $setupMfaCmd) { "ok" } else { "warn" })) ($(if (Test-Path $setupMfaCmd) { $setupMfaCmd } else { "缺少 Setup-Dubhe-MFA.cmd。" })))
 Add-Check (New-Check "Windows 入口" "快捷方式安装器" ($(if (Test-Path $shortcutInstaller) { "ok" } else { "warn" })) ($(if (Test-Path $shortcutInstaller) { $shortcutInstaller } else { "缺少 scripts/install-windows-shortcuts.ps1。" })))
 Add-Check (New-Check "本地配置" "配置模板" ($(if (Test-Path $localConfigExamplePath) { "ok" } else { "warn" })) ($(if (Test-Path $localConfigExamplePath) { $localConfigExamplePath } else { "缺少 config/dubhe.local.env.example。" })))
 Add-Check (New-Check "本地配置" "配置文件" ($(if (Test-Path $localConfigPath) { "ok" } else { "warn" })) ($(if (Test-Path $localConfigPath) { "已加载 $($loadedLocalConfigKeys.Count) 项：$localConfigPath" } else { "尚未创建；可双击 Configure-Dubhe.cmd 创建并填写模型/新闻源 Key。" })))
@@ -317,6 +319,7 @@ if ($coreReady) {
     $systemStatus = Read-SystemStatus -Url $CoreUrl
     if ($systemStatus) {
         Add-Check (New-Check "Core" "系统体检接口" "ok" "已读取 /v1/system/status，版本 $($systemStatus.version)。")
+        Add-Check (New-Check "账号安全" "本地 MFA 模式" ($(if ($systemStatus.auth.mfa_mode -eq "totp") { "ok" } else { "warn" })) ($(if ($systemStatus.auth.mfa_mode -eq "totp") { "已启用本机 TOTP 动态验证码。" } else { "当前仍是占位 MFA；可双击 Setup-Dubhe-MFA.cmd 启用本机动态验证码。" })))
         Add-Check (New-Check "交易" "实盘开关" ($(if ($systemStatus.trading.live_trading_enabled) { "fail" } else { "ok" })) ($(if ($systemStatus.trading.live_trading_enabled) { "实盘交易已开启，请确认风控和审批已完成。" } else { "实盘交易关闭，纸面交易可用。" })) ([bool]$systemStatus.trading.live_trading_enabled))
         foreach ($item in $systemStatus.config_items) {
             Add-Check (New-Check "数据源配置" $item.label_zh ($(if ($item.configured) { "ok" } else { "warn" })) $item.message_zh)

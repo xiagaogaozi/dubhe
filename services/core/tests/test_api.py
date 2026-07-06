@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import os
 import json
 import tempfile
@@ -10,6 +12,12 @@ from uuid import uuid4
 os.environ["DUBHE_CORE_DB_PATH"] = str(
     Path(tempfile.gettempdir()) / f"dubhe-core-test-{uuid4().hex}.sqlite",
 )
+for key in [
+    "DUBHE_LOCAL_MFA_MODE",
+    "DUBHE_LOCAL_MFA_CODE",
+    "DUBHE_LOCAL_TOTP_SECRET",
+]:
+    os.environ.pop(key, None)
 
 from fastapi.testclient import TestClient
 
@@ -22,9 +30,10 @@ from dubhe_core.news_sources import (
     fetch_news_feed,
 )
 from dubhe_core.external_checks import external_service_checks
+from dubhe_core.local_mfa import generate_totp_secret, totp_code
 from dubhe_core.models import ProviderStatus
 from dubhe_core import smoke_report
-from dubhe_core.store import SQLiteStore
+from dubhe_core.store import SQLiteStore, verify_local_mfa_code
 
 client = TestClient(app)
 
@@ -133,6 +142,7 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     assert body["service"] == "dubhe-core"
     assert body["language"] == "zh-CN"
     assert body["storage"]["backend"] == "sqlite"
+    assert body["auth"]["mfa_mode"] == "local_placeholder"
     assert body["llm"]["enabled"] is False
     assert body["llm"]["fallback_available"] is True
     assert body["trading"]["paper_broker_enabled"] is True
@@ -178,6 +188,80 @@ def test_system_status_reports_missing_provider_config(monkeypatch, tmp_path: Pa
     assert launchers["build-user-kit"]["local_path"].endswith("Build-Dubhe-User-Kit.cmd")
     assert launchers["start-local"]["available"] is True
     assert launchers["configure"]["available"] is False
+
+
+def test_local_mfa_placeholder_uses_configurable_fixed_code(monkeypatch) -> None:
+    monkeypatch.delenv("DUBHE_LOCAL_MFA_MODE", raising=False)
+    monkeypatch.delenv("DUBHE_LOCAL_TOTP_SECRET", raising=False)
+    monkeypatch.delenv("DUBHE_LOCAL_MFA_CODE", raising=False)
+
+    assert verify_local_mfa_code("000000") is True
+    assert verify_local_mfa_code("123456") is False
+
+    monkeypatch.setenv("DUBHE_LOCAL_MFA_CODE", "654321")
+
+    assert verify_local_mfa_code("654321") is True
+    assert verify_local_mfa_code("000000") is False
+
+
+def test_local_totp_mfa_verifies_current_and_neighbor_codes(monkeypatch) -> None:
+    secret = generate_totp_secret()
+    now = 1_783_209_600.0
+    monkeypatch.setenv("DUBHE_LOCAL_MFA_MODE", "totp")
+    monkeypatch.setenv("DUBHE_LOCAL_TOTP_SECRET", secret)
+
+    assert verify_local_mfa_code(totp_code(secret, at_time=now), at_time=now) is True
+    assert verify_local_mfa_code(totp_code(secret, at_time=now - 30), at_time=now) is True
+    assert verify_local_mfa_code("123456", at_time=now) is False
+
+
+def test_system_status_reports_totp_mfa_mode(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DUBHE_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("DUBHE_LOCAL_MFA_MODE", "totp")
+    monkeypatch.setenv("DUBHE_LOCAL_TOTP_SECRET", generate_totp_secret())
+
+    response = client.get("/v1/system/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["auth"]["mode"] == "local_dev"
+    assert body["auth"]["mfa_mode"] == "totp"
+
+
+def test_account_registration_accepts_totp_mfa(monkeypatch) -> None:
+    secret = generate_totp_secret()
+    now = 1_783_209_600.0
+    monkeypatch.setenv("DUBHE_LOCAL_MFA_MODE", "totp")
+    monkeypatch.setenv("DUBHE_LOCAL_TOTP_SECRET", secret)
+    monkeypatch.setattr("dubhe_core.local_mfa.time.time", lambda: now)
+    valid_code = totp_code(secret, at_time=now)
+    wrong_code = "000000" if valid_code != "000000" else "000001"
+
+    bad_response = client.post(
+        "/v1/auth/accounts/register",
+        json={
+            "account_key": f"totp-bad-{uuid4().hex[:8]}",
+            "account_name": "TOTP 测试账号",
+            "password": "Dubhe@2026",
+            "mfa_code": wrong_code,
+            "device_name": "Dubhe Theia Desktop",
+            "platform": "windows",
+        },
+    )
+    assert bad_response.status_code == 401
+
+    register_response = client.post(
+        "/v1/auth/accounts/register",
+        json={
+            "account_key": f"totp-good-{uuid4().hex[:8]}",
+            "account_name": "TOTP 测试账号",
+            "password": "Dubhe@2026",
+            "mfa_code": valid_code,
+            "device_name": "Dubhe Theia Desktop",
+            "platform": "windows",
+        },
+    )
+    assert register_response.status_code == 200
 
 
 def test_system_status_reports_configured_keys_without_leaking_values(

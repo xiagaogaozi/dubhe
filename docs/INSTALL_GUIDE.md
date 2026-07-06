@@ -71,11 +71,12 @@ http://10.0.2.2:8000
 ## 第一次使用顺序
 
 1. 双击 `Configure-Dubhe.cmd`，按中文向导填写 AI 模型和授权新闻源 key；不知道的项目直接回车即可。
-2. 双击 `Start-Dubhe.cmd`，启动 Core 和桌面端。
-3. 双击 `Accept-Dubhe.cmd` 跑本机完整验收，确认体检、新闻、AI、策略、回测、纸面交易和同步闭环可用。
-4. 如需单独定位环境问题，双击 `Check-Dubhe.cmd`，确认安装包、配置和 Core 状态。
-5. 填完真实 AI/新闻源 key 后，双击 `Test-Dubhe-Services.cmd` 做 live 外部服务体检。
-6. 双击 `Check-Dubhe-Production.cmd` 查看商业生产上线阻断项。
+2. 需要动态登录验证码时，双击 `Setup-Dubhe-MFA.cmd`，用认证器 App 扫码；普通本地烟测可继续使用默认占位验证码。
+3. 双击 `Start-Dubhe.cmd`，启动 Core 和桌面端。
+4. 双击 `Accept-Dubhe.cmd` 跑本机完整验收，确认体检、新闻、AI、策略、回测、纸面交易和同步闭环可用。
+5. 如需单独定位环境问题，双击 `Check-Dubhe.cmd`，确认安装包、配置和 Core 状态。
+6. 填完真实 AI/新闻源 key 后，双击 `Test-Dubhe-Services.cmd` 做 live 外部服务体检。
+7. 双击 `Check-Dubhe-Production.cmd` 查看商业生产上线阻断项。
 7. 双击 `Export-Dubhe-Production-Pack.cmd` 导出阻断项、负责人和供应商/账号材料清单。
 8. 需要把当前产物交给本机用户试用时，双击 `Build-Dubhe-User-Kit.cmd`。
 9. 桌面端登录本地账号，查看 “首次使用清单”。

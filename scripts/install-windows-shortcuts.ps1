@@ -74,6 +74,11 @@ $entries = @(
         description = "Open Dubhe local runtime configuration."
     },
     @{
+        name = "Setup Dubhe MFA"
+        file = Join-Path $repoRoot "Setup-Dubhe-MFA.cmd"
+        description = "Create a local TOTP MFA setup card for Dubhe account login."
+    },
+    @{
         name = "Accept Dubhe"
         file = Join-Path $repoRoot "Accept-Dubhe.cmd"
         description = "Run local acceptance: readiness check, smoke workflow, and external service status."

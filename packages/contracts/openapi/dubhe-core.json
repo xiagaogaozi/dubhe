@@ -2659,7 +2659,10 @@
           },
           "mfa_mode": {
             "type": "string",
-            "const": "local_placeholder",
+            "enum": [
+              "local_placeholder",
+              "totp"
+            ],
             "title": "Mfa Mode"
           },
           "message_zh": {

@@ -144,6 +144,53 @@ LOCAL_CONFIG_DEFINITIONS = [
         setup_hint_zh="除非使用代理网关，否则保持默认 paper API 地址。",
     ),
     LocalConfigDefinition(
+        key="DUBHE_LOCAL_MFA_MODE",
+        label_zh="本地 MFA 模式",
+        description_zh="本机账号登录的 MFA 模式；默认 placeholder，可设为 totp 启用动态验证码。",
+        group_zh="本地登录 MFA",
+        placeholder="placeholder / totp",
+        setup_hint_zh="普通本地体验可保持 placeholder；需要更接近真实登录时双击 Setup-Dubhe-MFA.cmd 自动配置 totp。",
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_LOCAL_MFA_CODE",
+        label_zh="占位 MFA 验证码",
+        description_zh="placeholder 模式下使用的固定 6 位验证码；仅用于本地开发体验。",
+        group_zh="本地登录 MFA",
+        placeholder="000000",
+        setup_hint_zh="生产环境不要使用固定验证码；启用 TOTP 后该项会被忽略。",
+        secret=True,
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_LOCAL_TOTP_SECRET",
+        label_zh="TOTP 密钥",
+        description_zh="本机动态验证码密钥；不会在接口响应中明文回显。",
+        group_zh="本地登录 MFA",
+        placeholder="Base32 secret",
+        setup_hint_zh="建议通过 Setup-Dubhe-MFA.cmd 生成，不要手工编写。请像密码一样保存。",
+        secret=True,
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_LOCAL_TOTP_ISSUER",
+        label_zh="TOTP 发行方名称",
+        description_zh="认证器 App 中显示的发行方名称。",
+        group_zh="本地登录 MFA",
+        placeholder="Dubhe",
+        setup_hint_zh="通常保持 Dubhe 即可。",
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
+        key="DUBHE_LOCAL_TOTP_ACCOUNT",
+        label_zh="TOTP 账号名称",
+        description_zh="认证器 App 中显示的账号名称。",
+        group_zh="本地登录 MFA",
+        placeholder="local-admin",
+        setup_hint_zh="可填写本机管理员或测试账号名称，便于区分多台设备。",
+        restart_required=True,
+    ),
+    LocalConfigDefinition(
         key="DUBHE_CORE_DB_PATH",
         label_zh="Core 数据库路径",
         description_zh="SQLite 本地数据库路径；修改后需要重启 Core 才能切换数据库。",
@@ -233,7 +280,7 @@ def read_local_config_values(path: Path) -> dict[str, str]:
 
     values: dict[str, str] = {}
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        trimmed = line.strip()
+        trimmed = line.strip().lstrip("\ufeff")
         if not trimmed or trimmed.startswith("#") or trimmed.startswith(";"):
             continue
         separator_index = trimmed.find("=")
@@ -271,6 +318,18 @@ def write_local_config_values(path: Path, values: dict[str, str]) -> None:
             "ALPACA_PAPER_API_KEY_ID",
             "ALPACA_PAPER_SECRET_KEY",
             "ALPACA_PAPER_BASE_URL",
+        ],
+    )
+    lines.extend(["", "# Optional local MFA."])
+    _append_named_lines(
+        lines,
+        known_values,
+        [
+            "DUBHE_LOCAL_MFA_MODE",
+            "DUBHE_LOCAL_MFA_CODE",
+            "DUBHE_LOCAL_TOTP_SECRET",
+            "DUBHE_LOCAL_TOTP_ISSUER",
+            "DUBHE_LOCAL_TOTP_ACCOUNT",
         ],
     )
     lines.extend(["", "# Optional persistent Core database override."])
