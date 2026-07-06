@@ -79,6 +79,11 @@ $entries = @(
         description = "Export delivery, four-platform, local-check, and production-readiness evidence."
     },
     @{
+        name = "Activate Dubhe GitHub Actions"
+        file = Join-Path $repoRoot "Activate-Dubhe-GitHub-Actions.cmd"
+        description = "Activate package-building GitHub Actions workflows when gh has workflow scope."
+    },
+    @{
         name = "Dubhe Mobile Guide"
         file = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
         description = "Open the Chinese phone/tablet install and connection guide."

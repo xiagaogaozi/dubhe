@@ -486,7 +486,7 @@ if (-not $macosDmg -and -not $macosZip) {
         -Title "macOS 安装包尚未放入本交付包" `
         -Lines @(
             "当前 Windows 本机不能生成 macOS dmg/zip。",
-            "请在 macOS runner 或真实 Mac 上运行 docs/ci/theia-desktop.yml 对应流程。",
+            "请先运行 Activate-Dubhe-GitHub-Actions.cmd 激活 GitHub Actions，再手动运行 Theia Desktop Packages，或在真实 Mac 上执行对应构建流程。",
             "下载 GitHub Actions 产物后，把 .dmg 或 .zip 放入 apps/theia-desktop/app/dist，再重新运行 Prepare-Dubhe-Delivery.cmd。",
             "最终四端交付前必须运行 scripts\verify-delivery-pack.ps1 -RequireAllPlatforms。"
         )
@@ -498,7 +498,7 @@ if (-not (Test-Path $iosApp) -and -not $iosIpa) {
         -Title "iOS 安装包尚未放入本交付包" `
         -Lines @(
             "当前 Windows 本机不能生成 iOS Runner.app 或 IPA。",
-            "请在 macOS + Xcode 环境运行 docs/ci/mobile.yml 对应流程。",
+            "请先运行 Activate-Dubhe-GitHub-Actions.cmd 激活 GitHub Actions，再手动运行 Mobile Companion Packages，或在 macOS + Xcode 环境执行对应构建流程。",
             "下载 GitHub Actions 产物后，把 Runner.app 放入 apps/mobile/build/ios/iphoneos，或把 .ipa 放入 apps/mobile/build/ios/ipa，再重新运行 Prepare-Dubhe-Delivery.cmd。",
             "最终四端交付前必须运行 scripts\verify-delivery-pack.ps1 -RequireAllPlatforms。"
         )
@@ -556,6 +556,7 @@ Write-Launcher -Path (Join-Path $kitRoot "11-Smoke-Dubhe-This-PC.cmd") -Title "S
 Write-Launcher -Path (Join-Path $kitRoot "12-Verify-Dubhe-Delivery-This-PC.cmd") -Title "Verify latest Dubhe delivery ZIP on this PC" -TargetScript (Join-Path $repoRoot "Verify-Dubhe-Delivery.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "13-Import-Dubhe-CI-Artifacts-This-PC.cmd") -Title "Import Dubhe CI artifacts on this PC" -TargetScript (Join-Path $repoRoot "Import-Dubhe-CI-Artifacts.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "14-Export-Dubhe-Release-Evidence-This-PC.cmd") -Title "Export Dubhe release evidence on this PC" -TargetScript (Join-Path $repoRoot "Export-Dubhe-Release-Evidence.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "15-Activate-Dubhe-GitHub-Actions-This-PC.cmd") -Title "Activate Dubhe GitHub Actions on this PC" -TargetScript (Join-Path $repoRoot "Activate-Dubhe-GitHub-Actions.cmd")
 
 $template = Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "docs\USER_KIT_README.md")
 $readme = $template

@@ -499,7 +499,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             build_channel_zh="macOS CI / macOS 本机",
             ready_zh="已找到 macOS 未签名桌面包；正式分发仍需 Apple 签名和公证。",
             missing_zh="当前 Windows 本机不能生成 macOS 安装包。",
-            next_step_zh="在 macOS runner 启用 docs/ci/theia-desktop.yml，生成 dmg/zip 后再做签名和公证。",
+            next_step_zh="先运行 Activate-Dubhe-GitHub-Actions.cmd 激活 workflow，再运行 Theia Desktop Packages 生成 dmg/zip 后做签名和公证。",
             source_updated_at=desktop_source_updated_at,
         ),
         _install_package(
@@ -510,7 +510,7 @@ def build_install_package_status(root: Path) -> list[InstallPackageStatus]:
             build_channel_zh="macOS CI / Xcode",
             ready_zh="已找到 iOS no-codesign app bundle；真机/TestFlight 仍需 Apple Developer 签名。",
             missing_zh="当前 Windows 本机不能生成 iOS 安装包。",
-            next_step_zh="在 macOS + Xcode 或 docs/ci/mobile.yml 的 iOS job 中构建，并补齐 Bundle ID、证书和描述文件。",
+            next_step_zh="先运行 Activate-Dubhe-GitHub-Actions.cmd 激活 workflow，再运行 Mobile Companion Packages iOS job，或在 macOS + Xcode 中构建并补齐签名材料。",
             source_updated_at=mobile_source_updated_at,
         ),
     ]
@@ -621,6 +621,14 @@ def build_local_launcher_status(root: Path) -> list[LocalLauncherStatus]:
             "Export-Dubhe-Release-Evidence.cmd",
             "双击即可生成 .dubhe-run\\release-evidence，适合给负责人或测试人员查看。",
             "证据包不等同于生产就绪；正式上线仍需生产门禁通过。",
+        ),
+        (
+            "activate-github-actions",
+            "激活 GitHub Actions",
+            "把 CI 模板写入 .github/workflows，并在 gh 具备 workflow scope 时推送触发四端构建。",
+            "Activate-Dubhe-GitHub-Actions.cmd",
+            "双击即可生成激活报告；如果缺 workflow scope，按报告重新授权 gh。",
+            "激活后下载 artifact，再运行 Import-Dubhe-CI-Artifacts.cmd。",
         ),
         (
             "install-guide",
