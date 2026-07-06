@@ -226,6 +226,7 @@ $userKitCmd = Join-Path $repoRoot "Build-Dubhe-User-Kit.cmd"
 $deliveryCmd = Join-Path $repoRoot "Prepare-Dubhe-Delivery.cmd"
 $deliveryVerifyCmd = Join-Path $repoRoot "Verify-Dubhe-Delivery.cmd"
 $ciArtifactImportCmd = Join-Path $repoRoot "Import-Dubhe-CI-Artifacts.cmd"
+$releaseEvidenceCmd = Join-Path $repoRoot "Export-Dubhe-Release-Evidence.cmd"
 $installGuideCmd = Join-Path $repoRoot "Open-Dubhe-Install-Guide.cmd"
 $mobileGuideCmd = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
 $acceptCmd = Join-Path $repoRoot "Accept-Dubhe.cmd"
@@ -251,6 +252,7 @@ $qrGeneratorScript = Join-Path $repoRoot "scripts\generate-qr-svg.py"
 $productionPackScript = Join-Path $repoRoot "scripts\export-production-pack.ps1"
 $deliveryVerifyScript = Join-Path $repoRoot "scripts\verify-delivery-pack.ps1"
 $ciArtifactImportScript = Join-Path $repoRoot "scripts\import-ci-artifacts.ps1"
+$releaseEvidenceScript = Join-Path $repoRoot "scripts\export-release-evidence.ps1"
 $desktopExe = Join-Path $theiaRoot "app\dist\win-unpacked\Dubhe.exe"
 $desktopDist = Join-Path $theiaRoot "app\dist"
 $windowsSetup = Resolve-NewestFile $desktopDist "Dubhe-*-win-x64-setup.exe"
@@ -276,6 +278,7 @@ Add-Check (New-Check "Windows 入口" "双击生成用户交付包" ($(if (Test-
 Add-Check (New-Check "Windows 入口" "双击生成最终交付 ZIP" ($(if (Test-Path $deliveryCmd) { "ok" } else { "warn" })) ($(if (Test-Path $deliveryCmd) { $deliveryCmd } else { "缺少 Prepare-Dubhe-Delivery.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击验证最终交付 ZIP" ($(if (Test-Path $deliveryVerifyCmd) { "ok" } else { "warn" })) ($(if (Test-Path $deliveryVerifyCmd) { $deliveryVerifyCmd } else { "缺少 Verify-Dubhe-Delivery.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击导入 CI 产物" ($(if (Test-Path $ciArtifactImportCmd) { "ok" } else { "warn" })) ($(if (Test-Path $ciArtifactImportCmd) { $ciArtifactImportCmd } else { "缺少 Import-Dubhe-CI-Artifacts.cmd。" })))
+Add-Check (New-Check "Windows 入口" "双击导出发行证据包" ($(if (Test-Path $releaseEvidenceCmd) { "ok" } else { "warn" })) ($(if (Test-Path $releaseEvidenceCmd) { $releaseEvidenceCmd } else { "缺少 Export-Dubhe-Release-Evidence.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击四端安装向导" ($(if (Test-Path $installGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $installGuideCmd) { $installGuideCmd } else { "缺少 Open-Dubhe-Install-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击手机连接向导" ($(if (Test-Path $mobileGuideCmd) { "ok" } else { "warn" })) ($(if (Test-Path $mobileGuideCmd) { $mobileGuideCmd } else { "缺少 Open-Dubhe-Mobile-Guide.cmd。" })))
 Add-Check (New-Check "Windows 入口" "双击本机完整验收" ($(if (Test-Path $acceptCmd) { "ok" } else { "warn" })) ($(if (Test-Path $acceptCmd) { $acceptCmd } else { "缺少 Accept-Dubhe.cmd。" })))
@@ -301,6 +304,7 @@ Add-Check (New-Check "移动端" "二维码生成脚本" ($(if (Test-Path $qrGen
 Add-Check (New-Check "生产门禁" "生产补齐包脚本" ($(if (Test-Path $productionPackScript) { "ok" } else { "warn" })) ($(if (Test-Path $productionPackScript) { $productionPackScript } else { "缺少 scripts/export-production-pack.ps1。" })))
 Add-Check (New-Check "交付包" "最终 ZIP 验证脚本" ($(if (Test-Path $deliveryVerifyScript) { "ok" } else { "warn" })) ($(if (Test-Path $deliveryVerifyScript) { $deliveryVerifyScript } else { "缺少 scripts/verify-delivery-pack.ps1。" })))
 Add-Check (New-Check "交付包" "CI 产物导入脚本" ($(if (Test-Path $ciArtifactImportScript) { "ok" } else { "warn" })) ($(if (Test-Path $ciArtifactImportScript) { $ciArtifactImportScript } else { "缺少 scripts/import-ci-artifacts.ps1。" })))
+Add-Check (New-Check "交付包" "发行证据包脚本" ($(if (Test-Path $releaseEvidenceScript) { "ok" } else { "warn" })) ($(if (Test-Path $releaseEvidenceScript) { $releaseEvidenceScript } else { "缺少 scripts/export-release-evidence.ps1。" })))
 
 $venvPython = Join-Path $coreRoot ".venv\Scripts\python.exe"
 if (Test-Path $venvPython) {

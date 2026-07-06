@@ -555,6 +555,7 @@ Write-Launcher -Path (Join-Path $kitRoot "10-Export-Production-Pack-This-PC.cmd"
 Write-Launcher -Path (Join-Path $kitRoot "11-Smoke-Dubhe-This-PC.cmd") -Title "Smoke Dubhe on this PC" -TargetScript (Join-Path $repoRoot "Smoke-Dubhe.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "12-Verify-Dubhe-Delivery-This-PC.cmd") -Title "Verify latest Dubhe delivery ZIP on this PC" -TargetScript (Join-Path $repoRoot "Verify-Dubhe-Delivery.cmd")
 Write-Launcher -Path (Join-Path $kitRoot "13-Import-Dubhe-CI-Artifacts-This-PC.cmd") -Title "Import Dubhe CI artifacts on this PC" -TargetScript (Join-Path $repoRoot "Import-Dubhe-CI-Artifacts.cmd")
+Write-Launcher -Path (Join-Path $kitRoot "14-Export-Dubhe-Release-Evidence-This-PC.cmd") -Title "Export Dubhe release evidence on this PC" -TargetScript (Join-Path $repoRoot "Export-Dubhe-Release-Evidence.cmd")
 
 $template = Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "docs\USER_KIT_README.md")
 $readme = $template

@@ -615,6 +615,14 @@ def build_local_launcher_status(root: Path) -> list[LocalLauncherStatus]:
             "最终四端交付前仍需运行 verify-delivery-pack.ps1 -RequireAllPlatforms。",
         ),
         (
+            "release-evidence",
+            "导出发行证据包",
+            "汇总最新交付 ZIP、四端校验、本机体检和生产门禁状态。",
+            "Export-Dubhe-Release-Evidence.cmd",
+            "双击即可生成 .dubhe-run\\release-evidence，适合给负责人或测试人员查看。",
+            "证据包不等同于生产就绪；正式上线仍需生产门禁通过。",
+        ),
+        (
             "install-guide",
             "打开安装指南",
             "打开 Windows/macOS/Android/iOS 的安装和分发说明。",

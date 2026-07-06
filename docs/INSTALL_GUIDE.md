@@ -81,9 +81,10 @@ http://10.0.2.2:8000
 9. 需要把当前产物交给本机用户试用时，双击 `Build-Dubhe-User-Kit.cmd`。
 10. 如果已经从 GitHub Actions 下载到 macOS/iOS/Android/Windows 构建产物，先放入 `.dubhe-run\ci-artifacts`，再双击 `Import-Dubhe-CI-Artifacts.cmd`。
 11. 准备发出 ZIP 前，先双击 `Prepare-Dubhe-Delivery.cmd`，再双击 `Verify-Dubhe-Delivery.cmd`。
-12. 桌面端登录本地账号，查看 “首次使用清单”。
-13. 如需手机/平板，双击 `Connect-Dubhe-Mobile.cmd`，扫码或填写手机连接卡里的 Core 地址。
-14. 需要单独重跑主链路时，双击 `Smoke-Dubhe.cmd`。
+12. 需要给负责人或测试人员看当前交付状态时，双击 `Export-Dubhe-Release-Evidence.cmd`。
+13. 桌面端登录本地账号，查看 “首次使用清单”。
+14. 如需手机/平板，双击 `Connect-Dubhe-Mobile.cmd`，扫码或填写手机连接卡里的 Core 地址。
+15. 需要单独重跑主链路时，双击 `Smoke-Dubhe.cmd`。
 
 ## 跨端数据互通
 

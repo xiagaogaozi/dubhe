@@ -74,6 +74,11 @@ $entries = @(
         description = "Import downloaded GitHub Actions package artifacts and rebuild the delivery ZIP."
     },
     @{
+        name = "Export Dubhe Release Evidence"
+        file = Join-Path $repoRoot "Export-Dubhe-Release-Evidence.cmd"
+        description = "Export delivery, four-platform, local-check, and production-readiness evidence."
+    },
+    @{
         name = "Dubhe Mobile Guide"
         file = Join-Path $repoRoot "Open-Dubhe-Mobile-Guide.cmd"
         description = "Open the Chinese phone/tablet install and connection guide."
